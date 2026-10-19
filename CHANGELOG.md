@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.4.0 (2026-10-20)
+
+### Added
+- **The team lead keeps you in the loop.** Before handing out work it says the plan and which member takes each
+  part, gives a line as each member finishes, fails or gets stuck, asks your decisions at once instead of guessing,
+  and ends with one report saying what was done, who reviewed it and what is waiting on you.
+- **A clickable sidebar.** "No team yet" has a **Build a team** button that runs `/agent-hq:team`, a board task
+  opens the agent that owns it, and the "+N more idle/done" line unfolds the folded agents (**Fold idle** folds them
+  again).
+- **Offered when it fits.** In a project with no team file, Claude offers `/agent-hq:team` when you ask for a team
+  or for work that needs several agents in parallel.
+
+### Changed
+- **Sharper bars in the Claude desktop app.** Where the terminal's pixel tracks are not drawn (desktop, VS Code,
+  mobile), the sidebar's bars are rounded Svg bars in the status colour with their words beside them, instead of
+  block characters.
+- **A clearer team interview.** Each `/agent-hq:team` question says its step ("Step 4 of 8"), every preview reads
+  the same way and names real folders, and the interview first reads the project's stack, app folders,
+  `CLAUDE.md`/`AGENTS.md` and matching skills, then uses them to suggest templates, missions, skills and first tasks.
+
 ## 0.3.3 (2026-10-20)
 
 ### Changed
