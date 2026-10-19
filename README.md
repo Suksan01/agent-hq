@@ -36,6 +36,34 @@ claude plugin install agent-hq --marketplace Suksan01/agent-hq
 In the desktop app, where `/plugin` does not run: click + next to the prompt box, then Plugins, Add marketplace
 with `Suksan01/agent-hq`, then Add plugin.
 
+## Updates
+
+Auto-update is off by default for marketplaces other than Anthropic's, so turn it on once:
+
+1. Type `/plugin`, open the **Marketplaces** tab, select **agent-hq**, and choose **Enable auto-update**.
+2. Claude Code then checks for updates within about ten minutes of your first message in each interactive session,
+   downloads new versions in the background, and applies them from your next session (or after `/reload-plugins`).
+
+To update by hand instead:
+
+```
+claude plugin marketplace update agent-hq
+claude plugin update agent-hq@agent-hq
+```
+
+Then restart Claude Code, or run `/reload-plugins` in a running session.
+
+- **Private repository:** background updates use the git credentials already saved on your machine and never prompt.
+  You need an SSH key, or `gh auth login` followed by `gh auth setup-git`; setting `GITHUB_TOKEN` alone is not
+  enough. If a check fails, you keep the version you have.
+- **Updates switched off:** `DISABLE_UPDATES=1`, `DISABLE_AUTOUPDATER=1` or `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`
+  also stop plugin updates, unless `FORCE_AUTOUPDATE_PLUGINS=1` is set too.
+- **Teams:** an organization admin can turn auto-update on for everyone by listing this marketplace under
+  `extraKnownMarketplaces` with `"autoUpdate": true` in managed settings.
+
+New versions are published by raising `version` in `.claude-plugin/plugin.json`; a commit without a version change
+does not reach installed copies.
+
 ## Credits
 
 The dotted progress tracks are adapted from the [plan-progress](https://github.com/zycck/claude-mods) mod by Kirill
