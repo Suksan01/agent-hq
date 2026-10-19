@@ -205,7 +205,7 @@ export const PLAN_TOOL = 'mcp__plan-progress__plan_progress'
  * with (a member that cannot SendMessage cannot answer the lead). The guard never refuses them and parseTeam adds them
  * to every tools list.
  */
-export const COORDINATION_TOOLS = ['SendMessage', 'TodoWrite', PLAN_TOOL, 'TaskCreate', 'TaskUpdate', 'TaskGet', 'TaskList']
+export const COORDINATION_TOOLS = ['SendMessage', 'SubagentHandback', 'TodoWrite', PLAN_TOOL, 'TaskCreate', 'TaskUpdate', 'TaskGet', 'TaskList']
 export type BarOwner = { owner: string; at: number }
 type Raw = Record<string, unknown>
 const isRaw = (v: unknown): v is Raw => typeof v === 'object' && v !== null
