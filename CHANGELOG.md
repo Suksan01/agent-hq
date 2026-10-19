@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.2 (2026-10-19)
+
+### Fixed
+- An idle teammate (done with its turn, waiting for a message) now counts as needing you: the status line reads
+  "0 working · 1 needs you" instead of going blank, and the teammate is listed in the inbox as "idle, waiting for a
+  message", matching the sidebar.
+- The band's Team track counts only working agents, so an idle or waiting teammate is no longer labelled "1 running".
+
 ## 0.3.1 (2026-10-19)
 
 ### Changed
