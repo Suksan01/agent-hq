@@ -1,0 +1,6 @@
+{
+  "name": "agent-hq",
+  "description": "Agent HQ: a live command center for Claude Code agent teams.",
+  "owner": { "name": "Suksan01" },
+  "plugins": [{ "name": "agent-hq", "source": "./" }]
+}
