@@ -659,7 +659,7 @@ export const register: Register = (on, options) => {
   on('prompt.compose', async ($, e, next) => {
     const composed = await next(e)
     const current = await read($, team)
-    if (e.traits.includes('teammate') || e.traits.includes('bare') || e.traits.includes('lean')) return composed
+    if (e.traits.includes('teammate') || e.traits.includes('bare')) return composed
     if (!current) {
       // no file at all: offer to make one; a file that is untrusted or ignored has its own toast pointing at the fix
       if ((await read($, teamSource)) !== null) return composed
