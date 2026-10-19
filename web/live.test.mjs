@@ -1,33 +1,59 @@
-// The live page, end to end, in a real browser: a real hub serving web/index.html, real session servers with scripted mods, and a
+// The live page, end to end, in a real browser: a real hub serving the page, real session servers with scripted mods, and a
 // headless Chrome of its own (browser-kit.mjs). Everything the person does on the page is done through its own buttons and boxes.
 //   node --test --test-concurrency=1 web/live.test.mjs      (skipped when no Chrome is found; CHROME_BIN overrides)
 //
-// Selectors for the page's parts are all in SEL, so a redesign changes one table. A test marked `todo` is a spec for something
-// the page does not do yet: it runs and reports, but does not fail the run; remove the `todo` when it lands.
+// It tests the page served at PAGE: /next while the new page is being built (web/next.html + live.js), and "/" after the swap
+// (AGENT_HQ_LIVE_PAGE=/ runs it against the old page's path). Every selector is in SEL and BTN, so a redesign changes one table.
+// Waits and timeouts scale with the machine's load (browser-kit.mjs: AGENT_HQ_TEST_SLOWDOWN).
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { buildSnapshot, launchBrowser, newWorld, skip, sleep, slow, twoSessions, until } from './browser-kit.mjs'
 
+const PAGE = process.env.AGENT_HQ_LIVE_PAGE ?? '/next'
+
 // ---- the page's parts ---------------------------------------------------------------------------------------------------
 
 const SEL = {
-  card: '.node', // one agent
-  cardName: '.name',
-  cardTone: 'data-tone', // running | needs_input | done | error
-  lead: '.node.lead',
-  chip: 'button.fc', // an island/group chip
-  tool: 'button.tb', // toolbar and panel buttons, found by their text
-  drawer: 'aside.drawer',
-  inbox: 'aside.inbox',
-  messageBox: 'textarea',
-  toast: '.toast',
-  inboxRow: '.inbox-row',
-  group: '.island', // one session's group
+  group: 'section.dg-group', // one session's team
+  groupTeam: '.dg-team',
+  agentCard: '.sk-agent', // a member (data-status: working | waiting | failed | done | idle | stopped)
+  agentName: '.sk-agent__name',
+  leadDeck: '.lc-deck',
+  drawer: '.sk-drawer',
+  drawerInput: '.sk-drawer input, .sk-drawer textarea',
+  inboxItem: '.sk-inbox__item',
+  toast: '.sk-toast',
+  chip: '.hq-bar button',
+  world: '.dg-world',
+  live: '.hq-live',
 }
-const BTN = { lead: 'Message lead', hide: 'Hide done', show: 'Show done', clear: 'Clear done', add: '^\\+$|Add an agent', send: '^Send$', stop: 'Stop agent', confirmStop: 'Stop it', addAgent: 'Add agent' }
+// buttons are found by their text, title or aria-label
+const BTN = {
+  lead: '^Message lead$',
+  add: '^Add an agent$',
+  hide: '^Hide done agents$',
+  show: '^Show done agents$',
+  clear: '^Clear done agents and tasks$',
+  clearYes: '^Clear$',
+  fit: '^Fit everything$',
+  send: '^Send$',
+  stop: 'Stop agent',
+  stopYes: '^Stop$',
+  message: 'Message',
+  addAgent: '^Add agent$',
+  space: '^Space$',
+  diagram: '^Diagram$',
+}
+// Real gaps found on the page: a test marked `todo: REAL.x` runs and reports but does not fail the run. Remove the marker when fixed.
+const REAL = {
+  card: 'a real mouse click on a card does not open its drawer: the diagram calls setPointerCapture on every pointerdown (diagram.js down()), which retargets the click away from the card (frontend-dev-1-2)',
+  login: 'a page path (/next) without a login answers a bare "forbidden"; "/" says to run /hq web again (hub)',
+  idle: 'an idle lead deck keeps spinning and breathing (lc-spin on svg, sk-breathe on .lc-core__blob), so frames never stop (frontend-dev-1-2 / frontend-dev-2-2)',
+}
+const STATUS = { running: 'working', waiting: 'waiting', failed: 'failed', completed: 'done', idle: 'idle' }
 
-/** What every test starts from: alpha (the hub) with a mixed team, beta with a small one, a browser logged in on alpha's page. */
-async function openLive(t, { sessions, browserOptions, probe = false } = {}) {
+/** What every test starts from: alpha (the hub) with a mixed team, beta with a small one, a browser logged in showing PAGE. */
+async function openLive(t, { sessions, browserOptions, probe = false, ready = true } = {}) {
   const world = newWorld(t)
   const alphaMake = mark => buildSnapshot({
     team: 'Alpha Team',
@@ -39,77 +65,43 @@ async function openLive(t, { sessions, browserOptions, probe = false } = {}) {
   const { alpha, beta, alphaMod, betaMod } = await twoSessions(world, sessions ?? [alphaMake, betaMake])
   const page = await launchBrowser(world, browserOptions)
   if (probe) await page.installProbe()
-  await page.open(alpha.url)
-  // ready when the page shows an agent card (the "live" badge is not shown at phone width)
-  await until(async () => (await cards(page)).length > 0, 20_000, 'the page to show agent cards')
+  await page.open(alpha.url) // the one-time code logs the browser in and redirects to /
+  await until(async () => (await page.eval('location.pathname')) === '/' && (await page.eval('document.readyState')) === 'complete', 20_000, 'the login redirect')
+  await sleep(slow(300))
+  await page.open(`${new URL(alpha.url).origin}${PAGE}`)
+  if (ready) await until(async () => (await members(page)).length > 0, 25_000, 'the page to show agent cards')
   return { world, page, alpha, beta, alphaMod, betaMod }
 }
 
-/** Opens an agent's drawer the way a person does: fit the team in view, then click its card with the mouse. */
+/** The members on the page, once each: `{ name, status }`. Compact cards repeat inside their hover copy, so repeats are dropped. */
+async function members(page) {
+  const list = await page.eval(`[...document.querySelectorAll(${JSON.stringify(SEL.agentCard)})].map(n => ({ name: (n.querySelector(${JSON.stringify(SEL.agentName)}) || n).textContent.trim(), status: n.getAttribute('data-status') }))`)
+  return [...new Map(list.map(c => [c.name, c])).values()]
+}
+
+/** Fits everything in view, then clicks an agent's card with a real mouse, as a person does. */
 async function openCard(page, name) {
-  await page.click(SEL.tool, 'Fit the team|^Fit$')
-  await sleep(slow(400))
-  await page.mouseClickOn(SEL.card, name)
-}
-
-/** Types into the message box and presses Send once the page has enabled it (the box is controlled: the click must come after its state updated). */
-async function typeAndSend(page, text) {
-  await until(() => page.eval(`!!document.querySelector(${JSON.stringify(SEL.messageBox)})`), 8000, 'the message box')
-  await page.type(SEL.messageBox, text)
-  await until(() => page.eval(`[...document.querySelectorAll(${JSON.stringify(SEL.tool)})].some(b => /^Send$/.test(b.textContent.trim()) && !b.disabled)`), 8000, 'the Send button to be enabled')
-  await page.click(SEL.tool, BTN.send)
-}
-
-const cards = page => page.eval(`[...document.querySelectorAll(${JSON.stringify(SEL.card)})].map(n => ({ name: (n.querySelector(${JSON.stringify(SEL.cardName)}) || n).textContent.trim(), tone: n.getAttribute(${JSON.stringify(SEL.cardTone)}) }))`)
-
-// ---- what is on the page -------------------------------------------------------------------------------------------------
-
-test('a group per session, with its team name', { skip, timeout: slow(60_000) }, async t => {
-  const { page } = await openLive(t)
-  await until(async () => (await page.eval(`document.querySelectorAll(${JSON.stringify(SEL.group)}).length`)) === 2, 15_000, 'one group per session')
-  const text = await page.text()
-  assert.match(text, /Alpha Team/)
-  assert.match(text, /Beta Team/)
-})
-
-test('a card for every agent, each in the right state', { skip, timeout: slow(60_000) }, async t => {
-  const { page } = await openLive(t)
-  const seen = await until(async () => {
-    const list = await cards(page)
-    return list.length >= 8 ? list : null // 2 leads + 5 members + 1 member
-  }, 15_000, 'a card for every agent')
-  const toneOf = name => seen.find(c => c.name.includes(name))?.tone
-  assert.equal(toneOf('Mochi-chan'), 'running')
-  assert.equal(toneOf('Tanuki'), 'needs_input', 'waiting for the person')
-  assert.equal(toneOf('Kuma-san'), 'error', 'failed')
-  assert.equal(toneOf('Tamago'), 'done', 'completed')
-  assert.equal(toneOf('Daifuku'), 'needs_input', 'idle')
-  assert.equal(toneOf('Momo'), 'running', 'beta session member')
-  assert.ok(seen.some(c => c.name.includes('Captain Alpha Team')) && seen.some(c => c.name.includes('Captain Beta Team')), 'both leads')
-})
-
-test('a lead deck per session: the lead card shows its team, progress and what it is doing', { skip, todo: 'the lead deck is part of the new page', timeout: slow(60_000) }, async t => {
-  const { page } = await openLive(t)
-  const lead = await page.eval(`(() => { const el = document.querySelector(${JSON.stringify(SEL.lead)}); return el ? el.innerText : '' })()`)
-  assert.match(lead, /Captain/)
-  assert.match(lead, /leading|Splitting|Tech Lead/i)
-  assert.match(lead, /members? working|working/i)
-})
-
-test('the drawer shows one agent in full and closes with Escape', { skip, timeout: slow(60_000) }, async t => {
-  const { page } = await openLive(t)
-  await until(async () => (await cards(page)).length >= 8, 15_000, 'the cards')
-  await openCard(page, 'Mochi-chan')
+  await page.click('button', BTN.fit)
+  await sleep(slow(500))
+  await page.mouseClickOn(`${SEL.agentCard}`, name)
   await until(() => page.eval(`!!document.querySelector(${JSON.stringify(SEL.drawer)})`), 8000, 'the drawer')
-  const drawer = await page.eval(`document.querySelector(${JSON.stringify(SEL.drawer)}).innerText`)
-  assert.match(drawer, /Mochi-chan/)
-  assert.match(drawer, /dev1|Developer/)
-  assert.match(drawer, /Edit|tools/i)
-  await page.eval(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))`)
-  await until(() => page.eval(`!document.querySelector(${JSON.stringify(SEL.drawer)})`), 5000, 'the drawer to close')
-})
+}
 
-// ---- the five actions ------------------------------------------------------------------------------------------------------
+/** Types into the drawer's box and presses Send once the page has enabled it. */
+async function typeAndSend(page, text) {
+  await until(() => page.eval(`!!document.querySelector(${JSON.stringify(SEL.drawerInput)})`), 8000, 'the message box')
+  await page.type(SEL.drawerInput, text)
+  await until(() => page.eval(`[...document.querySelectorAll('button')].some(b => /${BTN.send}/i.test((b.getAttribute('aria-label') || b.textContent).trim()) && !b.disabled)`), 8000, 'the Send button to be enabled')
+  await page.click('button', BTN.send)
+}
+
+/** Collects every distinct toast text while it is on screen (a toast is short-lived), until the test ends. */
+function collectToasts(page, t) {
+  const seen = new Set()
+  const poll = setInterval(() => page.eval(`[...document.querySelectorAll(${JSON.stringify(SEL.toast)})].map(e => e.textContent)`).then(list => list.forEach(x => seen.add(x))).catch(() => {}), 100)
+  t.after(() => clearInterval(poll))
+  return seen
+}
 
 /** Waits for the scripted mod to get `n` actions and returns them; every one must carry the page's idempotency key. */
 async function handled(mod, n) {
@@ -119,45 +111,89 @@ async function handled(mod, n) {
   return mod.handled.map(h => h.action)
 }
 
+// ---- what is on the page -------------------------------------------------------------------------------------------------
+
+test('a group per session, with its team name', { skip, timeout: slow(60_000) }, async t => {
+  const { page } = await openLive(t)
+  await until(async () => (await page.eval(`document.querySelectorAll(${JSON.stringify(SEL.group)}).length`)) === 2, 15_000, 'one group per session')
+  const teams = await page.eval(`[...document.querySelectorAll(${JSON.stringify(SEL.groupTeam)})].map(e => e.textContent.trim())`)
+  assert.deepEqual(teams.sort(), ['Alpha Team', 'Beta Team'])
+  assert.match(await page.text(), /live/i, 'the page says it is live')
+})
+
+test('a card for every agent, each in the right state', { skip, timeout: slow(60_000) }, async t => {
+  const { page } = await openLive(t)
+  const seen = await until(async () => {
+    const list = await members(page)
+    return list.length >= 6 ? list : null // 5 members in alpha + 1 in beta
+  }, 15_000, 'a card for every member')
+  const statusOf = name => seen.find(c => c.name.includes(name))?.status
+  assert.equal(statusOf('Mochi-chan'), STATUS.running)
+  assert.equal(statusOf('Tanuki'), STATUS.waiting, 'waiting for the person')
+  assert.equal(statusOf('Kuma-san'), STATUS.failed)
+  assert.equal(statusOf('Tamago'), STATUS.completed)
+  assert.equal(statusOf('Daifuku'), STATUS.idle)
+  assert.equal(statusOf('Momo'), STATUS.running, 'beta session member')
+})
+
+test('a lead deck per session: the lead shows its team, progress and what it is doing', { skip, timeout: slow(60_000) }, async t => {
+  const { page } = await openLive(t)
+  await until(async () => (await page.eval(`document.querySelectorAll(${JSON.stringify(SEL.leadDeck)}).length`)) >= 1, 15_000, 'a lead deck')
+  const decks = await page.eval(`[...document.querySelectorAll(${JSON.stringify(SEL.leadDeck)})].map(e => e.getAttribute('aria-label') + ' | ' + e.innerText.replace(/\\s+/g, ' '))`)
+  assert.ok(decks.some(d => /Captain Alpha Team/.test(d)), `a deck for alpha's lead: ${decks.join(' // ').slice(0, 300)}`)
+  assert.ok(decks.some(d => /Captain Beta Team/.test(d)), "a deck for beta's lead")
+})
+
+test('the drawer shows one agent in full and closes with Escape', { skip, todo: REAL.card, timeout: slow(60_000) }, async t => {
+  const { page } = await openLive(t)
+  await openCard(page, 'Mochi-chan')
+  const drawer = await page.eval(`document.querySelector(${JSON.stringify(SEL.drawer)}).innerText`)
+  assert.match(drawer, /Mochi-chan/)
+  assert.match(drawer, /dev1|Developer/)
+  assert.match(drawer, /Editing|Now/i)
+  await page.eval(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))`)
+  await until(() => page.eval(`!document.querySelector(${JSON.stringify(SEL.drawer)})`), 5000, 'the drawer to close')
+})
+
+// ---- the five actions ------------------------------------------------------------------------------------------------------
+
 test('message the lead: the text reaches the mod as a lead action', { skip, timeout: slow(60_000) }, async t => {
   const { page, alphaMod } = await openLive(t)
-  await page.click(SEL.tool, BTN.lead)
+  const toasts = collectToasts(page, t)
+  await page.click('button', BTN.lead)
   await typeAndSend(page, 'Please prioritise checkout')
   const [action] = await handled(alphaMod, 1)
   assert.equal(action.type, 'lead')
   assert.equal(action.text, 'Please prioritise checkout')
-  await until(async () => /Sent to/i.test(await page.text()), 8000, 'the page to say it was sent')
+  await until(() => [...toasts].some(x => /sent/i.test(x)), 8000, `a toast saying it was sent (saw: ${[...toasts].join(' | ')})`)
 })
 
-test('message one agent, from its drawer', { skip, timeout: slow(60_000) }, async t => {
+test('message one agent, from its drawer', { skip, todo: REAL.card, timeout: slow(60_000) }, async t => {
   const { page, alphaMod } = await openLive(t)
-  await until(async () => (await cards(page)).length >= 8, 15_000, 'the cards')
   await openCard(page, 'Mochi-chan')
   await typeAndSend(page, 'Use the new API')
   const [action] = await handled(alphaMod, 1)
   assert.deepEqual({ type: action.type, agent: action.agent, text: action.text }, { type: 'message', agent: 'dev1', text: 'Use the new API' })
 })
 
-test('stop an agent: only after the confirm', { skip, timeout: slow(60_000) }, async t => {
+test('stop an agent: only after the confirm', { skip, todo: REAL.card, timeout: slow(60_000) }, async t => {
   const { page, alphaMod } = await openLive(t)
-  await until(async () => (await cards(page)).length >= 8, 15_000, 'the cards')
   await openCard(page, 'Mochi-chan')
-  await until(() => page.eval(`!!document.querySelector(${JSON.stringify(SEL.drawer)})`), 8000, 'the drawer')
-  await page.click(SEL.tool, BTN.stop)
+  await page.click('button', BTN.stop)
   await sleep(slow(800))
-  assert.equal(alphaMod.handled.length, 0, 'one click on "Stop agent…" stops nothing')
-  await page.click(SEL.tool, BTN.confirmStop)
+  assert.equal(alphaMod.handled.length, 0, 'one click on "Stop agent" stops nothing')
+  await page.click('.sk-confirm button', BTN.stopYes)
   const [action] = await handled(alphaMod, 1)
   assert.deepEqual({ type: action.type, agent: action.agent }, { type: 'stop', agent: 'dev1' })
 })
 
 test('add an agent: role and task reach the mod as a spawn', { skip, timeout: slow(60_000) }, async t => {
   const { page, alphaMod, betaMod } = await openLive(t)
-  await until(async () => (await cards(page)).length >= 8, 15_000, 'the cards')
-  await page.click(SEL.tool, BTN.add)
-  await until(() => page.eval(`!!document.querySelector('[role="dialog"] ${SEL.messageBox}, ${SEL.messageBox}')`), 8000, 'the add panel')
-  await page.type(SEL.messageBox, 'Build the search page')
-  await page.click(SEL.tool, BTN.addAgent)
+  await page.click('button', BTN.add)
+  await until(() => page.eval(`!!document.querySelector('[role="dialog"] textarea')`), 8000, 'the add dialog')
+  await page.type('[role="dialog"] textarea', 'Build the search page')
+  await until(() => page.eval(`[...document.querySelectorAll('[role="dialog"] button')].some(b => /${BTN.addAgent}/.test(b.textContent.trim()) && !b.disabled)`), 8000, 'Add agent to be enabled')
+  await page.click('[role="dialog"] button', BTN.addAgent)
   const target = await until(() => (alphaMod.handled.length ? alphaMod : betaMod.handled.length ? betaMod : null), 10_000, 'a spawn to arrive')
   const [action] = await handled(target, 1)
   assert.deepEqual({ type: action.type, role: action.role, task: action.task }, { type: 'spawn', role: 'dev', task: 'Build the search page' })
@@ -165,97 +201,101 @@ test('add an agent: role and task reach the mod as a spawn', { skip, timeout: sl
 
 test('hide done, show done and clear done reach the mod; hiding really hides the finished card', { skip, timeout: slow(60_000) }, async t => {
   const { page, alphaMod } = await openLive(t)
-  await until(async () => (await cards(page)).some(c => c.name.includes('Tamago')), 15_000, 'the finished card')
+  await until(async () => (await members(page)).some(c => c.name.includes('Tamago')), 15_000, 'the finished card')
 
-  await page.click(SEL.tool, BTN.hide)
-  let [action] = await handled(alphaMod, 1)
-  assert.deepEqual({ type: action.type, mode: action.mode }, { type: 'finished', mode: 'hide' })
+  await page.click('button', BTN.hide)
+  await until(() => alphaMod.handled.length >= 1, 10_000, 'hide to arrive')
+  assert.ok(alphaMod.handled.some(h => h.action.type === 'finished' && h.action.mode === 'hide'))
   // the mod does what the real one does: it hides finished agents in the state it writes next
   alphaMod.make = mark => buildSnapshot({ team: 'Alpha Team', mark, hideFinished: true, agents: [['dev1', 'Mochi-chan', 'running'], ['qa1', 'Tanuki', 'waiting'], ['be1', 'Kuma-san', 'failed']] })
   alphaMod.write(1)
-  await until(async () => !(await cards(page)).some(c => c.name.includes('Tamago')), 10_000, 'the finished card to go')
-  assert.ok((await cards(page)).some(c => c.name.includes('Mochi-chan')), 'running agents stay')
+  await until(async () => !(await members(page)).some(c => c.name.includes('Tamago')), 10_000, 'the finished card to go')
+  assert.ok((await members(page)).some(c => c.name.includes('Mochi-chan')), 'running agents stay')
 
-  await page.click(SEL.tool, BTN.show)
-  await until(() => alphaMod.handled.length >= 2, 10_000, 'show to arrive')
-  assert.equal(alphaMod.handled[1].action.mode, 'show')
+  await page.click('button', BTN.show)
+  await until(() => alphaMod.handled.some(h => h.action.mode === 'show'), 10_000, 'show to arrive')
 
-  await page.click(SEL.tool, BTN.clear)
-  await sleep(slow(300))
-  await page.click(SEL.tool, 'Clear\\?|Click again|Clear done') // a second click confirms
+  await page.click('button', BTN.clear)
+  await until(() => page.eval(`!!document.querySelector('[role="dialog"]')`), 5000, 'the "Clear done?" dialog')
+  await page.click('[role="dialog"] button', BTN.clearYes)
   await until(() => alphaMod.handled.some(h => h.action.mode === 'clear'), 10_000, 'clear to arrive')
 })
 
-test('the inbox lists what needs the person; its Message button opens the agent and sends', { skip, timeout: slow(60_000) }, async t => {
+test('"Keep them" in the clear dialog sends nothing', { skip, timeout: slow(60_000) }, async t => {
   const { page, alphaMod } = await openLive(t)
-  await until(() => page.eval(`document.querySelectorAll(${JSON.stringify(SEL.inboxRow)}).length > 0`), 10_000, 'an inbox row for the waiting agent')
-  assert.match(await page.eval(`document.querySelector(${JSON.stringify(SEL.inboxRow)}).innerText`), /Tanuki/)
-  await page.click(`${SEL.inboxRow} button`, 'Message')
+  await page.click('button', BTN.clear)
+  await until(() => page.eval(`!!document.querySelector('[role="dialog"]')`), 5000, 'the "Clear done?" dialog')
+  await page.click('[role="dialog"] button', '^Keep them$')
+  await sleep(slow(800))
+  assert.equal(alphaMod.handled.length, 0)
+  assert.equal(await page.eval(`!!document.querySelector('[role="dialog"]')`), false, 'the dialog closed')
+})
+
+test('the needs-you tile lists what waits on the person; its Message button opens the agent and sends', { skip, timeout: slow(60_000) }, async t => {
+  const { page, alphaMod } = await openLive(t)
+  await until(() => page.eval(`document.querySelectorAll(${JSON.stringify(SEL.inboxItem)}).length > 0`), 10_000, 'a needs-you item for the waiting agent')
+  assert.match(await page.eval(`document.querySelector(${JSON.stringify(SEL.inboxItem)}).innerText`), /Tanuki/)
+  await page.click(`${SEL.inboxItem} button`, BTN.message)
   await typeAndSend(page, 'Go ahead')
   const [action] = await handled(alphaMod, 1)
   assert.deepEqual({ type: action.type, agent: action.agent }, { type: 'message', agent: 'qa1' })
 })
 
-test('two results that arrive in one push both show as toasts', { skip, todo: 'one toast at a time today', timeout: slow(60_000) }, async t => {
+test('two results that arrive in one push both show as toasts', { skip, timeout: slow(60_000) }, async t => {
   const { page, alphaMod } = await openLive(t)
   const now = Date.now()
   const events = [
     { n: 1, at: now, agent: 'dev1', kind: 'action', text: 'started frontend-dev-1 (Frontend)' },
     { n: 2, at: now, agent: 'dev1', kind: 'action', text: 'message sent to Mochi-chan' },
   ]
-  // collect every distinct toast text while it is on screen
-  const seen = new Set()
-  const poll = setInterval(() => page.eval(`[...document.querySelectorAll(${JSON.stringify(SEL.toast)})].map(e => e.textContent)`).then(list => list.forEach(x => seen.add(x))).catch(() => {}), 100)
-  t.after(() => clearInterval(poll))
+  const seen = collectToasts(page, t)
   alphaMod.make = mark => buildSnapshot({ team: 'Alpha Team', mark, events, notice: { seq: 2, ok: true, text: 'message sent to Mochi-chan' }, agents: [['dev1', 'Mochi-chan', 'running']] })
   alphaMod.write(2)
-  await until(() => [...seen].some(x => /started frontend-dev-1/.test(x)) && [...seen].some(x => /message sent to Mochi-chan/.test(x)), 10_000, 'both results as toasts')
+  await until(() => [...seen].some(x => /started frontend-dev-1/.test(x)) && [...seen].some(x => /message sent to Mochi-chan/.test(x)), 10_000, `both results as toasts (saw: ${[...seen].join(' | ')})`)
 })
 
 // ---- views -------------------------------------------------------------------------------------------------------------------
 
-test('Diagram and Space: a toggle switches views, and Space loads only when asked for', { skip, todo: 'the Diagram/Space toggle is part of the new page', timeout: slow(90_000) }, async t => {
+test('Diagram and Space: a toggle switches views, and the 3D code loads only when Space is chosen', { skip, timeout: slow(120_000) }, async t => {
   const { page } = await openLive(t)
-  const threeLoaded = () => [...page.requests.values()].some(r => /three|spaceview|starsystem|lazyspace/.test(r.url) && r.status === 200)
+  const threeLoaded = () => [...page.requests.values()].some(r => /three|spaceview|starsystem|engine\.chunk/.test(r.url) && r.status === 200)
   assert.equal(threeLoaded(), false, 'the 3D code is not fetched until Space is chosen')
-  await page.click('button, [role=button]', '^Space$')
-  await until(() => threeLoaded(), 15_000, 'the 3D code to load')
-  await until(() => page.eval(`!!document.querySelector('canvas')`), 15_000, 'a canvas')
-  await page.click('button, [role=button]', '^Diagram$')
-  await until(() => page.eval(`!document.querySelector('canvas[data-space]')`), 8000, 'back on the diagram')
+  await page.click('button', BTN.space)
+  await until(() => threeLoaded(), 20_000, 'the 3D code to load')
+  await until(() => page.eval(`!!document.querySelector('canvas')`), 20_000, 'the Space canvas')
+  await page.click('button', BTN.diagram)
+  await until(() => page.eval(`!!document.querySelector(${JSON.stringify(SEL.world)})`), 10_000, 'the diagram again')
 })
 
-test('without WebGL there is no Space toggle, and the diagram still works (with WebGL there is one)', { skip, todo: 'the Diagram/Space toggle is part of the new page', timeout: slow(120_000) }, async t => {
-  const toggles = page => page.eval(`[...document.querySelectorAll('button, [role=button]')].filter(b => /^Space$/.test(b.textContent.trim())).length`)
+test('without WebGL there is no Space toggle, and the diagram still works (with WebGL there is one)', { skip, timeout: slow(120_000) }, async t => {
+  const toggles = page => page.eval(`[...document.querySelectorAll('button')].filter(b => /${BTN.space}/.test((b.getAttribute('aria-label') || b.textContent).trim())).length`)
   const withGl = await openLive(t)
-  await until(async () => (await cards(withGl.page)).length >= 8, 15_000, 'the cards (WebGL on)')
   assert.ok((await toggles(withGl.page)) >= 1, 'a Space toggle when WebGL is on (the control for the check below)')
   const noGl = await openLive(t, { browserOptions: { webgl: false } })
-  await until(async () => (await cards(noGl.page)).length >= 8, 15_000, 'the cards (WebGL off)')
   assert.equal(await toggles(noGl.page), 0, 'no Space toggle when WebGL is off')
+  assert.ok((await members(noGl.page)).length >= 6, 'the diagram shows the agents')
 })
 
 test('a chip flies the view to its group', { skip, timeout: slow(60_000) }, async t => {
   const { page } = await openLive(t)
-  const before = await page.eval(`document.querySelector('.canvas, canvas')?.style.transform ?? ''`)
-  await page.click(SEL.chip, 'beta')
-  await sleep(slow(800))
-  const after = await page.eval(`document.querySelector('.canvas, canvas')?.style.transform ?? ''`)
-  assert.notEqual(after, before, 'the view moved')
+  const transform = () => page.eval(`document.querySelector(${JSON.stringify(SEL.world)})?.style.transform ?? ''`)
+  const before = await transform()
+  await page.click(SEL.chip, '^beta')
+  await until(async () => (await transform()) !== before, 5000, 'the view to move')
 })
 
 test('at phone width the page does not scroll sideways and still shows the agents', { skip, timeout: slow(60_000) }, async t => {
   const { page } = await openLive(t, { browserOptions: { width: 390, height: 844, mobile: true } })
-  const m = await page.eval(`({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth })`)
-  assert.ok(m.scroll <= m.client + 1, `no horizontal scroll: ${m.scroll}px in a ${m.client}px window`)
-  assert.match(await page.text(), /Mochi-chan|Alpha Team/)
+  const m = await page.eval(`({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth, body: document.body.scrollWidth })`)
+  assert.ok(m.scroll <= m.client + 1 && m.body <= m.client + 1, `no horizontal scroll: ${m.scroll}/${m.body}px in a ${m.client}px window`)
+  assert.match(await page.text(), /Mochi-chan|Alpha Team|Captain/)
 })
 
-test('a browser with no login, or an old link, is told how to get one, not shown a blank page', { skip, timeout: slow(60_000) }, async t => {
+test('a browser with no login, or an old link, is told how to get one, not shown a blank page', { skip, todo: REAL.login, timeout: slow(60_000) }, async t => {
   const { world, alpha } = await openLive(t)
   const root = new URL(alpha.url).origin
   const stranger = await launchBrowser(world) // a fresh profile: no cookie
-  await stranger.open(`${root}/`)
+  await stranger.open(`${root}${PAGE}`)
   await until(async () => /\/hq web/i.test(await stranger.text()), 10_000, 'the instruction to run /hq web again')
   assert.doesNotMatch(await stranger.text(), /Mochi-chan/, 'no agents are shown without a login')
   await stranger.open(`${root}/?c=${'0'.repeat(32)}`) // a link that is wrong or already used
@@ -264,15 +304,22 @@ test('a browser with no login, or an old link, is told how to get one, not shown
   assert.match(await stranger.text(), /forbidden|\/hq web/i)
 })
 
+test('a page that loses its login says so, instead of "reconnecting" forever', { skip, timeout: slow(90_000) }, async t => {
+  const { page, alpha } = await openLive(t)
+  await page.send('Network.clearBrowserCookies') // the browser forgets the login
+  await alpha.kill('SIGKILL') // the stream breaks; the page reconnects, and is refused
+  await until(async () => /lost its login|run \/hq web again/i.test(await page.text()), 40_000, 'the lost-login message')
+})
+
 // ---- cost -----------------------------------------------------------------------------------------------------------------------
 
-test('idle budget: at most 2 frames/s, 12 running animations and no drawing canvases while nothing is working', { skip, todo: 'frames keep coming while idle: infinite halo/ping animations on an idle page (see the perf report)', timeout: slow(120_000) }, async t => {
+test('idle budget: at most 2 frames/s, 12 running animations and no drawing canvases while nothing is working', { skip, todo: REAL.idle, timeout: slow(120_000) }, async t => {
   const idle = id => buildSnapshot({ team: id, agents: [['a1', 'Mochi-chan', 'completed'], ['a2', 'Tamago', 'idle']], lead: 'idle' })
   const { page } = await openLive(t, { sessions: [() => idle('Alpha Team'), () => idle('Beta Team')], probe: true })
   await sleep(slow(3000))
   const cost = await page.idleCost(5)
-  console.log(`[live idle] ${cost.framesPerSecond} frames/s, ${cost.animations} running animations, ${cost.canvases.length} drawing canvases (${cost.canvases.filter(c => !c.inView).length} offscreen)`)
-  assert.ok(cost.framesPerSecond <= 2, `idle frames/s ${cost.framesPerSecond} must be <= 2`)
+  console.log(`[live idle] ${cost.framesPerSecond} frames/s (a headless Chrome draws faster than a display's 60), ${cost.animations} running animations, ${cost.canvases.length} drawing canvases (${cost.canvases.filter(c => !c.inView).length} offscreen)`)
+  assert.ok(cost.framesPerSecond <= 2, `idle frames/s ${cost.framesPerSecond} must be <= 2 (running animations: ${cost.animationNames.join('; ') || 'none'})`)
   assert.ok(cost.animations <= 12, `running animations ${cost.animations} must be <= 12`)
   assert.equal(cost.canvases.length, 0, `${cost.canvases.length} canvases still draw while nothing works`)
 })

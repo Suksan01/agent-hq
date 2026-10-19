@@ -555,14 +555,8 @@ export function SidebarView(els: Els, data: HqData, actions: HqActions, draw: Dr
   return (
     <Box flexDirection="column" flexGrow={1} paddingX={1} backgroundColor={panelBg(data.isLight)}>
       {Header(els, team, data.isLight)}
-      {Section(els, teamHeading(data.team, data.project, data.columns - agentCount.length - HEADING_PADDING), data.columns, agentCount)}
-      {!data.team && <Text dimColor>No team defined. /agent-hq:team builds one.</Text>}
-      {rows.map(row => TreeLine(els, data, actions, row, draw))}
-      {team.length === 0 && <Text dimColor>No sub-agents yet. They appear here once one is spawned.</Text>}
-      {hiddenAgents > 0 && <Text dimColor>{hiddenAgents} finished agent(s) hidden</Text>}
-      {taskP.total > 0 && Section(els, 'TASK BOARD', data.columns, `${taskP.done}/${taskP.total}`)}
-      {taskP.total > 0 && TaskList(els, data)}
-      <Box marginTop={1} gap={1}>
+      {/* controls up top: with a long team a footer falls below the dock's bottom edge */}
+      <Box gap={1}>
         <Button key="toggle-hide" hotkey="h" onPress={actions.onToggleHide}>
           {data.hideFinished ? 'Show done' : 'Hide done'}
         </Button>
@@ -573,6 +567,13 @@ export function SidebarView(els: Els, data: HqData, actions: HqActions, draw: Dr
           ✕ Close
         </Button>
       </Box>
+      {Section(els, teamHeading(data.team, data.project, data.columns - agentCount.length - HEADING_PADDING), data.columns, agentCount)}
+      {!data.team && <Text dimColor>No team defined. /agent-hq:team builds one.</Text>}
+      {rows.map(row => TreeLine(els, data, actions, row, draw))}
+      {team.length === 0 && <Text dimColor>No sub-agents yet. They appear here once one is spawned.</Text>}
+      {hiddenAgents > 0 && <Text dimColor>{hiddenAgents} finished agent(s) hidden</Text>}
+      {taskP.total > 0 && Section(els, 'TASK BOARD', data.columns, `${taskP.done}/${taskP.total}`)}
+      {taskP.total > 0 && TaskList(els, data)}
     </Box>
   )
 }

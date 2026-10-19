@@ -29,6 +29,7 @@ export async function until(check, ms = 8000, what = 'condition') {
 
 const children = new Set()
 process.on('exit', () => children.forEach(c => c.kill('SIGKILL')))
+for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(signal, () => (children.forEach(c => c.kill('SIGKILL')), process.exit(130)))
 
 // ---- sample snapshots (what hooks/live.ts writes) ---------------------------------------------------------------------
 
@@ -242,7 +243,7 @@ export async function launchBrowser(world, { width = 1400, height = 900, webgl =
       const byTree = new Map()
       for (const e of events) if (e.name === 'DrawFrame') byTree.set(`${e.pid}/${e.args?.layerTreeId}`, (byTree.get(`${e.pid}/${e.args?.layerTreeId}`) ?? 0) + 1)
       const frames = Math.max(0, ...byTree.values()) / wall
-      const page = await browser.eval(`(() => { const vw = innerWidth, vh = innerHeight; const inView = r => r.right > 0 && r.bottom > 0 && r.left < vw && r.top < vh && r.width > 0 && r.height > 0; return JSON.stringify({ animations: document.getAnimations().filter(a => a.playState === 'running').length, canvases: ((window.__probe && window.__probe.canvases) || []).filter(c => c.calls > 0).map(c => ({ calls: c.calls, connected: c.el.isConnected, inView: c.el.isConnected && inView(c.el.getBoundingClientRect()) })) }) })()`)
+      const page = await browser.eval(`(() => { const vw = innerWidth, vh = innerHeight; const inView = r => r.right > 0 && r.bottom > 0 && r.left < vw && r.top < vh && r.width > 0 && r.height > 0; return JSON.stringify({ animations: document.getAnimations().filter(a => a.playState === 'running').length, animationNames: document.getAnimations().filter(a => a.playState === 'running').map(a => (a.animationName || a.transitionProperty || 'script') + ' on ' + (a.effect && a.effect.target ? a.effect.target.tagName.toLowerCase() + (a.effect.target.className && typeof a.effect.target.className === 'string' ? '.' + a.effect.target.className.trim().split(/\\s+/).slice(0, 2).join('.') : '') : '?')), canvases: ((window.__probe && window.__probe.canvases) || []).filter(c => c.calls > 0).map(c => ({ calls: c.calls, connected: c.el.isConnected, inView: c.el.isConnected && inView(c.el.getBoundingClientRect()) })) }) })()`)
       return { framesPerSecond: +frames.toFixed(1), seconds: wall, ...JSON.parse(page) }
     },
     posts: () => [...requests.values()].filter(r => r.method === 'POST' && r.url.endsWith('/action')),
@@ -274,7 +275,7 @@ export async function launchBrowser(world, { width = 1400, height = 900, webgl =
     },
     /** Clicks the centre of the first element matching `selector` (and, when given, whose text matches `text`) with a real mouse. */
     async mouseClickOn(selector, text) {
-      const point = await browser.eval(`(() => { const re = ${text ? `new RegExp(${JSON.stringify(text)}, 'i')` : 'null'}; const el = [...document.querySelectorAll(${JSON.stringify(selector)})].find(e => !re || re.test(e.textContent.trim())); if (!el) return null; el.scrollIntoView({ block: 'center', inline: 'center' }); const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 } })()`)
+      const point = await browser.eval(`(() => { const re = ${text ? `new RegExp(${JSON.stringify(text)}, 'i')` : 'null'}; const el = [...document.querySelectorAll(${JSON.stringify(selector)})].filter(e => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 }).find(e => !re || re.test(e.textContent.trim())); if (!el) return null; el.scrollIntoView({ block: 'center', inline: 'center' }); const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 } })()`)
       if (!point) throw new Error(`nothing to click for ${selector}${text ? ` /${text}/` : ''}`)
       await browser.mouseClick(point.x, point.y)
     },

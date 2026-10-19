@@ -73,6 +73,7 @@ const CSS = String.raw`/* The live diagram (diagram.js): groups, connections and
   display: inline-flex; align-items: center; gap: 8px; max-width: 200px; padding: 6px 14px 6px 10px; border: 0; border-radius: 999px; color: var(--sk-text); font: 500 13px var(--sk-font-title); cursor: pointer;
   background: linear-gradient(135deg, color-mix(in srgb, var(--hue) 22%, rgba(20, 20, 32, 0.8)), rgba(10, 10, 18, 0.8)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 0 24px -8px var(--hue);
 }
+.spv-chip--lead { padding: 0; background: none; box-shadow: none; max-width: none; border-radius: 0; }
 .spv-chip i { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--hue); box-shadow: 0 0 10px var(--hue); }
 .spv-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .spv-title { position: absolute; left: 0; top: 0; text-align: center; white-space: nowrap; pointer-events: none; will-change: transform; opacity: 0; transition: opacity 250ms; }

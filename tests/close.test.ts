@@ -1,5 +1,5 @@
-// The person can always close the sidebar: `/hq` toggles it, `/hq close` / `/hq open` say which, a ✕ Close button sits in
-// its footer, and once they close it no spawned agent opens it again by itself.
+// The person can always close the sidebar: `/hq` toggles it, `/hq close` / `/hq open` say which, a ✕ Close button sits at
+// its top, and once they close it no spawned agent opens it again by itself.
 import { expect, mock, test } from 'claude-code/testing'
 import type { AgentInfo, On } from 'claude-code'
 import type { Engine } from 'claude-code/testing'
@@ -66,7 +66,7 @@ test('/hq toggles the sidebar, and /hq close says how to get it back', async ($,
   expect((await s.hq('close')).text).toBe(CLOSED) // closing a closed sidebar is fine
 })
 
-test('the sidebar footer has a ✕ Close button (q) that closes it', async ($, on) => {
+test('the sidebar has a ✕ Close button (q) that closes it', async ($, on) => {
   const s = await session($, on)
   await s.hq('open')
   const ui = await $.ui.mount({ plugin: 'agent-hq', surface: 'terminal', component: 'Pane', requestId: PANE, props: PANE_PROPS as never })

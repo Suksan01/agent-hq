@@ -37,6 +37,7 @@ const CARD_COVER = 0.4, NARROW_COVER = 0.22, MIN_CARD_SCALE = 0.55 // the cards 
 const FRAME_EVERY_MS = 30 // the cards and leader lines are brought up to date at most once per frame the scene draws
 const GLIDE_MS = 250 // a card moving to a new slot
 const CLICK_SLOP = 5, PICK_PADDING = 10 // pixels: a press that moves less is a click; how far outside a planet still picks it
+const LEAD_MIN_SCALE = 0.8
 const LEAD_WIDTH = 320 // the compact lead deck is built for about this width
 const TITLE_FALLBACK = { w: 220, h: 60 }
 
@@ -135,7 +136,8 @@ export function SpaceView({ groups = [], focus = null, selected = null, inset = 
 
   const scaleRef = useRef(1) // the cards shrink when there are many for the room
   const rawSize = (uid, kind) => sizes.current.get(`${uid}|${kind}`) ?? GUESS[kind]
-  const sizeOf = (uid, kind) => { const s = rawSize(uid, kind); return kind === 'chip' || scaleRef.current === 1 ? s : { w: s.w * scaleRef.current, h: s.h * scaleRef.current } }
+  const scaleOf = kind => (kind === 'chip' ? 1 : kind === 'lead' ? Math.max(LEAD_MIN_SCALE, scaleRef.current) : scaleRef.current) // the lead's deck never shrinks far: it falls back to its mini chip instead
+  const sizeOf = (uid, kind) => { const s = rawSize(uid, kind), k = scaleOf(kind); return k === 1 ? s : { w: s.w * k, h: s.h * k } }
 
   // after cards of another kind have been drawn, place them
   useLayoutEffect(() => { frame(true) }, [kinds, hover])
@@ -185,7 +187,12 @@ export function SpaceView({ groups = [], focus = null, selected = null, inset = 
       if (el) el.classList.toggle('is-placed', show)
       if (!show) continue
       const size = sizes.current.get(`title|${key}`) ?? TITLE_FALLBACK
-      const x = Math.min(Math.max(bounds.x, info.title.x - size.w / 2), bounds.x + bounds.w - size.w), y = Math.max(bounds.y, info.title.y - size.h)
+      const x = Math.min(Math.max(bounds.x, info.title.x - size.w / 2), bounds.x + bounds.w - size.w)
+      // a title that would land on another system's title steps up, then down, a title's height at a time; with no room it is left out
+      const clear = at => ![...titles.values()].some(o => x < o.x + o.w + 6 && o.x < x + size.w + 6 && at < o.y + o.h + 6 && o.y < at + size.h + 6)
+      const top = Math.max(bounds.y, info.title.y - size.h)
+      const y = [top, top - size.h - 8, top + size.h + 8].find(at => at >= bounds.y && at + size.h <= bounds.y + bounds.h && clear(at))
+      if (y === undefined) { if (el) el.classList.remove('is-placed'); continue }
       titles.set(key, { x, y, w: size.w, h: size.h })
       if (el && el.dataset.at !== `${x},${y}`) { el.style.transform = `translate(${x}px, ${y}px)`; el.dataset.at = `${x},${y}` }
     }
@@ -224,7 +231,7 @@ export function SpaceView({ groups = [], focus = null, selected = null, inset = 
         el.style.transition = glide && !fresh ? `transform ${GLIDE_MS}ms ease-out, opacity ${GLIDE_MS}ms` : ''
         el.classList.toggle('is-placed', on)
         if (on) {
-          const to = `translate(${x}px, ${y}px)${kind !== 'chip' && scaleRef.current < 1 ? ` scale(${scaleRef.current})` : ''}`
+          const to = `translate(${x}px, ${y}px)${scaleOf(kind) < 1 ? ` scale(${scaleOf(kind)})` : ''}`
           if (el.dataset.at !== to) { el.style.transform = to; el.dataset.at = to } // only a card that moved is written to
         }
       }
@@ -233,7 +240,7 @@ export function SpaceView({ groups = [], focus = null, selected = null, inset = 
       const [, key2, id] = /^([^|]*)\|(.*)$/.exec(a.id) ?? []
       const p = ok ? space.project(id, key2 === '' ? null : key2) : null
       if (line && p?.visible) {
-        const w = slot.w * (slot.kind === 'chip' ? 1 : scaleRef.current), h = slot.h * (slot.kind === 'chip' ? 1 : scaleRef.current)
+        const { w, h } = slot // already at the scale the card is drawn
         const nx = Math.min(Math.max(p.x, x), x + w), ny = Math.min(Math.max(p.y, y), y + h)
         const far = Math.hypot(nx - p.x, ny - p.y) > Math.max(6, p.r) + 6
         const d = far ? `M${p.x.toFixed(1)} ${p.y.toFixed(1)}L${nx.toFixed(1)} ${ny.toFixed(1)}` : ''
@@ -284,6 +291,9 @@ export function SpaceView({ groups = [], focus = null, selected = null, inset = 
       ${[...agentOf].flatMap(([uid, { agent, group }]) => drawn(uid).map(kind => {
         const state = agent.needsYou ? 'waiting' : normStatus(agent.status)
         const p = cardProps(agent, uid, selected, onSelect, group)
+        if (kind === 'chip' && agent.isLead) {
+          return html`<div key=${`${uid}|chip`} className="spv-chip spv-chip--lead" ref=${el => measure(`${uid}|chip`, el)}><${LeadDeck} variant="mini" ...${leadDeckProps(agent, group, handlers)} /></div>`
+        }
         if (kind === 'chip') {
           return html`<button key=${`${uid}|chip`} type="button" className=${`spv-chip${group.alive === false ? ' spv-chip--lost' : ''}`} style=${{ '--hue': STATUS_HUE[agent.isLead ? 'lead' : state] }} ref=${el => measure(`${uid}|chip`, el)} onClick=${() => onSelect?.(group.session ?? null, agent.id)}><i></i><span>${agent.nickname || agent.name}</span></button>`
         }
