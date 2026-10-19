@@ -126,6 +126,6 @@ test('the sidebar draws that bar on both surfaces, never leaving a working agent
 
   const desktop = await $.ui.mount({ plugin: 'agent-hq', surface: 'desktop', component: 'Pane', requestId: 'agent-hq', props: PANE_PROPS as never })
   expect(await desktop.find({ text: /getting started · 0 tools/ })).toBeDefined()
-  expect(await desktop.find({ text: /░ in progress/ })).toBeDefined()
+  expect(await desktop.find({ text: /in progress/ })).toBeDefined()
   await desktop.unmount()
 })

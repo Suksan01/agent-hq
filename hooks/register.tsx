@@ -41,6 +41,7 @@ const todos = atom({ plugin: 'agent-hq', key: 'todos' } as const, {})
 const tasks = atom({ plugin: 'agent-hq', key: 'tasks' } as const, {})
 const now = atom({ plugin: 'agent-hq', key: 'now' } as const, 0)
 const hideFinished = atom({ plugin: 'agent-hq', key: 'hideFinished' } as const, false)
+const isTreeExpanded = atom({ plugin: 'agent-hq', key: 'isTreeExpanded' } as const, false)
 const wasAutoOpened = atom({ plugin: 'agent-hq', key: 'wasAutoOpened' } as const, false)
 const isBandHidden = atom({ plugin: 'agent-hq', key: 'isBandHidden' } as const, false)
 const barOwners = atom({ plugin: 'agent-hq', key: 'barOwners' } as const, {})
@@ -571,6 +572,7 @@ async function readData($: EngineInterface, columns: number): Promise<HqData> {
     tasks: await read($, tasks),
     now: await read($, now),
     hideFinished: await read($, hideFinished),
+    isTreeExpanded: await read($, isTreeExpanded),
     columns,
     isLight,
     team: await read($, team),
@@ -879,6 +881,8 @@ export const register: Register = (on, options) => {
       onToggleHide: () => void update($, hideFinished, v => !v),
       onClear: () => clearDone($),
       onClose: () => void closeSidebar($).catch(() => {}),
+      onBuildTeam: () => void $.command.run({ command: 'agent-hq:team' }).catch(() => $.ui.toast('Agent HQ: run /agent-hq:team to build a team')),
+      onToggleExpand: () => void update($, isTreeExpanded, v => !v),
     }
     if (e.surface !== 'terminal') {
       const els = $.ui.resolve(e)

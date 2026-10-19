@@ -19,6 +19,8 @@ export type HqData = {
   tasks: Record<string, HqTask>
   now: number
   hideFinished: boolean
+  /** The person unfolded the "+N more" lines: every one-line agent is listed. */
+  isTreeExpanded?: boolean
   columns: number
   isLight: boolean
   /** The team in force: its lead names the main row, its role titles name the members. */
@@ -92,6 +94,10 @@ export type HqActions = {
   onToggleHide: () => void
   onClear: () => void
   onClose: () => void
+  /** Runs /agent-hq:team, from the "Build a team" button shown while no team exists. */
+  onBuildTeam: () => void
+  /** Unfolds the "+N more" lines, or folds them again. */
+  onToggleExpand: () => void
 }
 
 export type BandActions = { onOpenSidebar: () => void; onHide: () => void }
@@ -435,10 +441,13 @@ function CompactNode(els: Els, data: HqData, actions: HqActions, { agent, prefix
 function TreeLine(els: Els, data: HqData, actions: HqActions, row: TreeRow | MoreRow, draw: DrawRaster) {
   const { Text } = els
   if ('more' in row) {
+    const { Button } = els
     return (
-      <Text key={`more-${row.prefix}`} dimColor>
-        {row.prefix}+{row.more} more idle/done
-      </Text>
+      <Button key={`more-${row.prefix}`} plain onPress={actions.onToggleExpand}>
+        <Text dimColor>
+          {row.prefix}+{row.more} more idle/done ›
+        </Text>
+      </Button>
     )
   }
   return isCompact(row.agent) ? CompactNode(els, data, actions, row) : AgentNode(els, data, actions, row, draw)
@@ -514,7 +523,7 @@ function AgentNode(els: Els, data: HqData, actions: HqActions, row: TreeRow, dra
   )
 }
 
-function TaskList({ Box, Text }: Els, data: HqData) {
+function TaskList({ Box, Text, Button }: Els, data: HqData, actions: HqActions) {
   const ORDER: HqTaskStatus[] = ['in_progress', 'pending', 'completed']
   const TONE_COLOR = tonesFor(data.isLight)
   const all = Object.values(data.tasks)
@@ -527,13 +536,24 @@ function TaskList({ Box, Text }: Els, data: HqData) {
     <Box flexDirection="column">
       {shown.map(task => {
         const blockers = task.blockedBy.filter(isOpen)
+        // a task names its owner by agent name; a listed one opens on a press
+        const owner = task.owner ? Object.values(data.agents).find(a => a.name === task.owner) : undefined
+        const line = (
+          <Text wrap="truncate-end" dimColor={task.status === 'completed'}>
+            <Text color={TONE_COLOR[TASK_TONE[task.status]]}>{TASK_GLYPH[task.status]} </Text>
+            <Text dimColor>#{task.id} </Text>
+            {task.status === 'in_progress' && task.activeForm ? task.activeForm : task.subject}
+          </Text>
+        )
         return (
           <Box key={`task-${task.id}`} flexDirection="column">
-            <Text wrap="truncate-end" dimColor={task.status === 'completed'}>
-              <Text color={TONE_COLOR[TASK_TONE[task.status]]}>{TASK_GLYPH[task.status]} </Text>
-              <Text dimColor>#{task.id} </Text>
-              {task.status === 'in_progress' && task.activeForm ? task.activeForm : task.subject}
-            </Text>
+            {owner ? (
+              <Button key={`open-task-${task.id}`} plain onPress={() => actions.onView(owner.id)}>
+                {line}
+              </Button>
+            ) : (
+              line
+            )}
             {(task.owner || blockers.length > 0) && task.status !== 'completed' && (
               <Text wrap="truncate-end" dimColor>
                 {'   '}
@@ -552,7 +572,7 @@ function TaskList({ Box, Text }: Els, data: HqData) {
 export function SidebarView(els: Els, data: HqData, actions: HqActions, draw: DrawRaster): RenderElement {
   const { Box, Text, Button } = els
   const team = teamOf(data)
-  const rows = walkTree(data, MAX_COMPACT)
+  const rows = walkTree(data, data.isTreeExpanded ? Infinity : MAX_COMPACT)
   const taskP = progressOf(Object.values(data.tasks))
   const hiddenAgents = team.filter(a => data.hideFinished && isFinished(a.status)).length
   const agentCount = `${team.length} agent${team.length === 1 ? '' : 's'}`
@@ -571,21 +591,51 @@ export function SidebarView(els: Els, data: HqData, actions: HqActions, draw: Dr
         <Button key="close-sidebar" hotkey="q" onPress={actions.onClose}>
           ✕ Close
         </Button>
+        {data.isTreeExpanded ? (
+          <Button key="fold-agents" onPress={actions.onToggleExpand}>
+            Fold idle
+          </Button>
+        ) : null}
       </Box>
       {Section(els, teamHeading(data.team, data.project, data.columns - agentCount.length - HEADING_PADDING), data.columns, agentCount)}
-      {!data.team && <Text dimColor>No team defined. /agent-hq:team builds one.</Text>}
+      {!data.team && (
+        <Box gap={1}>
+          <Text dimColor>No team yet.</Text>
+          <Button key="build-team" variant="primary" onPress={actions.onBuildTeam}>
+            Build a team
+          </Button>
+        </Box>
+      )}
       {rows.map(row => TreeLine(els, data, actions, row, draw))}
       {team.length === 0 && <Text dimColor>No sub-agents yet. They appear here once one is spawned.</Text>}
       {hiddenAgents > 0 && <Text dimColor>{hiddenAgents} finished agent(s) hidden</Text>}
       {taskP.total > 0 && Section(els, 'TASK BOARD', data.columns, `${taskP.done}/${taskP.total}`)}
-      {taskP.total > 0 && TaskList(els, data)}
+      {taskP.total > 0 && TaskList(els, data, actions)}
     </Box>
   )
 }
 
-/** Where Rasters are not drawn (desktop, vscode, mobile), a track is a plain block bar of the same width. */
+const BAR_PX = 8 // an Svg bar's height in CSS pixels
+const COLUMN_PX = 7 // about one monospace column, so an Svg bar is as wide as the track it stands for
+const BAR_TRACK = { dark: '#3F3F46', light: '#C9C8C3' }
+
+/** A bar as an Svg: a rounded track with its done part in the tone's colour, its words in `alt` for a reader. */
+function svgBar(Svg: Elements['desktop']['Svg'], key: string, fraction: number, color: string, isLight: boolean, alt: string, columns: number) {
+  const w = columns * COLUMN_PX
+  const done = Math.round(Math.max(0, Math.min(1, fraction)) * w)
+  const track = isLight ? BAR_TRACK.light : BAR_TRACK.dark
+  const fill = done > 0 ? `<rect width="${done}" height="${BAR_PX}" rx="4" fill="${color}"/>` : ''
+  const source = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${BAR_PX}" viewBox="0 0 ${w} ${BAR_PX}"><rect width="${w}" height="${BAR_PX}" rx="4" fill="${track}"/>${fill}</svg>`
+  return <Svg key={key} source={source} alt={alt} width={w} height={BAR_PX} />
+}
+
+/**
+ * Where Rasters are not drawn (desktop, vscode, mobile), a track is an Svg bar of the same width with its words beside
+ * it, or a plain block bar on a surface without Svg.
+ */
 export function textTrack(els: Els, rasters: Raster[], data: HqData): DrawRaster {
-  const { Text } = els
+  const { Box, Text } = els
+  const { Svg } = els as Partial<Elements['desktop']>
   const TONE_COLOR = tonesFor(data.isLight)
   const progressFor = (key: string): Progress | undefined => {
     if (key === 'track-team') return teamProgress(data)
@@ -607,6 +657,15 @@ export function textTrack(els: Els, rasters: Raster[], data: HqData): DrawRaster
       const spec = fallbackSpec(fallback, owner as HqAgent)
       const width = Math.min(r?.columns ?? 30, 30)
       const done = Math.round(spec.done * width)
+      const words = spec.sweep ? spec.label : spec.count
+      if (Svg) {
+        return (
+          <Box gap={1}>
+            {svgBar(Svg, key, spec.done, TONE_COLOR[spec.tone], data.isLight, words, width)}
+            <Text dimColor>{words}</Text>
+          </Box>
+        )
+      }
       return spec.sweep ? (
         <Text dimColor>{'⠶⠶⠶ '}{spec.label}</Text>
       ) : (
@@ -620,6 +679,7 @@ export function textTrack(els: Els, rasters: Raster[], data: HqData): DrawRaster
     if (!r || !p) return null
     const width = Math.min(r.columns, 30)
     const done = p.total === 0 ? 0 : Math.round((p.done / p.total) * width)
+    if (Svg) return svgBar(Svg, key, p.total === 0 ? 0 : p.done / p.total, TONE_COLOR[p.done === p.total ? 'done' : 'running'], data.isLight, `${p.done} of ${p.total} done`, width)
     return (
       <Text>
         <Text color={TONE_COLOR[p.done === p.total ? 'done' : 'running']}>{'█'.repeat(done)}</Text>
