@@ -20,6 +20,8 @@ test('parseTeam reads a team and refuses a broken one with the reason', () => {
   if (typeof team === 'string') throw new Error(team)
   expect(team.roles.map(r => r.id)).toEqual(['senior-dev', 'reviewer'])
   expect(team.roles[1]?.tools).toEqual(['Read', 'Grep', ...COORDINATION_TOOLS])
+  // a limited role must still be able to hand its report back to the lead
+  expect(team.roles[1]?.tools).toContain('SubagentHandback')
   expect(team.roles[0]?.tools).toBeUndefined()
 
   expect(parseTeam('{ not json')).toContain('not valid JSON')
