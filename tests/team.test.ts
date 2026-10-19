@@ -197,10 +197,11 @@ test('a team file loads: roles registered, lead names the main row, lead section
   expect(composed.sections[1]?.text).toContain('You are the Tech Lead')
   const asTeammate = await $.prompt.compose({ model: 'm', promptModel: 'm', surfaces: [], tools: [], outputStyle: null, traits: ['teammate'] })
   expect(asTeammate.sections.map(s => s.id)).toEqual(['engine'])
-  for (const trait of ['lean', 'bare'] as const) {
-    const slim = await $.prompt.compose({ model: 'm', promptModel: 'm', surfaces: [], tools: [], outputStyle: null, traits: [trait] })
-    expect(slim.sections.map(s => s.id), trait).toEqual(['engine']) // a lean or bare prompt gets no lead section
-  }
+  const bare = await $.prompt.compose({ model: 'm', promptModel: 'm', surfaces: [], tools: [], outputStyle: null, traits: ['bare'] })
+  expect(bare.sections.map(s => s.id)).toEqual(['engine']) // a bare prompt gets no lead section
+  // the desktop app's own prompt (seen live): a lean body, no terminal, skills listed; the lead must still be there
+  const desktop = await $.prompt.compose({ model: 'm', promptModel: 'm', surfaces: [], tools: [], outputStyle: null, traits: ['lean', 'print', 'skills'] })
+  expect(desktop.sections.map(s => s.id)).toEqual(['engine', 'agent-hq:team'])
 
   await $.agent.spawn({ prompt: 'go', subagentType: 'agent-hq:senior-dev' } as never)
   const ui = await $.ui.mount({

@@ -42,8 +42,8 @@ file wins. Run the skill again to edit or replace the team.
 Agent HQ loads the file right away:
 
 - Each role becomes an agent type named `agent-hq:<role id>`, so the lead hands work to it with the Agent tool.
-- The main session acts as the lead. Its title, rules and the roster are added to its system prompt (not to a `lean` or
-  `bare` prompt). Where an organization manages Claude Code, hooks on prompt composition do not run in a plugin you
+- The main session acts as the lead. Its title, rules and the roster are added to its system prompt (also the short `lean`
+  prompt the desktop app sends; not a `bare` one). Where an organization manages Claude Code, hooks on prompt composition do not run in a plugin you
   installed, so there the lead section and the team's rules are missing from the prompt; the roles still register. The lead's
   `model` (for example `"opus"`) is the one the session should run on: a toast says so, once per change, when it
   runs on another (switch with `/model`).
