@@ -143,13 +143,18 @@ export const bandTrackWidth = (cols: number, hasClicks: boolean) => Math.max(12,
 
 export const hasBand = (data: HqData) => teamOf(data).length > 0 || Object.keys(data.tasks).length > 0
 
+/** The Team track's words: how many agents work now (idle and waiting ones do not), else Done or Team. */
+export function teamTrackLabel(team: HqAgent[], p: Progress): string {
+  const running = team.filter(a => isWorking(a.status)).length
+  return running > 0 ? `${running} running` : p.done === p.total ? 'Done' : 'Team'
+}
+
 export function bandRasters(data: HqData, W: number, t: number, isLight: boolean): Raster[] {
   const team = teamOf(data)
   const out: Raster[] = []
-  const running = team.filter(a => !isFinished(a.status)).length
   const p = teamProgress(data)
   if (p.total > 0) {
-    const label = running > 0 ? `${running} running` : p.done === p.total ? 'Done' : 'Team'
+    const label = teamTrackLabel(team, p)
     out.push({ key: 'track-team', columns: W, rows: 1, cells: trackCells({ ...p, tone: toneOf(p, team), label, count: `${p.done}/${p.total}` }, W, t, isLight) })
   }
   const tasks = Object.values(data.tasks)
