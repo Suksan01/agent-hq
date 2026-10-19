@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.1 (2026-10-19)
+
+### Changed
+- The bundled libraries no longer carry HeroUI or BotAvatar, which nothing has used since the space page replaced the
+  island page: `web/vendor/libs.js` shrinks from 579 KB to 385 KB and `heroui.min.css` is gone.
+
+### Fixed
+- The live page's drawer test waits for the view to settle after Fit before its real mouse click, so it no longer
+  fails on a loaded machine.
+
 ## 0.3.0 (2026-10-19)
 
 ### Added
