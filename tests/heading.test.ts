@@ -7,7 +7,8 @@ import type { Engine } from 'claude-code/testing'
 import { withApproval } from '../hooks/approval'
 import { cellText } from '../hooks/cells'
 import { TEAM_FILE, parseTeam } from '../hooks/team'
-import { folderOf, teamHeading } from '../hooks/view'
+import { MAIN, mergeAgents } from '../hooks/model'
+import { folderOf, teamHeading, teamTrackLabel } from '../hooks/view'
 
 const RAW_TEAM = {
   name: 'Booking App Team',
@@ -102,4 +103,13 @@ test('the band above the prompt starts with the team name and folder', async ($,
   const ui = await $.ui.mount({ plugin: 'agent-hq', surface: 'terminal', component: 'AbovePrompt', props: BAND_PROPS as never, viewport: { columns: 100, rows: 40, isFullscreen: true } as never })
   expect(await ui.find({ text: /BOOKING APP TEAM · app/ })).toBeDefined()
   await ui.unmount()
+})
+
+test('the band calls only working agents running, never idle or waiting teammates', () => {
+  const member = (id: string, status: AgentInfo['status']): AgentInfo => ({ id, name: id, type: 'general-purpose', description: 'x', status })
+  const team = (...listed: AgentInfo[]) => Object.values(mergeAgents({}, listed, 0)).filter(a => a.id !== MAIN)
+
+  expect(teamTrackLabel(team(member('a1', 'idle'), member('a2', 'waiting')), { done: 0, active: 0, total: 2 })).toBe('Team')
+  expect(teamTrackLabel(team(member('a1', 'idle'), member('a2', 'running')), { done: 0, active: 1, total: 2 })).toBe('1 running')
+  expect(teamTrackLabel(team(member('a1', 'completed')), { done: 1, active: 0, total: 1 })).toBe('Done')
 })

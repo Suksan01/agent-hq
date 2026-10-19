@@ -1,7 +1,7 @@
-// What waits on the person: tool calls the engine put to them (a permission ask) and agents held on an approval. Pure
-// helpers; register.tsx owns the state. The live page shows the list, the status line counts it.
+// What waits on the person: tool calls the engine put to them (a permission ask), agents held on an approval and idle
+// teammates. Pure helpers; register.tsx owns the state. The live page shows the list, the status line counts it.
 
-import type { HqAgent } from '../types'
+import type { HqAgent, HqStatus } from '../types'
 import { baseName, commandWords, hostOf } from './activity'
 import { MAIN, isFinished } from './model'
 
@@ -34,24 +34,31 @@ export const liveAsks = (asks: Asks, agents: Record<string, HqAgent>): Asks =>
   Object.fromEntries(Object.entries(asks).filter(([, ask]) => ask.agent === MAIN || (agents[ask.agent] !== undefined && !isFinished(agents[ask.agent]?.status ?? 'completed'))))
 
 /**
- * The agents newly `waiting` get a start time, the ones no longer waiting lose theirs. (`waiting` is an agent held on a
- * plan's approval, background work or an Agent call: the sidebar already calls it "needs approval".)
+ * Why an agent waits on the person, by its status: `waiting` is held on a plan's approval, background work or an Agent
+ * call (the sidebar calls it "needs approval"); `idle` is a teammate done with its turn, waiting for a message.
  */
+const HELD: Partial<Record<HqStatus, string>> = {
+  waiting: 'held, waiting on an approval or a background task',
+  idle: 'idle, waiting for a message',
+}
+
+/** The agents newly waiting on the person (see HELD) get a start time, the ones no longer waiting lose theirs. */
 export function trackWaiting(since: Record<string, number>, agents: Record<string, HqAgent>, now: number): Record<string, number> {
   return Object.fromEntries(
     Object.values(agents)
-      .filter(a => a.id !== MAIN && a.status === 'waiting')
+      .filter(a => a.id !== MAIN && HELD[a.status] !== undefined)
       .map(a => [a.id, since[a.id] ?? now]),
   )
 }
 
-/** Everything waiting on the person, longest waiting first: open permission asks, then agents held on an approval. */
+/** Everything waiting on the person, longest waiting first: open permission asks, then held agents and idle teammates. */
 export function buildInbox(asks: Asks, agents: Record<string, HqAgent>, waitingSince: Record<string, number>): InboxItem[] {
   const fromAsks = Object.values(liveAsks(asks, agents))
   const askers = new Set(fromAsks.map(a => a.agent))
-  const fromAgents = Object.values(agents)
-    .filter(a => a.id !== MAIN && a.status === 'waiting' && !askers.has(a.id))
-    .map((a): InboxItem => ({ agent: a.id, since: waitingSince[a.id] ?? a.startedAt, what: 'held, waiting on an approval or a background task' }))
+  const fromAgents = Object.values(agents).flatMap((a): InboxItem[] => {
+    const what = HELD[a.status]
+    return a.id !== MAIN && what && !askers.has(a.id) ? [{ agent: a.id, since: waitingSince[a.id] ?? a.startedAt, what }] : []
+  })
   return [...fromAsks, ...fromAgents].sort((a, b) => a.since - b.since)
 }
 

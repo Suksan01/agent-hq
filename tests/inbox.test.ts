@@ -3,7 +3,7 @@ import { expect, test } from 'claude-code/testing'
 import type { AgentInfo } from 'claude-code'
 
 import { addAsk, buildInbox, describeAsk, liveAsks, removeAsk, statusText, trackWaiting } from '../hooks/inbox'
-import { MAIN, mergeAgents } from '../hooks/model'
+import { MAIN, mergeAgents, workingCount } from '../hooks/model'
 
 const info = (id: string, status: AgentInfo['status'] = 'running'): AgentInfo => ({ id, name: id, type: 'general-purpose', description: 'x', status })
 
@@ -73,6 +73,16 @@ test('the inbox lists open asks and held agents, longest waiting first, an agent
     { agent: 'a1', since: 50, what: 'Bash: git push' }, // its ask says more than "held"
   ])
   expect(buildInbox({}, mergeAgents({}, [info('a3')], 0), {})).toEqual([])
+})
+
+test('an idle teammate needs the person: dated once, listed, and counted on the status line', () => {
+  const idle = mergeAgents({}, [info('a1', 'idle')], 0)
+  const since = trackWaiting({}, idle, 100)
+
+  expect(since).toEqual({ a1: 100 })
+  expect(buildInbox({}, idle, since)).toEqual([{ agent: 'a1', since: 100, what: 'idle, waiting for a message' }])
+  // "0 working · 1 needs you", whatever the status line's emoji
+  expect(statusText(workingCount(idle), buildInbox({}, idle, since).length, { done: 0, total: 0 })).toBe(statusText(0, 1, { done: 0, total: 0 }))
 })
 
 test('the status line counts who works and who needs the person, and is empty when there is nothing', () => {
