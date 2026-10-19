@@ -274,3 +274,17 @@ test('a session with auto memory switched off registers members that keep lesson
   expect(prompts[0]).toContain('you have no agent memory here') // senior-dev can edit files
   expect(prompts[0]).not.toContain('update your agent memory')
 })
+
+test('the lead keeps the person in the loop: the plan and who does what first, a line per finished member, decisions asked at once', () => {
+  const team = parseTeam(JSON.stringify(TEAM))
+  if (typeof team === 'string') throw new Error(team)
+  const lead = leadPrompt(team)
+
+  expect(lead).toContain('## Keep the person in the loop')
+  expect(lead).toMatch(/before you hand out work, tell the person the plan/i)
+  expect(lead).toContain('which member (by name) takes each part')
+  expect(lead).toMatch(/when a member finishes, fails or gets stuck, say so in one line/i)
+  expect(lead).toMatch(/ask the person at once with AskUserQuestion/i)
+  expect(lead).toMatch(/never go quiet/i)
+  expect(lead).toContain('waiting on the person')
+})

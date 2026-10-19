@@ -3,7 +3,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import { MAIN, barIdsIn, clearFinished, countTool, createTask, mergeAgents, mergeTodos, overallProgress, planSteps, updateTask, who, workingCount } from './model'
 import type { HqTeam, HqTodo } from '../types'
-import { MEMORY_SCOPE, SELF_EVAL_SKILL, TEAM_FILE, leadModelWarning, leadPrompt, parseTeam, rolePrompt } from './team'
+import { MEMORY_SCOPE, NO_TEAM_PROMPT, SELF_EVAL_SKILL, TEAM_FILE, leadModelWarning, leadPrompt, parseTeam, rolePrompt } from './team'
 import { runFreshActions } from './actions'
 import type { ActionDeps, PageAction } from './actions'
 import { hasOldRecord, isApproved, withApproval } from './approval'
@@ -657,7 +657,12 @@ export const register: Register = (on, options) => {
   on('prompt.compose', async ($, e, next) => {
     const composed = await next(e)
     const current = await read($, team)
-    if (!current || e.traits.includes('teammate') || e.traits.includes('bare') || e.traits.includes('lean')) return composed
+    if (e.traits.includes('teammate') || e.traits.includes('bare') || e.traits.includes('lean')) return composed
+    if (!current) {
+      // no file at all: offer to make one; a file that is untrusted or ignored has its own toast pointing at the fix
+      if ((await read($, teamSource)) !== null) return composed
+      return { sections: [...composed.sections, { id: 'agent-hq:no-team', text: NO_TEAM_PROMPT, scope: 'session' as const }] }
+    }
 
     return { sections: [...composed.sections, { id: 'agent-hq:team', text: `${leadPrompt(current)}\n\n${LEAD_TOOLS_NOTE}`, scope: 'session' as const }] }
   })
