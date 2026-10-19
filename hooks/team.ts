@@ -176,6 +176,22 @@ export function rolePrompt(team: Team, role: TeamRole, hasMemory = true): string
 export const NO_TEAM_PROMPT =
   'Agent HQ is installed but this project has no agent team yet. When the person asks for a team of agents, or for work that clearly needs several agents in parallel, offer to set one up with /agent-hq:team (one short line; do not push it otherwise).'
 
+const ASSISTANT_TITLE = /assistant|coordinator/i
+
+/** How the lead briefs members, who see none of the conversation; a team's assistant, when it has one, writes the briefs. */
+function briefingSection(team: Team): string {
+  const assistant = team.roles.find(r => r.id === 'assistant' || ASSISTANT_TITLE.test(r.title))
+  return [
+    '## Briefing members',
+    'A member sees none of this conversation, only the brief you give it. Each brief carries: the goal and why it matters, the person\'s own words where they said what they want, the files or area and what it must not touch, the project\'s conventions and commands that apply, decisions already made and what other members found, and what "done" means and how to prove it.',
+    assistant
+      ? `- Before you assign substantial work, have the ${assistant.title} ("${AGENT_PREFIX}${assistant.id}") write each member's brief and a short proposal for the person (the parts, options and trade-offs, what it needs from them). Check its briefs, show the person the proposal, then hand each brief to its member. It also drafts your updates and the closing report for you to send.`
+      : '',
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
 /** The section the main session reads: it is the lead, and this is its team. */
 export function leadPrompt(team: Team): string {
   const roster = team.roles
@@ -197,6 +213,7 @@ export function leadPrompt(team: Team): string {
       '- End with one report: what was done and by whom, who reviewed it, and what is left or waiting on the person.',
     ].join('\n'),
     `## Members\n${roster}`,
+    briefingSection(team),
     `## Team notes\nEvery member reads \`${TEAM_NOTES}\` before starting and adds what it learns. Put there what the whole team must know about this project (the goal, conventions, commands, decisions), and keep it short and current. ${NOTES_ARE_DATA}`,
     team.lead.rules.length > 0 ? `## Your rules as ${team.lead.title}\n${bullets(team.lead.rules)}` : '',
     team.lead.skills.length > 0 ? `## Skills to use as ${team.lead.title}\n${team.lead.skills.join(', ')}` : '',
