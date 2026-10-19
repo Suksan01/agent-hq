@@ -36,6 +36,11 @@ AskUserQuestion for choices, and wait for the answer before moving on.
 - **No catch-all options** such as "Change it" or "Something else": "Other" already lets the person type what to
   change. An option that goes back to an earlier step names that step ("Change the lineup").
 - Keep `header` to 12 characters and 2 to 4 options. The person can always pick "Other" to type their own answer.
+- **Say where the person is**: start every question's text with its step, `Step 4 of 8 · ` then the question
+  ("Step 4 of 8 · Which lineup fits the checkout work?"), so the interview never feels open-ended. Skipped steps keep
+  their numbers.
+- **Every preview reads the same way**: what the choice produces on top, one `───` rule, then the one-line summary.
+  Name real things from this project (its folders, its stack, its test command), never placeholders like `<area>`.
 
 ## 1. Look for an existing team
 
@@ -55,8 +60,19 @@ Recommend **Start a new team** instead when the person asked for a new team in s
 
 ## 2. Ask what the team is for
 
-First glance at the working directory (its folder name, the README and a package or build file, a few reads at
-most) so the question can name what you see. Then ask in plain text and wait: what the team should accomplish, and
+First read the project so every later suggestion fits it (about ten reads at most; Glob and Read, nothing that
+changes a file):
+- **Stack**: the package or build file (`package.json` dependencies and scripts, `pyproject.toml`, `go.mod`,
+  `Cargo.toml`, ...): the framework, the test runner and the test command.
+- **Shape**: workspaces or app folders (`apps/*`, `packages/*`, `services/*`): one app or several.
+- **House rules**: `CLAUDE.md`, `AGENTS.md` and the README's first screen: conventions a team must keep.
+- **Skills**: which of this session's listed skills match that stack (for example `tdd`, `code-review`, a framework's
+  own skill).
+
+Keep what you found as a few notes for yourself and use them later: step 4 matches templates on it (UI work in a web
+app → `frontend-web`, several apps → `product-team`, a goal about bugs → `bug-squad`) and names the real folders in
+each role's mission; step 6 picks skills from the matching ones and puts the real test command in the rules; step 8's
+suggestions name real areas. Then ask in plain text and wait: what the team should accomplish, and
 what it works on (repository, stack, product, documents), with one example answer, for example: "What should this
 team do? This looks like a Next.js storefront, so for example: build the checkout flow and keep the tests green."
 Skip the guess when the directory is empty or is the home directory. One or two sentences from the person is enough;
@@ -320,12 +336,15 @@ placeholder (`<...>`, `<purpose: ...>`) is refused the same way: check both befo
 Ask in plain text what the team should do first, with two or three concrete suggestions drawn from the goal and the
 project (for example "Add the booking cancel flow", "Get the test suite passing", "Map the codebase into the team
 notes"), then lead it:
-1. Plan the work and track it (a plan-progress bar or TodoWrite), one step per assignment.
+1. Plan the work and track it (a plan-progress bar or TodoWrite), one step per assignment, and tell the person the
+   plan before anyone starts: each part, which member takes it by name, and what you do meanwhile.
 2. Hand each assignment to a member with the Agent tool: `subagent_type: "agent-hq:<role id>"`,
    `name: "<role id>-<n>"` (`senior-dev-1`, `senior-dev-2`), a clear goal, the files or area, what done means and
    what not to touch. Run independent assignments in the background in parallel; never run more of a role than
    its count.
 3. Send finished work to the review role when the team has one, and back to its author when changes are requested.
-4. Give the person one combined report: what was done, by whom, what was reviewed, what is left.
+4. Keep the person in the loop while members work: one line as each member finishes, fails or gets stuck, and a
+   choice that is theirs asked at once with AskUserQuestion. Never go quiet.
+5. Give the person one combined report: what was done, by whom, what was reviewed, what is left or waiting on them.
 
 The person can run `/agent-hq:team` again at any time to edit or replace the team, and `/hq` to watch it work.
