@@ -249,9 +249,9 @@ function seat($: EngineInterface, name: 'band' | 'sidebar', site: Omit<Site, 're
 // ---------- state ----------
 
 async function syncAgents($: EngineInterface) {
-  const [listed, t] = await Promise.all([$.agent.list(), $.clock.now()])
+  const [listed, t, session] = await Promise.all([$.agent.list(), $.clock.now(), $.session.id().catch(() => '')]) // no id just means no lead seed
   const before = await read($, agents)
-  const after = mergeAgents(before, listed, t, nameTheme)
+  const after = mergeAgents(before, listed, t, nameTheme, session)
   let heard: Sound | null = null
   if (JSON.stringify(after) !== JSON.stringify(before)) {
     await update($, agents, () => after)

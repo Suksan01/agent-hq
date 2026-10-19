@@ -11,9 +11,10 @@
     "nicknameTheme": {
       "type": "string",
       "title": "Nickname theme",
-      "description": "The cast your agents' nicknames are drawn from: futuristic planets with a star for the lead by default. A new theme applies to agents named from now on.",
-      "default": "planets",
+      "description": "The cast your agents' nicknames are drawn from: ordinary first names by default. Changing it renames every agent whose name is from another theme.",
+      "default": "people",
       "options": [
+        "people",
         "planets",
         "japanese-snacks",
         "pirates",

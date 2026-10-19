@@ -4,9 +4,9 @@ import { expect, test } from 'claude-code/testing'
 import { LEAD_NICKNAMES, NICKNAMES } from '../hooks/names'
 import { DEFAULT_THEME, THEMES, THEME_IDS, soundsOn, themeOf } from '../hooks/themes'
 
-test('the six themes, planets first and the default', () => {
-  expect(THEME_IDS).toEqual(['planets', 'japanese-snacks', 'pirates', 'space-crew', 'forest-friends', 'robots'])
-  expect(DEFAULT_THEME).toBe('planets')
+test('the seven themes, people first and the default', () => {
+  expect(THEME_IDS).toEqual(['people', 'planets', 'japanese-snacks', 'pirates', 'space-crew', 'forest-friends', 'robots'])
+  expect(DEFAULT_THEME).toBe('people')
   expect(Object.keys(THEMES)).toEqual([...THEME_IDS])
 })
 
@@ -28,11 +28,11 @@ test('no two themes share a name, so a nickname says which theme it came from', 
   expect(new Set(all).size).toBe(all.length)
 })
 
-test('the default theme, planets, is the pool the names module draws from', () => {
-  expect(THEMES.planets.members).toEqual(NICKNAMES)
-  expect(THEMES.planets.leads).toEqual(LEAD_NICKNAMES)
-  expect(NICKNAMES).toContain('Kepler-7b')
-  expect(LEAD_NICKNAMES).toContain('Sirius Prime')
+test('the default theme, people, is the pool the names module draws from', () => {
+  expect(THEMES.people.members).toEqual(NICKNAMES)
+  expect(THEMES.people.leads).toEqual(LEAD_NICKNAMES)
+  expect(NICKNAMES).toContain('Alex')
+  expect(LEAD_NICKNAMES).toContain('Margaret')
   for (const name of [...NICKNAMES, ...LEAD_NICKNAMES]) expect(name.length).toBeLessThanOrEqual(14)
 })
 

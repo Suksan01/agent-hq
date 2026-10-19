@@ -1,5 +1,5 @@
 import type { HqAgent, HqStatus, HqTask, HqTaskStatus, HqTodo } from '../types'
-import { pickNickname } from './names'
+import { isThemeName, pickNickname } from './names'
 import { DEFAULT_THEME, THEMES, type NameTheme } from './themes'
 import { MASCOT_COUNT, SPECIES } from './sprites'
 
@@ -40,7 +40,8 @@ export function mergeAgents(
   rows: Record<string, HqAgent>,
   listed: readonly ListedAgent[],
   now: number,
-  theme: NameTheme = THEMES[DEFAULT_THEME], // where new nicknames come from; agents that have one keep it
+  theme: NameTheme = THEMES[DEFAULT_THEME], // where nicknames come from; an agent keeps its own while it is from this theme
+  leadSeed = '', // the session id: two sessions' leads pick from different places in the pool, so they are not named alike
 ): Record<string, HqAgent> {
   const seen = new Set(listed.map(a => a.id))
   const next: Record<string, HqAgent> = { [MAIN]: rows[MAIN] ?? mainAgent(now) }
@@ -70,7 +71,7 @@ export function mergeAgents(
     }
   }
 
-  return withNicknames(uniqueMascots(next), theme)
+  return withNicknames(uniqueMascots(next), theme, leadSeed)
 }
 
 /** Rows from older versions can share a bot: the later-started of two gets a free one. */
@@ -86,11 +87,13 @@ function uniqueMascots(rows: Record<string, HqAgent>): Record<string, HqAgent> {
 }
 
 /** Every row has a nickname of its own: the lead's from the lead pool; a clash (rows from older versions) goes to the later-started. */
-function withNicknames(rows: Record<string, HqAgent>, theme: NameTheme): Record<string, HqAgent> {
+function withNicknames(rows: Record<string, HqAgent>, theme: NameTheme, leadSeed = ''): Record<string, HqAgent> {
   const ordered = Object.values(rows).sort((a, b) => Number(b.id === MAIN) - Number(a.id === MAIN) || a.startedAt - b.startedAt)
   const taken = new Set<string>()
   return ordered.reduce((acc, a) => {
-    const nickname = a.nickname !== undefined && !taken.has(a.nickname) ? a.nickname : pickNickname(a.id, taken, a.id === MAIN, theme)
+    const isLead = a.id === MAIN
+    const keeps = a.nickname !== undefined && !taken.has(a.nickname) && isThemeName(a.nickname, theme, isLead) // a theme change renames
+    const nickname = keeps ? (a.nickname as string) : pickNickname(isLead && leadSeed ? `${MAIN}:${leadSeed}` : a.id, taken, isLead, theme)
     taken.add(nickname)
     return nickname === a.nickname ? acc : { ...acc, [a.id]: { ...a, nickname } }
   }, rows)

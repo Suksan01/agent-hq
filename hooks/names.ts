@@ -1,5 +1,5 @@
 // Nicknames: every agent gets its own, picked once when it is first seen (like its bot), so the team reads as a cast of
-// characters. The pools are the nickname themes (themes.ts); by default members are futuristic worlds and the lead a star.
+// characters. The pools are the nickname themes (themes.ts); by default members and lead get ordinary first names and the lead a star.
 import { DEFAULT_THEME, THEMES, type NameTheme } from './themes'
 
 /** The default theme's member names: agents take these in turn (see pickNickname). */
@@ -26,4 +26,10 @@ export function pickNickname(id: string, taken: ReadonlySet<string>, isLead = fa
       if (!taken.has(pick)) return pick
     }
   }
+}
+
+/** Whether `name` comes from the theme's pool (lead or member), a repeat like "Alex II" included: a name from another theme does not. */
+export function isThemeName(name: string, theme: NameTheme, isLead = false): boolean {
+  const base = name.replace(/ (?:[IVX]+|\d+)$/, '')
+  return (isLead ? theme.leads : theme.members).includes(base)
 }

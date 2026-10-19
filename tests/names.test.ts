@@ -5,7 +5,7 @@ import type { Engine } from 'claude-code/testing'
 import type { HqAgent } from '../types'
 import { buildSnapshot } from '../hooks/live'
 import { MAIN, mergeAgents } from '../hooks/model'
-import { LEAD_NICKNAMES, NICKNAMES, pickNickname } from '../hooks/names'
+import { LEAD_NICKNAMES, NICKNAMES, isThemeName, pickNickname } from '../hooks/names'
 import { THEMES } from '../hooks/themes'
 import { nameAndRole, titleParts } from '../hooks/view'
 import type { HqData } from '../hooks/view'
@@ -106,14 +106,29 @@ test('the sidebar shows each agent by nickname, then its real name; the lead by 
   await ui.unmount()
 })
 
-test('a chosen theme names new agents from its pools, and agents that already have a nickname keep it', () => {
+test('a chosen theme names agents from its pools, and a theme change renames everyone from the new one', () => {
   const pirates = mergeAgents({}, [agent('a'), agent('b')], 0, THEMES.pirates)
   expect(THEMES.pirates.members).toContain(pirates.a?.nickname as string)
   expect(THEMES.pirates.leads).toContain(pirates[MAIN]?.nickname as string)
-  const switched = mergeAgents(pirates, [agent('a'), agent('b'), agent('c')], 5, THEMES.robots)
-  expect(switched.a?.nickname).toBe(pirates.a?.nickname)
-  expect(switched[MAIN]?.nickname).toBe(pirates[MAIN]?.nickname)
-  expect(THEMES.robots.members).toContain(switched.c?.nickname as string)
+  const again = mergeAgents(pirates, [agent('a'), agent('b')], 5, THEMES.pirates)
+  expect(again.a?.nickname).toBe(pirates.a?.nickname) // the same theme keeps every name
+  const switched = mergeAgents(pirates, [agent('a'), agent('b'), agent('c')], 5, THEMES.people)
+  for (const id of ['a', 'b', 'c']) expect(THEMES.people.members).toContain(switched[id]?.nickname as string)
+  expect(THEMES.people.leads).toContain(switched[MAIN]?.nickname as string)
+})
+
+test('two sessions\' leads are seeded by their session, so they are not all named alike', () => {
+  const leadOf = (seed: string) => mergeAgents({}, [], 0, THEMES.people, seed)[MAIN]?.nickname
+  expect(leadOf('6b43dbf5')).toBe(leadOf('6b43dbf5')) // the same session keeps its lead's name
+  expect(new Set(['6b43dbf5', '7d86a1c2', '1f00e9aa', 'c0ffee00', '9a8b7c6d'].map(leadOf)).size).toBeGreaterThan(1)
+})
+
+test(`isThemeName knows a theme's own names, repeats like "Alex II" included, and nothing from another theme`, () => {
+  expect(isThemeName('Alex', THEMES.people)).toBe(true)
+  expect(isThemeName('Alex III', THEMES.people)).toBe(true)
+  expect(isThemeName('Margaret', THEMES.people, true)).toBe(true)
+  expect(isThemeName('Margaret', THEMES.people)).toBe(false)
+  expect(isThemeName('Kepler-7b', THEMES.people)).toBe(false)
 })
 
 test('the nicknameTheme option picks the theme the sidebar names agents from', { options: { nicknameTheme: 'forest-friends' } }, async ($, on) => {

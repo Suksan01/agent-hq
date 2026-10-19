@@ -188,9 +188,10 @@ working, and the status line is empty when there is nothing to show.
 
 ## Nicknames, sounds and XP
 
-- **Nicknames**: every agent gets a cheerful nickname when it first appears (the lead too, from its own pool), shown
-  before its real name: `Mochi-chan (frontend-dev-1)`. The **Nickname theme** option picks the cast: Japanese snacks
-  (default), pirates, space crew, forest friends or robots. A new theme applies to agents named from then on.
+- **Nicknames**: every agent gets a nickname when it first appears (the lead too, from its own pool), shown before its
+  real name: `Alex (frontend-dev-1)`. The **Nickname theme** option picks the cast: ordinary first names (people, the
+  default), planets, Japanese snacks, pirates, space crew, forest friends or robots. Changing the theme renames every
+  agent whose name is from another theme; XP and badges are kept per name, so a renamed agent starts its own.
 - **Sounds**: a short, soft, low tone when an agent finishes, needs you, fails, starts, or the team levels up (terminals
   with audio only). Switch them off with the **Sounds** option. The live page plays the same tones; `node
   scripts/make-space-sounds.mjs assets` writes the terminal's clips from `web/space-sounds.js`.
@@ -403,6 +404,9 @@ From the mod folder:
   call it makes, and `tsc -p . --noUnusedLocals` type-checks it.
 - `node --test web/server.test.mjs web/build-design.test.mjs` tests the local server, the hub and the design build
   (real server processes on free ports, in temp folders).
+- `node --test skills/self-evaluation/skill.test.mjs` checks that the self-evaluation skill teaches the same evidence
+  rule as the role prompt, and that every `Self-check` example in it follows that rule (the mod's test sandbox cannot
+  read Markdown).
 - `node --test --test-concurrency=1 web/e2e.test.mjs` is the end-to-end proof that the live page is realtime and
   lossless: a real hub and two real session servers with scripted stand-ins for the mod, and a raw HTTP client for the
   page. It prints the numbers it measures. It is timing-sensitive, so run it alone or with `--test-concurrency=1`. On a

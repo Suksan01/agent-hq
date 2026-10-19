@@ -74,7 +74,7 @@ export function groupsOf(sessions, names, clockOf = () => 0) {
     const ids = new Set(shown.map(m => m.id))
     const leadId = shown.find(m => m.isLead)?.id ?? null
     const tidy = shown.map(m => (m.parentId && !ids.has(m.parentId) ? { ...m, parentId: leadId } : m))
-    return { session: s.session, team: n.team, folder: n.sub || n.folder, tag: n.tag, alive: s.alive, agents: tidy }
+    return { session: s.session, team: n.flag ?? n.team, folder: n.sub || n.folder, tag: n.tag, alive: s.alive, agents: tidy }
   })
 }
 
@@ -90,8 +90,8 @@ export function hudOf(shown, names) {
   const n = one ? names.get(one.session) : null
   const overall = shown.reduce((p, s) => ({ done: p.done + s.snapshot.overall.done, total: p.total + s.snapshot.overall.total }), { done: 0, total: 0 })
   return {
-    title: one ? n?.team ?? one.label : `${shown.length} systems`,
-    folder: one ? n?.sub || undefined : shown.map(s => names.get(s.session)?.team ?? s.label).join(' · '),
+    title: one ? n?.flag ?? one.label : `${shown.length} systems`,
+    folder: one ? n?.sub || undefined : shown.map(s => names.get(s.session)?.flag ?? s.label).join(' · '),
     counts: countsOf(shown),
     pct: pctOf(overall),
     hasTeam: Boolean(one?.snapshot.team),

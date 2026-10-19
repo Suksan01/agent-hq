@@ -1,13 +1,11 @@
 // How a session is named on the page, and which of its results become toasts. Pure, no DOM and no imports, so `node --test`
 // can check it; the page (whatever its look) takes its labels and toasts from here.
 
-const TAG_LENGTH = 4
-
 /**
  * Names for sessions: `team` is the team's name (the folder when the session has no team), `folder` the project folder, `tag`
- * the first 4 characters of the session id, only when two alive sessions share both team name and folder. The text forms:
- * `flag` (the big one on the system), `sub` (smaller, under it), `chip` ("Team · folder"), `prefix` (starts toasts and the drawer's
- * "on …": the team, or the folder when there is no team).
+ * "#1", "#2"… only when two alive sessions share both team name and folder (numbered in session id order). The text forms:
+ * `flag` (the team as every title, list and toast shows it: "Web Team #2"), `sub` (smaller, under it: the folder), `chip`
+ * (the flag, with the folder only when the same team name runs in another folder too), `prefix` (starts toasts: the flag).
  * Takes [{session, label, alive, snapshot}], returns a Map from session to its names.
  */
 export function sessionNames(sessions) {
@@ -16,20 +14,21 @@ export function sessionNames(sessions) {
     const team = s.snapshot?.team?.name || folder
     return { session: s.session ?? null, alive: s.alive !== false, hasTeam: Boolean(s.snapshot?.team?.name), team, folder }
   })
-  const alikeAlive = n => base.filter(o => o.alive && o.team === n.team && o.folder === n.folder).length
+  const twins = n => base.filter(o => o.alive && o.team === n.team && o.folder === n.folder).sort((x, y) => String(x.session).localeCompare(String(y.session)))
+  const elsewhere = n => base.some(o => o.hasTeam && o.team === n.team && o.folder !== n.folder)
   const out = new Map()
   for (const n of base) {
-    const tag = n.alive && alikeAlive(n) > 1 ? String(n.session ?? '').slice(0, TAG_LENGTH) : ''
-    const sub = n.hasTeam ? n.folder : ''
-    const suffix = tag ? ` · ${tag}` : ''
+    const alike = n.alive ? twins(n) : []
+    const tag = alike.length > 1 ? `#${alike.indexOf(n) + 1}` : ''
+    const flag = n.team + (tag ? ` ${tag}` : '')
     out.set(n.session, {
       team: n.team,
       folder: n.folder,
       tag,
-      flag: n.team + suffix,
-      sub,
-      chip: (n.hasTeam ? `${n.team} · ${n.folder}` : n.folder) + suffix,
-      prefix: n.team + suffix,
+      flag,
+      sub: n.hasTeam ? n.folder : '',
+      chip: n.hasTeam && elsewhere(n) ? `${n.team} · ${n.folder}${tag ? ` ${tag}` : ''}` : flag,
+      prefix: flag,
     })
   }
   return out

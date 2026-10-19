@@ -134,14 +134,14 @@ function App() {
   const leadOf = s => s?.snapshot.agents.find(a => a.isMain)
   const hidden = Boolean(current?.snapshot.hideFinished)
   const clock = pick ? live.clockOf(pick.session.session) : 0
-  const drawer = pick ? drawerOf(pick.agent, pick.session, clock, pick.index, isMulti ? names.get(pick.session.session)?.team : undefined) : null
+  const drawer = pick ? drawerOf(pick.agent, pick.session, clock, pick.index, isMulti ? names.get(pick.session.session)?.flag : undefined) : null
   const teams = focused === null ? list.filter(s => s.alive) : []
   const side = wide && (drawer || feedOpen || inbox.length > 0)
   const sheet = !wide && (drawer || (inbox.length > 0 && inboxOpen) || feedOpen)
   const inset = wide
     ? { top: 16, right: side ? PANEL_W + 24 : 16, bottom: barHeight, left: PANEL_W + 24 }
     : { top: NARROW_TOP, right: 12, bottom: barHeight + (sheet ? Math.round(innerHeight * 0.4) : PILLS_H), left: 12 }
-  const chips = [{ id: 'all', label: 'All', count: list.length }, ...list.map(s => ({ id: keyOf(s), label: names.get(s.session)?.chip ?? s.label, count: s.snapshot.agents.filter(a => !a.isMain).length, seed: names.get(s.session)?.team, attention: inbox.some(i => i.session === s.session) }))]
+  const chips = [{ id: 'all', label: 'All', count: list.length }, ...list.map(s => ({ id: keyOf(s), label: names.get(s.session)?.chip ?? s.label, count: s.snapshot.agents.filter(a => !a.isMain).length, seed: names.get(s.session)?.flag, attention: inbox.some(i => i.session === s.session) }))]
   const target = focused === null ? 'all' : keyOf(list.find(s => s.session === focused) ?? list[0])
 
   return html`<${SpaceCanvas} className="hq-app">
@@ -155,7 +155,7 @@ function App() {
       ${boardOpen ? html`<${TaskBoardTile} sections=${boardSections(shown, names)} onClose=${() => setBoardOpen(false)} />` : null}
     </div>
     <div className=${`hq-right${drawer ? ' has-drawer' : ''}`}>
-      ${drawer?.lead && teams.length > 1 ? html`<${SegmentedToggle} label="Team to message" value=${keyOf(pick.session)} options=${teams.map(s => ({ id: keyOf(s), label: names.get(s.session)?.team ?? s.label }))}
+      ${drawer?.lead && teams.length > 1 ? html`<${SegmentedToggle} label="Team to message" value=${keyOf(pick.session)} options=${teams.map(s => ({ id: keyOf(s), label: names.get(s.session)?.flag ?? s.label }))}
         onChange=${key => talkTo(list.find(s => keyOf(s) === key))} />` : null}
       ${drawer
         ? html`<${Drawer} key=${selected} ...${drawer} onClose=${() => setSelected(null)}

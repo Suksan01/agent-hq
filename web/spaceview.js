@@ -287,7 +287,7 @@ export function SpaceView({ groups = [], focus = null, selected = null, inset = 
     ${loaded ? null : html`<div className="spv-loading sk-label">loading the space view…</div>`}
     <div className="spv-overlay">
       <svg className="spv-leaders" aria-hidden="true">${[...agentOf.keys()].map(id => html`<path key=${id} className="spv-leader" ref=${el => { if (el) lines.current.set(id, el); else lines.current.delete(id) }} />`)}</svg>
-      ${groups.map(g => html`<div key=${`title|${g.session ?? ''}`} className="spv-title" ref=${el => measure(`title|${g.session ?? ''}`, el)}><div className="spv-measure" style=${{ display: 'inline-block' }}><h2>${g.team || g.folder}</h2><div className="sk-label">${[g.team ? g.folder : '', g.tag].filter(Boolean).join(' · ')}</div></div></div>`)}
+      ${groups.map(g => html`<div key=${`title|${g.session ?? ''}`} className="spv-title" ref=${el => measure(`title|${g.session ?? ''}`, el)}><div className="spv-measure" style=${{ display: 'inline-block' }}><h2>${g.team || g.folder}</h2><div className="sk-label">${g.team ? g.folder : ''}</div></div></div>`)}
       ${[...agentOf].flatMap(([uid, { agent, group }]) => drawn(uid).map(kind => {
         const state = agent.needsYou ? 'waiting' : normStatus(agent.status)
         const p = cardProps(agent, uid, selected, onSelect, group)

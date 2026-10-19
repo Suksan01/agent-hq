@@ -242,7 +242,7 @@ export function Diagram({ groups = [], focus = null, selected = null, inset, onS
       ${world.groups.map(g => html`<section key=${g.key} className=${`dg-group${groupLost.get(g.key) ? ' dg-group--lost' : ''}`} aria-label=${g.team || g.folder} style=${{ left: g.x, top: g.y, width: g.w, height: g.h, '--ghue': groupGlow.get(g.key) }}>
         <header className="dg-header">
           <h2 className="dg-team">${g.team || g.folder}</h2>
-          <div className="dg-folder sk-label">${[g.team ? g.folder : '', g.tag].filter(Boolean).join(' · ')}</div>
+          <div className="dg-folder sk-label">${g.team ? g.folder : ''}</div>
         </header>
       </section>`)}
       <svg className="dg-edges" width=${world.width} height=${world.height} aria-hidden="true">

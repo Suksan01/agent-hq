@@ -2,9 +2,9 @@
 // mean. Pure data and two readers, so the tests and the names module use them without an engine. Every pool is plain
 // ASCII and short enough for a sidebar row, and no name appears in two themes.
 
-export const THEME_IDS = ['planets', 'japanese-snacks', 'pirates', 'space-crew', 'forest-friends', 'robots'] as const
+export const THEME_IDS = ['people', 'planets', 'japanese-snacks', 'pirates', 'space-crew', 'forest-friends', 'robots'] as const
 export type ThemeId = (typeof THEME_IDS)[number]
-export const DEFAULT_THEME: ThemeId = 'planets'
+export const DEFAULT_THEME: ThemeId = 'people'
 
 export type NameTheme = {
   id: ThemeId
@@ -15,6 +15,23 @@ export type NameTheme = {
   /** Names for the lead. */
   leads: readonly string[]
 }
+
+// Ordinary first names, for people who want their agents named like colleagues: members and, for the lead, other names.
+const PEOPLE_MEMBERS: readonly string[] = [
+  'Alex', 'Sam', 'Jordan', 'Taylor', 'Casey', 'Riley', 'Jamie', 'Morgan', 'Avery', 'Quinn',
+  'Emma', 'Liam', 'Olivia', 'Noah', 'Sophia', 'Lucas', 'Mia', 'Ethan', 'Chloe', 'Daniel',
+  'Grace', 'Henry', 'Isabel', 'Jack', 'Laura', 'Leo', 'Lily', 'Mark', 'Nina', 'Oscar',
+  'Paul', 'Rachel', 'Ryan', 'Sarah', 'Simon', 'Tom', 'Anna', 'Ben', 'Clara', 'David',
+  'Elena', 'Felix', 'Hannah', 'Ian', 'Julia', 'Kevin', 'Lena', 'Martin', 'Nora', 'Peter',
+  'Rosa', 'Sean', 'Tara', 'Victor', 'Zoe', 'Adam', 'Beth', 'Carlos', 'Diana', 'Eric',
+  'Fiona', 'George', 'Helen', 'Ivan', 'Jenny', 'Kate', 'Luke', 'Maya', 'Nathan', 'Owen',
+  'Priya', 'Raj', 'Sofia', 'Tim', 'Uma', 'Vera', 'Will', 'Yuki', 'Amir', 'Lina',
+]
+
+const PEOPLE_LEADS: readonly string[] = [
+  'Margaret', 'Robert', 'Catherine', 'Michael', 'Elizabeth', 'Richard', 'Patricia', 'Thomas', 'Susan', 'Andrew',
+  'Rebecca', 'Jonathan',
+]
 
 // Futuristic worlds for members (catalog-style and evocative) and stars for the lead, so name, planet and card read as one world.
 const PLANETS_MEMBERS: readonly string[] = [
@@ -116,6 +133,7 @@ const ROBOTS_LEADS: readonly string[] = [
 ]
 
 export const THEMES: Record<ThemeId, NameTheme> = {
+  people: { id: 'people', title: 'People', members: PEOPLE_MEMBERS, leads: PEOPLE_LEADS },
   planets: { id: 'planets', title: 'Planets and stars', members: PLANETS_MEMBERS, leads: PLANETS_LEADS },
   'japanese-snacks': { id: 'japanese-snacks', title: 'Japanese snacks', members: JAPANESE_SNACKS_MEMBERS, leads: JAPANESE_SNACKS_LEADS },
   pirates: { id: 'pirates', title: 'Pirates', members: PIRATES_MEMBERS, leads: PIRATES_LEADS },
