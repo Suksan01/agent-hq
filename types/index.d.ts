@@ -69,6 +69,8 @@ declare module 'claude-code' {
       tasks: Record<string, HqTask>
       now: number
       hideFinished: boolean
+      /** The person unfolded the sidebar's "+N more" lines. */
+      isTreeExpanded: boolean
       wasAutoOpened: boolean
       /** The person closed the band; the next spawned agent brings it back. */
       isBandHidden: boolean
