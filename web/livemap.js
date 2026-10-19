@@ -9,6 +9,10 @@ import { levelOf, timelineOf } from './drawer.js'
 const STATUS_OF = { running: 'working', pending: 'working', waiting: 'waiting', idle: 'idle', completed: 'done', failed: 'failed', killed: 'stopped' }
 export const statusOf = status => STATUS_OF[status] ?? (['working', 'waiting', 'done', 'failed', 'idle', 'stopped'].includes(status) ? status : 'idle')
 
+/** The lead's snapshot status is always 'running'; what it is doing is in its `tone` (running, needs_input, done, error). Members use their status. */
+const LEAD_TONE = { running: 'working', needs_input: 'waiting', done: 'done', error: 'failed' }
+export const agentStatus = a => (a.isMain ? LEAD_TONE[a.tone] ?? 'working' : statusOf(a.status))
+
 export const BLANK = { at: 0, team: null, agents: [], tasks: [], roles: [], overall: { done: 0, active: 0, total: 0 }, tasksProgress: { done: 0, active: 0, total: 0 }, notice: null, hideFinished: false, events: [] }
 
 /** /events and /state carry {v: 2, sessions: [{session, cwd, label, alive, snapshot}]}; an older single snapshot is one session. Stable order: name, then id. */
@@ -45,7 +49,7 @@ export function groupsOf(sessions, names, clockOf = () => 0) {
     const n = names.get(s.session) ?? { team: s.label, folder: s.label, tag: '' }
     const clock = clockOf(s.session)
     const agents = [...s.snapshot.agents].sort((a, b) => Number(b.isMain) - Number(a.isMain) || a.id.localeCompare(b.id)).map(a => {
-      const status = statusOf(a.status)
+      const status = agentStatus(a)
       const needsYou = waiting.has(`${keyOf(s)}|${a.id}`)
       return {
         id: a.id,
@@ -108,7 +112,7 @@ export function feedItems(rows, clockOf, isMulti, nameOf) {
     ? { marker: true, text: `${isMulti ? `${r.label}: ` : ''}${r.text}` }
     : {
       time: elapsedText(clockOf(r.session) - r.at),
-      status: r.agent ? statusOf(r.agent.status) : FEED_STATUS[r.kind] ?? 'idle',
+      status: r.agent ? agentStatus(r.agent) : FEED_STATUS[r.kind] ?? 'idle',
       who: r.agent ? r.agent.nickname || r.agent.name : r.agentId ?? '',
       text: `${r.text}${isMulti ? ` · ${nameOf(r.session)}` : ''}`,
     })
@@ -137,7 +141,7 @@ export function boardSections(shown, names) {
 
 /** What the drawer shows for one agent (the props of Drawer), from the snapshot's agent and its session's events. */
 export function drawerOf(agent, session, clock, index = 0, team) {
-  const status = statusOf(agent.status)
+  const status = agentStatus(agent)
   const level = levelOf(agent.xp)
   const end = agent.endedAt ?? clock
   const minutes = Math.max(0, Math.round((end - agent.startedAt) / 60000))
@@ -182,7 +186,7 @@ export function nicknamed(text, agents) {
 /** The live session to talk to when none is chosen: one that needs the person (an inbox item or a failure), else the most recently active. */
 export function attentionOf(sessions) {
   const alive = sessions.filter(s => s.alive)
-  const needs = s => inboxOf(s.snapshot).length > 0 || s.snapshot.agents.some(a => statusOf(a.status) === 'failed')
+  const needs = s => inboxOf(s.snapshot).length > 0 || s.snapshot.agents.some(a => agentStatus(a) === 'failed')
   const recent = s => Math.max(s.snapshot.at, ...s.snapshot.events.map(e => e.at))
   const pool = alive.some(needs) ? alive.filter(needs) : alive
   return pool.reduce((best, s) => (!best || recent(s) > recent(best) ? s : best), null) ?? sessions[0]
@@ -193,3 +197,6 @@ export function addRequest({ roleId, task, hire }, roles) {
   if (hire) return { type: 'lead', text: `Please bring on another ${roles.find(r => r.id === roleId)?.title ?? roleId ?? 'helper'} for this: ${task}` }
   return roleId ? { type: 'spawn', role: roleId, task } : null
 }
+
+/** What a push says apart from the engine's clock: two pushes with the same signature need no new render (the clock alone moves every write). */
+export const signatureOf = sessions => JSON.stringify(sessions.map(s => [s.session, s.label, s.alive, { ...s.snapshot, at: 0 }]))

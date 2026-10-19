@@ -329,7 +329,7 @@ const CROSSFADE_S = 0.08 // a new swoosh fades the previous one out within this
 const REPEAT_MS = 250 // a repeat click this soon after the last plays nothing
 const BURST_MS = 150 // wheel or drag events closer than this are one gesture: one tick
 const PAN_WIDTH = 0.8 // how far left or right a sideways move travels in the stereo field
-const SOUND_KEY = 'agent-hq.sound' // the page's ♪ toggle (app.js useStored), JSON true/false
+const SOUND_KEY = 'agent-hq.sound' // the page's ♪ toggle, JSON true/false
 const nav = { ctx: null, current: null, lastAt: -Infinity, burstAt: -Infinity, cache: new Map() }
 
 function soundOn() {

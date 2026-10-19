@@ -203,8 +203,7 @@ export function Diagram({ groups = [], focus = null, selected = null, inset, onS
     if (e.target.closest('input, textarea, select')) return
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
     drag.current = { moved: false, x: v.x, y: v.y, z: v.z, sx: e.clientX, sy: e.clientY, span: pointers.current.size > 1 ? span() : 0 }
-    root.current.setPointerCapture?.(e.pointerId)
-  }
+  } // no pointer capture here: it would send the click that ends a press on a card to the canvas; a drag takes it in move()
   const span = () => { const [a, b] = [...pointers.current.values()]; return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0 }
   const move = e => {
     const p = pointers.current.get(e.pointerId)
@@ -214,6 +213,7 @@ export function Diagram({ groups = [], focus = null, selected = null, inset, onS
     p.x = e.clientX; p.y = e.clientY
     if (Math.hypot(e.clientX - d.sx, e.clientY - d.sy) > 5) d.moved = true
     if (!d.moved) return
+    root.current.setPointerCapture?.(e.pointerId) // now it is a drag: keep its events even outside the canvas
     setEase(false)
     if (pointers.current.size >= 2) {
       const s = span()

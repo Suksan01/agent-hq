@@ -148,7 +148,9 @@ export function newWorld(t) {
   t.after(async () => {
     for (const b of world.browsers) await b.stop()
     for (const c of world.children) (c.kill('SIGCONT'), c.kill('SIGKILL'), children.delete(c))
-    rmSync(world.dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
+    try {
+      rmSync(world.dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 })
+    } catch {} // a temp dir that will not go is the OS's to clean; it must never fail a test
   })
   return world
 }
@@ -286,7 +288,10 @@ export async function launchBrowser(world, { width = 1400, height = 900, webgl =
       try {
         ws.close()
       } catch {}
+      const gone = new Promise(resolve => chrome.once('exit', resolve))
       chrome.kill('SIGKILL')
+      await Promise.race([gone, sleep(3000)])
+      await sleep(300) // Chrome's helper processes close their profile files a moment after it
       children.delete(chrome)
     },
   }

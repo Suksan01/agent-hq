@@ -8,7 +8,7 @@ import { arrivals, catchUpRow, inboxOf } from './feed.js'
 import { soundSummary, soundsFor } from './sounds.js'
 import { playEvent, playNav } from './space-sounds.js'
 import { connectEvents, postAction } from './net.js'
-import { keyOf, nicknamed, sessionsOf } from './livemap.js'
+import { keyOf, nicknamed, sessionsOf, signatureOf } from './livemap.js'
 
 const { useCallback, useEffect, useMemo, useRef, useState } = React
 const TOAST_MS = 4500
@@ -58,6 +58,7 @@ export function useLive() {
   const [markers, setMarkers] = useState([]) // "caught up" rows for the feed
   const [soundOn, setSoundOn] = useStored(SOUND_KEY, true)
   const receivedAt = useRef(Date.now())
+  const signature = useRef('')
   const reconnected = useRef(false)
   const lastN = useRef(new Map()) // session -> newest feed number seen
   const seenNotice = useRef(new Map())
@@ -75,9 +76,13 @@ export function useLive() {
   useEffect(() => connectEvents('/events', {
     onMessage: event => {
       try {
-        setSessions(sessionsOf(JSON.parse(event.data)))
-        receivedAt.current = Date.now()
+        const next = sessionsOf(JSON.parse(event.data))
         setOnline(true)
+        const now = signatureOf(next)
+        if (now === signature.current) return // only the engine's clock moved: nothing to redraw, so an idle page stays still
+        signature.current = now
+        receivedAt.current = Date.now()
+        setSessions(next)
       } catch { /* a half-written push: the next one fixes it */ }
     },
     onError: reason => {

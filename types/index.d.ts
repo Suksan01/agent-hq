@@ -82,6 +82,8 @@ declare module 'claude-code' {
       lastAction: number
       /** What became of the last request from the live page, shown there. */
       liveNotice: { seq: number; ok: boolean; text: string } | null
+      /** `/hq web` started the live page in this session: a hot reload starts it again. */
+      isWebWanted: boolean
       /** What the lead assigned each agent, by agent name. */
       assignments: Record<string, HqAssignment>
       /** Permission asks the engine put to the person, by tool call id (see hooks/inbox.ts). */

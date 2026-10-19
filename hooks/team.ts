@@ -143,7 +143,9 @@ export function rolePrompt(team: Team, role: TeamRole, hasMemory = true): string
       '  next point says:',
       '  `Self-check <average>: accuracy <n> (<gap>), completeness <n> (<gap>), clarity <n> (<gap>), actionability <n> (<gap>), conciseness <n> (<gap>)`',
       '  `Open: <what you did not fix, most important first, or none>`',
-      '  The evidence rule: every score below 5 must show a (<gap>) that names what is missing or wrong, and where; a 5 must cite its proof (a test run or grep) in the same place, e.g. `accuracy 5 (node --test: 12 pass)`.',
+      '  The evidence rule: every score below 5 must show a (<gap>) that names what is missing or wrong, and where. A 5 cites its proof in',
+      '  the same place: for accuracy and completeness a test run or grep, e.g. `accuracy 5 (node --test: 12 pass)`;',
+      '  for clarity, actionability and conciseness a file:line, a line count or a section of your reply, e.g. `conciseness 5 (words.mjs: 1 line)`.',
       ...(readOnly
         ? [
             '- Get better at your role: you can read your agent memory (when you have one) but cannot edit it; put what would make',

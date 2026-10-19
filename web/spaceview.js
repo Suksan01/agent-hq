@@ -164,12 +164,12 @@ export function SpaceView({ groups = [], focus = null, selected = null, inset = 
       const key = g.session ?? ''
       const info = infos.get(key)
       if (!info?.visible || (focusedOnly && key !== focused)) continue
-      systems.set(key, { x: info.x, y: info.y, r: info.r, starR: info.starR, visible: true })
+      systems.set(key, { x: info.x, y: info.y, r: info.r, rr: info.rr, starR: info.starR, visible: true })
       const chipOnly = isChipOnly(info.r, W, H)
       for (const a of g.agents) {
         const uid = `${key}|${a.id}`
         const state = a.needsYou ? 'waiting' : normStatus(a.status)
-        agents.push({ id: uid, key, angle: angles.get(uid) ?? 0, priority: a.isLead ? 6 : PRIORITY[state] ?? 1, farOk: narrow, variants: variantsFor({ isLead: a.isLead, state, needsYou: a.needsYou }, { chipOnly, narrow }) })
+        agents.push({ id: uid, key, angle: angles.get(uid) ?? 0, priority: a.isLead ? 6 : PRIORITY[state] ?? 1, nearStar: Boolean(a.isLead), farOk: narrow, variants: variantsFor({ isLead: a.isLead, state, needsYou: a.needsYou }, { chipOnly, narrow }) })
       }
     }
 

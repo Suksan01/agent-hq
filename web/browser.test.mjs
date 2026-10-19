@@ -20,25 +20,23 @@ test('a click the hub cannot deliver at first is retried with the same key and t
   const { beta, betaMod, alpha } = await twoSessions(world)
   const page = await launchBrowser(world)
   await page.open(alpha.url) // the one-time code logs the browser in, then the page loads
-  await until(async () => /live/.test(await page.text()) && /Beta Team|Captain Beta/i.test(await page.text()), 15_000, 'the page showing both sessions live')
+  await until(async () => /Alpha Team/.test(await page.text()) && /Beta Team/.test(await page.text()), 15_000, 'the page showing both sessions')
 
-  await page.eval(`window.SEND = () => [...document.querySelectorAll('button.tb')].find(b => b.textContent.trim() === 'Send')`)
-  // pick the beta island, open its lead, type a message
-  await page.eval(`[...document.querySelectorAll('button.fc')].find(b => /beta/i.test(b.title || b.textContent)).click()`)
-  await sleep(300)
-  await page.eval(`document.querySelector('button.tb[title="Send the lead a message"]').click()`)
-  await until(() => page.eval(`!!document.querySelector('textarea')`), 8000, 'the message box')
-  await page.eval(`(() => {
-    const box = document.querySelector('textarea')
-    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(box, 'hello from the browser')
-    box.dispatchEvent(new Event('input', { bubbles: true }))
-  })()`)
-  await until(() => page.eval(`!document.querySelector('button.tb.add').disabled`), 5000, 'the Send button enabled')
+  // open beta's lead's message box from its lead deck, type a message (the selectors are live.test.mjs' SEL/BTN)
+  await until(() => page.eval(`[...document.querySelectorAll('.lc-deck')].some(d => /Beta/.test(d.getAttribute('aria-label')))`), 8000, "beta's lead deck")
+  await page.eval(`[...document.querySelectorAll('.lc-deck')].find(d => /Beta/.test(d.getAttribute('aria-label'))).querySelector('button[aria-label="Message the lead"]').click()`)
+  const box = '.sk-drawer input, .sk-drawer textarea'
+  await until(() => page.eval(`!!document.querySelector(${JSON.stringify(box)})`), 8000, 'the message box')
+  await page.type(box, 'hello from the browser')
+  await until(() => page.eval(`[...document.querySelectorAll('button')].some(b => /^Send$/i.test((b.getAttribute('aria-label') || b.textContent).trim()) && !b.disabled)`), 5000, 'the Send button enabled')
+  const toasts = new Set() // a toast is short-lived: collect each while it is on screen
+  const poll = setInterval(() => page.eval(`[...document.querySelectorAll('.sk-toast')].map(e => e.textContent)`).then(list => list.forEach(x => toasts.add(x))).catch(() => {}), 100)
+  t.after(() => clearInterval(poll))
 
   // freeze beta's server: the hub can reach its socket but gets no answer, so its forward times out and it answers 503
   beta.child.kill('SIGSTOP')
   const clickedAt = performance.now()
-  await page.eval(`SEND().click()`)
+  await page.click('button', '^Send$')
   const posts = () => [...page.requests.values()].filter(r => r.method === 'POST' && r.url.endsWith('/action'))
   await until(() => posts().some(p => p.status === 503), 12_000, `the first attempt to be refused with 503 (POSTs so far: ${JSON.stringify(posts().map(p => ({ status: p.status, failed: p.failed, body: p.body })))}; page says: ${(await page.text()).replace(/\s+/g, ' ').slice(0, 300)})`).catch(async error => {
     throw new Error(`${error.message.split(' (POSTs')[0]} (POSTs: ${JSON.stringify(posts().map(p => ({ status: p.status, failed: p.failed, body: p.body })))}; page: ${(await page.text()).replace(/\s+/g, ' ').slice(0, 300)})`)
@@ -46,7 +44,7 @@ test('a click the hub cannot deliver at first is retried with the same key and t
   const firstRefusedAt = performance.now() - clickedAt
   beta.child.kill('SIGCONT') // the session is back; the page's retry (after its backoff) lands on it
   await until(() => posts().some(p => p.status === 202), 15_000, 'a retry to be accepted with 202')
-  await until(async () => /Sent to/i.test(await page.text()), 8000, 'the page to say it was sent') // the toast is short-lived: look at once
+  await until(() => [...toasts].some(x => /sent/i.test(x)), 8000, `a toast saying it was sent (saw: ${[...toasts].join(' | ')})`)
   await until(() => betaMod.handled.length >= 1, 8000, 'the mod to get the action')
   await sleep(slow(2500)) // past a reprint: nothing may run twice
 

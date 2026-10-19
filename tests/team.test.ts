@@ -113,9 +113,12 @@ test('members share the team context and get better between runs', () => {
     // the evidence rule: every score below 5 names its gap, on every axis, not only completeness
     for (const axis of ['accuracy', 'completeness', 'clarity', 'actionability', 'conciseness']) expect(text, axis).toContain(`${axis} <n> (<gap>)`)
     expect(text).toContain('every score below 5 must show a (<gap>)')
-    // and a 5 is not free: it cites what proves it, as the skill's evidence rule says
-    expect(text).toContain('a 5 must cite its proof (a test run or grep)')
+    // and a 5 is not free: it cites what proves it, as the skill's evidence rule says, with proof that fits the axis
+    expect(text).toContain('A 5 cites its proof')
+    expect(text).toContain('for accuracy and completeness a test run or grep')
+    expect(text).toContain('for clarity, actionability and conciseness a file:line, a line count or a section of your reply')
     expect(text).not.toContain('only a 5 has none')
+    expect(text).not.toContain('a 5 must cite its proof (a test run or grep)') // one kind of proof does not fit every axis
   }
   expect(devPrompt).toContain('whatever files your assignment limits you to') // the brief's file limits never stop a lesson
 

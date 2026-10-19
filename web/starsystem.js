@@ -521,9 +521,9 @@ export function createStarSystems({ container, onContextLost, onFrame, onNudge }
     return [...systems.values()].map(sys => {
       const centre = sys.group.localToWorld(new THREE.Vector3(0, 0, 0))
       const c = screen(centre)
-      const top = sys.group.localToWorld(new THREE.Vector3(0, 0, -(sys.radius + 40)))
+      const top = sys.group.localToWorld(new THREE.Vector3(0, 0, -(sys.radius - 24))) // just beyond the outermost ring, so the title hugs its own system
       const t = screen(top)
-      return { session: sys.session, team: sys.data.team, folder: sys.data.folder, tag: sys.data.tag, x: c.x, y: c.y, r: sys.radius * c.scale, starR: LEAD_R * 1.5 * c.scale, title: { x: t.x, y: t.y }, visible: c.visible || t.visible }
+      return { session: sys.session, team: sys.data.team, folder: sys.data.folder, tag: sys.data.tag, x: c.x, y: c.y, r: sys.radius * c.scale, rr: (sys.radius - 40) * c.scale, starR: LEAD_R * 1.5 * c.scale, title: { x: t.x, y: t.y }, visible: c.visible || t.visible }
     })
   }
 

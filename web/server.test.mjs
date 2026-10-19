@@ -153,7 +153,7 @@ test('the old ?t= token no longer opens anything', async t => {
 
 test('every route is 403 without the cookie, and a POST queues nothing', async t => {
   const server = await startServer(t)
-  for (const path of ['/', '/state', '/events', '/app.js', '/vendor/libs.js', '/nope']) {
+  for (const path of ['/', '/state', '/events', '/live.js', '/vendor/libs.js', '/nope']) {
     assert.equal((await call(server, { path, cookie: null })).status, 403, path)
   }
   assert.equal((await post(server, { type: 'lead', text: 'x' }, { cookie: null })).status, 403)
@@ -161,9 +161,11 @@ test('every route is 403 without the cookie, and a POST queues nothing', async t
   assert.deepEqual(server.actions(), [])
 })
 
-test('the page route says how to get back in', async t => {
+test('the page routes say how to get back in, and the files and endpoints behind them just refuse', async t => {
   const server = await startServer(t)
-  assert.match((await call(server, { cookie: null })).body, /\/hq web/)
+
+  for (const path of ['/']) assert.match((await call(server, { path, cookie: null })).body, /open the page again with \/hq web/, path)
+  for (const path of ['/state', '/events', '/space.css', '/live.js', '/vendor/libs.js', '/nope']) assert.equal((await call(server, { path, cookie: null })).body, 'forbidden', path)
 })
 
 test('403 with a wrong or malformed cookie', async t => {
@@ -346,9 +348,9 @@ test('/vendor serves only files listed in web/vendor: traversal and unknown name
   }
 })
 
-test('/app.js and /islands.js serve their web/ files when they exist and are 404 otherwise', async t => {
+test('/live.js and /panels.js serve their web/ files when they exist and are 404 otherwise', async t => {
   const server = await startServer(t)
-  for (const name of ['app.js', 'islands.js']) {
+  for (const name of ['live.js', 'panels.js']) {
     const res = await call(server, { path: `/${name}` })
     const file = join(WEB, name)
     if (existsSync(file)) {
@@ -382,25 +384,9 @@ test('the page\'s stylesheets are served from web/ as text/css, by plain lower-c
   assert.match((await call(server, { path: '/vendor/heroui.min.css' })).headers['content-type'], /^text\/css/) // the vendored one still works
 })
 
-test('/next (temporary) previews the page being rebuilt, with the same cookie and headers as /', async t => {
+test('/next is gone now that the new page is /', async t => {
   const server = await startServer(t)
-  const file = ['next.html', 'index.next.html'].find(name => existsSync(join(WEB, name)))
-
-  const res = await call(server, { path: '/next' })
-  const home = await call(server)
-
-  if (file) {
-    assert.equal(res.status, 200)
-    assert.match(res.headers['content-type'], /^text\/html/)
-    assert.equal(res.body, readFileSync(join(WEB, file), 'utf8'))
-  } else {
-    assert.equal(res.status, 404)
-  }
-  assert.equal(home.body, PAGE, '/ still serves index.html')
-  for (const name of ['content-security-policy', 'referrer-policy', 'x-content-type-options']) assert.equal(res.headers[name], home.headers[name], name)
-  assert.equal((await call(server, { path: '/next', cookie: null })).status, 403, 'only with the cookie')
-  assert.equal((await call(server, { path: '/next/' })).status, 404)
-  assert.equal((await call(server, { path: '/next', headers: { origin: 'http://evil.example' } })).status, 403)
+  assert.equal((await call(server, { path: '/next' })).status, 404)
 })
 
 test('unknown path is 404', async t => {

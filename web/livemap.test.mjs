@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import { sessionNames } from './labels.js'
-import { addRequest, attentionOf, boardSections, countsOf, drawerOf, feedItems, groupsOf, hudOf, inboxItems, keyOf, nicknamed, pctOf, progressOf, sessionsOf, statusOf, whoOf } from './livemap.js'
+import { signatureOf, agentStatus, addRequest, attentionOf, boardSections, countsOf, drawerOf, feedItems, groupsOf, hudOf, inboxItems, keyOf, nicknamed, pctOf, progressOf, sessionsOf, statusOf, whoOf } from './livemap.js'
 
 const agent = (id, over = {}) => ({ id, parentId: 'main', name: id, nickname: id.toUpperCase(), role: 'Dev', status: 'running', isMain: false, now: 'Working', next: null, last: null, todos: null, fallback: null, tools: 3, lastTool: 'Edit', activity: null, startedAt: 1000, endedAt: null, xp: null, ...over })
 const session = (id, label, agents, extra = {}) => ({ session: id, label, alive: true, snapshot: { at: 5000, team: { name: `${label} Team`, purpose: 'p', lead: 'Lead' }, agents, tasks: [], roles: [], overall: { done: 1, active: 0, total: 4 }, tasksProgress: { done: 1, active: 1, total: 2 }, events: [], ...extra } })
@@ -149,4 +149,23 @@ test('Add agent spawns the chosen role (general-purpose for a session without a 
   assert.deepEqual(addRequest({ roleId: 'qa', task: 'test it', hire: true }, roles), { type: 'lead', text: 'Please bring on another QA Engineer for this: test it' })
   assert.deepEqual(addRequest({ task: 'help', hire: true }, []), { type: 'lead', text: 'Please bring on another helper for this: help' })
   assert.equal(addRequest({ task: 'x' }, []), null)
+})
+
+test('the lead takes its state from its tone (its status is always running), members from their status', () => {
+  const idleLead = { ...lead, status: 'running', tone: 'done' }
+  assert.equal(agentStatus(idleLead), 'done')
+  assert.equal(agentStatus({ ...lead, status: 'running', tone: 'running' }), 'working')
+  assert.equal(agentStatus({ ...lead, status: 'running', tone: 'needs_input' }), 'waiting')
+  assert.equal(agentStatus({ ...lead, status: 'running', tone: 'error' }), 'failed')
+  assert.equal(agentStatus(agent('a', { status: 'completed', tone: 'running' })), 'done')
+  const g = groupsOf(sessionsOf({ v: 2, sessions: [session('s1', 'app', [idleLead, agent('a', { status: 'completed' })])] }), new Map(), () => 0)[0]
+  assert.equal(g.agents.find(a => a.isLead).status, 'done')
+})
+
+test('two pushes that differ only in the engine clock have the same signature; a real change does not', () => {
+  const a = sessionsOf({ v: 2, sessions: [session('s1', 'app', [lead], { at: 1000 })] })
+  const b = sessionsOf({ v: 2, sessions: [session('s1', 'app', [lead], { at: 2000 })] })
+  const c = sessionsOf({ v: 2, sessions: [session('s1', 'app', [lead, agent('x')], { at: 2000 })] })
+  assert.equal(signatureOf(a), signatureOf(b))
+  assert.notEqual(signatureOf(a), signatureOf(c))
 })

@@ -78,3 +78,15 @@ test('a change of wanted kind waits for the hold; an agent coming or going does 
   const fewer = crowd().slice(1)
   assert.equal(keeper.update(5300, input({ agents: fewer })).planId, a + 3, 'an agent leaving is replanned at once')
 })
+
+test('a lead stands beside its own star, nearer than any ring, and a member outside its ring', () => {
+  const sys = new Map([['a', { x: 600, y: 480, r: 260, rr: 220, starR: 40, visible: true }]])
+  const lead = { id: 'a|main', key: 'a', angle: Math.PI / 2, priority: 6, nearStar: true, variants: ['lead', 'chip'] }
+  const member = { id: 'a|m', key: 'a', angle: 0, priority: 3, variants: ['compact', 'chip'] }
+  const plan = planSlots({ systems: sys, agents: [lead, member], sizeOf, bounds: BOUNDS })
+  const near = (slot, s) => { const x = Math.max(s.x + slot.dx, Math.min(600, s.x + slot.dx + slot.w)), y = Math.max(s.y + slot.dy, Math.min(480, s.y + slot.dy + slot.h)); return Math.hypot(x - 600, y - 480) }
+  const s = plan.get('a|main'), m = plan.get('a|m')
+  assert.equal(s.kind, 'lead')
+  assert.ok(near({ ...s, dx: s.dx - 0, dy: s.dy }, { x: 600, y: 480 }) < 120, 'the lead deck is close to its star')
+  assert.ok(near(m, { x: 600, y: 480 }) >= 220, 'a member stands outside its outermost ring')
+})

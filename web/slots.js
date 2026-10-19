@@ -16,12 +16,13 @@ const INNER = [0.85, 0.7] // when nothing fits outside: a card's nearest edge th
 const SPREAD = 12 // angles tried each side of the preferred one, 15 degrees apart
 const STEP = Math.PI / 12
 const MARGIN = 8 // between two cards
+const STAR_STEP = 28 // how much farther from its star each try for a lead's slot stands
 const HOLE = 20 // the grid a last-resort search walks (phones)
 const dirOf = angle => { const x = Math.cos(angle), y = Math.sin(angle) * 0.8; const length = Math.hypot(x, y); return [x / length, y / length] } // the camera looks down at a tilt, so rings are flatter than they are wide
 
 /**
- * `systems`: Map key -> {x, y, r, starR, visible} on screen. `agents`: [{id, key, angle, priority, variants, farOk}]: `angle` is the
- * side of its system (radians, screen) its orbit starts on, `farOk` lets it take any free hole when nothing near fits (a phone).
+ * `systems`: Map key -> {x, y, r, rr, starR, visible} on screen (`r` the system's radius with its margin, `rr` its outermost ring). `agents`: [{id, key, angle, priority, variants, farOk}]: `angle` is the
+ * side of its system (radians, screen) its orbit starts on, `nearStar` puts it as close to its own star as it fits (a lead), `farOk` lets it take any free hole when nothing near fits (a phone).
  * `sizeOf(id, kind)` -> {w, h}. `bounds`: the free rectangle. `titles`: Map key -> rectangle (kept clear of by every card).
  * `prev`: the last plan, so a slot that still fits is kept. Returns Map id -> {kind, w, h, dx, dy} (dx, dy: the card's top-left from its
  * system's centre), kind null when nothing fits.
@@ -46,11 +47,17 @@ export function planSlots({ systems, agents, sizeOf, bounds, titles = new Map(),
         const rect = { x: sys.x + before.dx, y: sys.y + before.dy, w, h }
         if (free(rect)) found = rect
       }
-      const distances = [...TIERS.map(t => sys.r + GAP + t), ...INNER.map(f => sys.r * f)]
+      const ring = sys.rr ?? sys.r // the outermost ring as drawn
+      // a lead stands beside its own star: the nearest free place first, then ever farther; a member outside its ring
+      const distances = a.nearStar
+        ? [...Array.from({ length: Math.ceil((ring + GAP - (sys.starR ?? 30)) / STAR_STEP) + 1 }, (_, i) => (sys.starR ?? 30) + 10 + i * STAR_STEP)]
+        : [...TIERS.map(t => ring + GAP + t), ...INNER.map(f => ring * f)]
       search: for (const dist of found ? [] : distances) {
         for (let k = 0; k <= SPREAD * 2; k++) {
           const off = Math.ceil(k / 2) * STEP * (k % 2 === 1 ? 1 : -1)
-          const rect = cardRect(sys.x, sys.y, w, h, dist, dirOf(a.angle + off))
+          const raw = cardRect(sys.x, sys.y, w, h, dist, dirOf(a.angle + off))
+          // a place that sticks out past the screen's edge slides back in, rather than being given up (the star's own disc still keeps it clear)
+          const rect = { ...raw, x: Math.min(Math.max(raw.x, bounds.x), bounds.x + bounds.w - w), y: Math.min(Math.max(raw.y, bounds.y), bounds.y + bounds.h - h) }
           if (!free(rect)) continue
           found = rect
           break search

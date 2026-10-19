@@ -4,7 +4,7 @@
 // No dependencies.
 
 import { createHmac, randomBytes } from 'node:crypto'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { checkAction } from './queue.mjs'
@@ -19,6 +19,8 @@ const HEX_SECRET = /^[0-9a-f]{32}$/
 const EMPTY_STATE = { v: 1, at: 0, team: null, agents: [], tasks: [], overall: { done: 0, active: 0, total: 0 }, tasksProgress: { done: 0, active: 0, total: 0 } }
 // the page's own modules: plain lowercase `name.js` files in web/ (server code is .mjs, tests .test.mjs, so never matched)
 // the page's own modules and stylesheets, from web/: a plain lower-case name and one of these extensions (never server.mjs, a test, or a folder)
+// the paths a browser is sent to
+const PAGES = ['/']
 const PAGE_FILE = /^\/[a-z][a-z-]*(\.js|\.css)$/
 const TYPES = {
   '.js': 'text/javascript; charset=utf-8',
@@ -220,15 +222,11 @@ export function createHub({ liveDir, webDir, secret, config }) {
       if (!redeemCode(code)) return plain(res, 403, 'forbidden')
       return res.writeHead(302, { location: '/', 'set-cookie': `${cookieName()}=${sessionCookie}; HttpOnly; SameSite=Strict; Path=/`, 'cache-control': 'no-store' }).end()
     }
-    if (!hasSession(req)) return plain(res, 403, url.pathname === '/' ? 'forbidden: open the page again with /hq web' : 'forbidden')
+    // the pages a person opens say how to get back in; the files and endpoints behind them just refuse
+    if (!hasSession(req)) return plain(res, 403, PAGES.includes(url.pathname) ? 'forbidden: open the page again with /hq web' : 'forbidden')
 
     if (url.pathname === '/') {
       fileOr404(res, join(webDir, 'index.html'), 'text/html; charset=utf-8')
-    } else if (url.pathname === '/next') {
-      // TEMPORARY: the page being rebuilt, previewed beside the old one (same login, same headers); removed at the swap, when it becomes index.html
-      const next = ['next.html', 'index.next.html'].find(name => existsSync(join(webDir, name)))
-      if (next) fileOr404(res, join(webDir, next), 'text/html; charset=utf-8')
-      else plain(res, 404, 'not found')
     } else if (PAGE_FILE.test(url.pathname)) {
       const name = url.pathname.slice(1)
       // only a file the directory listing names, like serveVendor, so nothing outside web/ is reachable

@@ -709,3 +709,29 @@ test('the server\'s repeated prints of a request wait once, and run once, in id 
   expect(s.prompts).toHaveLength(3)
   s.finish()
 })
+
+// a hot reload ends the module and its page server, then runs session.start again with the session's state kept
+test('after /hq web, a session.start (a hot reload) starts the live page again without opening another tab', async ($, on) => {
+  const s = await liveSession($, on)
+  expect(s.spawnArgv).toHaveLength(1)
+  const opensBefore = s.commands.filter(argv => argv[0] === 'open').length
+
+  s.finish() // the server's output ends, as when the reload killed it
+  await s.clock.settle()
+  await $.session.start({ cwd: '/work/app', surface: null, isInteractive: true } as never)
+  await s.clock.settle()
+
+  expect(s.spawnArgv).toHaveLength(2)
+  expect(s.spawnArgv[1].some(arg => arg.endsWith('/web/server.mjs'))).toBe(true)
+  expect(s.commands.filter(argv => argv[0] === 'open')).toHaveLength(opensBefore)
+})
+
+test('a session that never ran /hq web starts no page on session.start', async ($, on) => {
+  const s = await liveSession($, on, { noUrl: true })
+  s.finish()
+  await s.clock.settle()
+  const before = s.spawnArgv.length
+  await $.session.start({ cwd: '/work/app', surface: null, isInteractive: true } as never)
+  await s.clock.settle()
+  expect(s.spawnArgv).toHaveLength(before)
+})

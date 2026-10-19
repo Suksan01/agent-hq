@@ -48,6 +48,7 @@ const team = atom({ plugin: 'agent-hq', key: 'team' } as const, null)
 const teamSource = atom({ plugin: 'agent-hq', key: 'teamSource' } as const, null)
 const lastAction = atom({ plugin: 'agent-hq', key: 'lastAction' } as const, 0)
 const liveNotice = atom({ plugin: 'agent-hq', key: 'liveNotice' } as const, null)
+const isWebWanted = atom({ plugin: 'agent-hq', key: 'isWebWanted' } as const, false)
 const feed = atom({ plugin: 'agent-hq', key: 'feed' } as const, EMPTY_FEED)
 const usage = atom({ plugin: 'agent-hq', key: 'usage' } as const, {})
 const asks = atom({ plugin: 'agent-hq', key: 'asks' } as const, {})
@@ -616,6 +617,8 @@ export const register: Register = (on, options) => {
     await migrateHomeTrust($).catch(() => {}) // a store that cannot be read just means the home file asks for trust
     await loadTeam($).catch(error => $.ui.toast(`Agent HQ: could not load the team (${error instanceof Error ? error.message : 'error'})`))
     for (const spec of TOOL_SPECS) await $.tool.register(spec).catch(error => $.ui.log(`Agent HQ: could not offer ${spec.name} (${error instanceof Error ? error.message : 'error'})`, { to: 'debug' }))
+    // a hot reload ends the module and the page server with it: bring the page back (same hub port and secret, so an open tab reconnects)
+    if (await read($, isWebWanted)) void startWeb($).catch(error => $.ui.log(`Agent HQ: could not restart the live page (${error instanceof Error ? error.message : String(error)})`, { to: 'debug' }))
 
     return next(e)
   })
@@ -629,6 +632,7 @@ export const register: Register = (on, options) => {
       try {
         // the first link of a started server is single-use and spent by the first visit: a repeated /hq web asks the hub for a new one
         const url = web ? await freshLoginUrl($, web.statePath) : await startWeb($)
+        await update($, isWebWanted, () => true)
         const opened = await openInBrowser($, url)
         return { text: opened ? `Agent HQ live page opened: ${url}` : `Agent HQ live page is running; open it at ${url}` }
       } catch (error) {
