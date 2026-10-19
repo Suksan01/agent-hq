@@ -331,3 +331,12 @@ test('a post-tool bookkeeping failure never turns a finished tool call into a fa
   expect(ran.isError).toBeUndefined()
   expect(s.registered).toEqual(['senior-dev']) // only the session start's: the reload after the Write ran, and failed
 })
+
+test('with no team file at all, the prompt says to offer /agent-hq:team; an untrusted one gets no such offer', async ($, on) => {
+  const none = await boot($, on, { file: '/elsewhere/team.json' })
+
+  const sections = (await none.compose()).sections
+  expect(sections.map(x => x.id)).toEqual(['engine', 'agent-hq:no-team'])
+  expect(sections[1]?.text).toContain('/agent-hq:team')
+  expect((await none.compose(['teammate'])).sections.map(x => x.id)).toEqual(['engine'])
+})

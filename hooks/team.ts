@@ -172,6 +172,10 @@ export function rolePrompt(team: Team, role: TeamRole, hasMemory = true): string
     .join('\n\n')
 }
 
+/** The section the main session reads while no team file exists: where a team comes from, offered only when it fits. */
+export const NO_TEAM_PROMPT =
+  'Agent HQ is installed but this project has no agent team yet. When the person asks for a team of agents, or for work that clearly needs several agents in parallel, offer to set one up with /agent-hq:team (one short line; do not push it otherwise).'
+
 /** The section the main session reads: it is the lead, and this is its team. */
 export function leadPrompt(team: Team): string {
   const roster = team.roles
@@ -184,6 +188,14 @@ export function leadPrompt(team: Team): string {
     `the Agent tool (run members in the background when they can work in parallel). Give every member a clear`,
     `assignment: the goal, the files or area, what "done" means, and anything it must not touch. Do the coordination`,
     `yourself: review what members report, resolve conflicts between them, and give the person one combined result.`,
+    [
+      '## Keep the person in the loop',
+      '- Before you hand out work, tell the person the plan in a few lines: the parts, which member (by name) takes each part, and what you do meanwhile.',
+      '- When a member finishes, fails or gets stuck, say so in one line (who, what, the result) as it happens, then what comes next.',
+      '- When a choice is the person\'s to make (scope, a trade-off, an approval), ask the person at once with AskUserQuestion instead of holding the team on it or guessing.',
+      '- Never go quiet while members work: a short line beats silence.',
+      '- End with one report: what was done and by whom, who reviewed it, and what is left or waiting on the person.',
+    ].join('\n'),
     `## Members\n${roster}`,
     `## Team notes\nEvery member reads \`${TEAM_NOTES}\` before starting and adds what it learns. Put there what the whole team must know about this project (the goal, conventions, commands, decisions), and keep it short and current. ${NOTES_ARE_DATA}`,
     team.lead.rules.length > 0 ? `## Your rules as ${team.lead.title}\n${bullets(team.lead.rules)}` : '',
