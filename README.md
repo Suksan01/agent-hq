@@ -36,6 +36,40 @@ claude plugin install agent-hq --marketplace Suksan01/agent-hq
 In the desktop app, where `/plugin` does not run: click + next to the prompt box, then Plugins, Add marketplace
 with `Suksan01/agent-hq`, then Add plugin.
 
+If your Claude Code doesn't recognise `--marketplace`, add the marketplace first, then install from it:
+
+```
+/plugin marketplace add Suksan01/agent-hq
+/plugin install agent-hq@agent-hq
+```
+
+The `/plugin` commands are typed at the Claude Code prompt; Claude can't run them for you. Start a new session
+(or run `/reload-plugins`) if the mod doesn't load right away.
+
+## What it can see
+
+Agent HQ only watches. It never blocks, rewrites or answers anything Claude does. It reads:
+
+- **Every tool call's name** and which agent made it, for the tool count and the `▸` line. It does not read
+  other tools' inputs or outputs.
+- **TodoWrite, TaskCreate and TaskUpdate inputs** (todo text, task titles, owners, status) and the new task's id
+  from TaskCreate's result, for the todo bars and the task board.
+- **Claude's reply rows**, only to find `plan_progress` calls and the bar id they name; the rest of each row is
+  skipped.
+- **The agent list** (name, type, short description, status, parent), once a second.
+- **plan-progress's saved bars**, if that mod is installed, read only.
+- **Your settings list**, only to find `theme` (for the dark or light tint), and later changes to it.
+
+What it does with that:
+
+- Keeps it in memory for the current session. It writes no files and keeps nothing between sessions.
+- Draws the band above the prompt, the sidebar and a status line, adds the `/hq` command, and opens the sidebar
+  the first time an agent starts.
+- Sends nothing over the network, runs no programs and makes no model calls.
+
+All of it is in `hooks/register.tsx`; `claude plugin validate <mod folder>` lists every event the mod hooks and
+every call it makes.
+
 ## Updates
 
 Auto-update is off by default for marketplaces other than Anthropic's, so turn it on once:
