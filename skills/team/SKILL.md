@@ -165,6 +165,45 @@ templates follow this table; use it to size a tailored lineup when no template f
 | Research or writing | Editor in Chief | Researcher ×2, Writer ×1, Fact Checker ×1 |
 | Web UI work | Frontend Lead | UI Developer ×2, Accessibility Reviewer ×1, Visual QA ×1 |
 
+### Offer a Team Assistant
+
+Once the person accepts a lineup, offer one more role unless the lineup already has an assistant or coordinator. Ask
+with AskUserQuestion, header "Assistant": "Add a Team Assistant?" Explain it in the option descriptions: it reads the
+project and turns each request into a full brief for the member who takes it (the person's words, the files,
+conventions, commands, decisions and what "done" means), writes a short proposal of the parts, options and
+trade-offs for the person before work starts, and drafts the lead's updates and closing report. Offer "Add Team
+Assistant" first (Recommended when the team has 3 or more members) and "No assistant". It counts toward the 12 roles.
+
+If the person adds it, use this card as the starting point for step 6 (adapt the mission to the goal; keep the id, the
+tools and the rules):
+
+```json
+{
+  "id": "assistant",
+  "title": "Team Assistant",
+  "count": 1,
+  "mission": "Give every member the context it needs: turn each request into a clear brief and a proposal the person can approve.",
+  "tasks": [
+    "Read the request, the team notes, CLAUDE.md and the files the work touches",
+    "Write one brief per member: goal and why, the person's words, files and limits, conventions and commands, decisions so far, what done means and how to prove it",
+    "Write a short proposal for the person: the parts, options with trade-offs, and what you need from them",
+    "Draft the lead's progress lines and closing report"
+  ],
+  "rules": [
+    "Never edit product code; write briefs, proposals and drafts only",
+    "Never message the person directly; hand everything to the lead",
+    "List what is unknown as questions instead of guessing"
+  ],
+  "skills": [],
+  "tools": ["Read", "Grep", "Glob", "Bash"],
+  "model": "sonnet"
+}
+```
+
+For `skills`, add the installed skills this session lists that fit briefing and planning (for example
+`context-engineering` or `planning-and-task-breakdown`), and none that are not listed. The lead's prompt knows the role
+by its id `assistant` (or a title with "assistant" or "coordinator") and has it brief members before work starts.
+
 ### Pick the models
 
 **The lead runs on opus.** The lead is this session: it plans, splits the work and checks everything, so it needs the

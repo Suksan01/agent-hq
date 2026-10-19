@@ -124,3 +124,23 @@ test('the lead is told to give a new role a full card', () => {
   if (typeof team === 'string') throw new Error(team)
   expect(leadPrompt(team)).toContain('full role card')
 })
+
+test('every lead is told what a member brief must carry, since a member sees none of the conversation', () => {
+  const team = parseTeam(source())
+  if (typeof team === 'string') throw new Error(team)
+  const prompt = leadPrompt(team)
+  expect(prompt).toContain('## Briefing members')
+  expect(prompt).toContain("the person's own words")
+  expect(prompt).not.toContain('Team Assistant')
+})
+
+test('with a Team Assistant on the team, the lead has it write the briefs and proposals first', () => {
+  const team = parseTeam(source({}, [
+    { id: 'dev', title: 'Developer', mission: 'Build.' },
+    { id: 'assistant', title: 'Team Assistant', mission: 'Write the briefs.', tools: ['Read', 'Grep', 'Glob'] },
+  ]))
+  if (typeof team === 'string') throw new Error(team)
+  const prompt = leadPrompt(team)
+  expect(prompt).toContain('have the Team Assistant ("agent-hq:assistant") write')
+  expect(prompt).toContain('proposal')
+})
