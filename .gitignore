@@ -1,2 +1,4 @@
 # local code graph (graphify), never part of the published plugin
 graphify-out/
+# the design system page, built by web/build-design.mjs
+web/design/out/

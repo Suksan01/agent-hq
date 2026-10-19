@@ -1,8 +1,19 @@
 # Changelog
 
-## 0.3.0 (not released yet)
+## 0.3.0 (2026-10-19)
 
 ### Added
+- **A new space-themed live page** (`/hq web`). It replaces the old one. Each session's team is a group in a 2D
+  diagram of glass cards with live connections, and an optional **Space view** (three.js, loaded only when chosen,
+  hidden without WebGL) shows each team as a star system: members are planets with their own spin and tilt, and
+  cards sit in stable slots beside them.
+  - The lead gets a **command deck** with a mission board.
+  - Moving between teams plays low swoosh sounds, with tones that follow the direction.
+  - The page is still when nothing works: no animation, no re-render.
+- **The live page survives hot reloads**: after `/hq web` the mod restarts its page on the same port and secret, so
+  an open tab reconnects without a new login.
+- **Terminal sidebar**: active agents first, a live activity line per agent, small member mascots and controls at the
+  top (Hide done, Clear done, ✕ Close).
 - **One live page for every session.** `/hq web` in any number of Claude Code sessions shares one page (a hub),
   with each session's team and its own request queue. If the hub's session ends another takes over; the page
   reconnects without a new login.
