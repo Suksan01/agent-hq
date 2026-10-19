@@ -2,7 +2,7 @@
 //   node web/build-vendor.mjs
 // Installs the packages pinned in vendor-build/package-lock.json (versions and hashes of every transitive package) with
 // `npm ci` into a temp dir (never into the mod), bundles them into one minified ESM file with the locked esbuild, and
-// copies the HeroUI stylesheet. Then scans the result for banned patterns and writes vendor/SHA256SUMS (see
+// copies the fonts. Then scans the result for banned patterns and writes vendor/SHA256SUMS (see
 // vendor-guard.mjs). To change a version: edit vendor-build/package.json, run `npm install --package-lock-only
 // --ignore-scripts` there, and review the lock's diff. Needs network + npm; the output is committed, so end users never run it.
 
@@ -20,10 +20,6 @@ export default React
 export { Children, Fragment, StrictMode, Suspense, cloneElement, createContext, createElement, createRef, forwardRef, isValidElement, lazy, memo, startTransition, use, useActionState, useCallback, useContext, useDebugValue, useDeferredValue, useEffect, useId, useImperativeHandle, useInsertionEffect, useLayoutEffect, useMemo, useOptimistic, useReducer, useRef, useState, useSyncExternalStore, useTransition } from 'react'
 export { createRoot } from 'react-dom/client'
 export { default as htm } from 'htm'
-export { Card } from '@heroui/react/card'
-export { Chip } from '@heroui/react/chip'
-export { ProgressBar } from '@heroui/react/progress-bar'
-export { BotAvatar } from 'bot-avatars'
 export { BorderBeam } from 'border-beam'
 export { ThinkingOrb } from 'thinking-orbs'
 export { Liquid } from 'liquid-gooey'
@@ -68,7 +64,6 @@ try {
     'three-entry.js', '--bundle', '--minify', '--format=esm', '--target=es2022', '--legal-comments=none',
     `--outfile=${join(vendorDir, 'three.module.js')}`,
   ])
-  copyFileSync(join(work, 'node_modules/@heroui/styles/dist/heroui.min.css'), join(vendorDir, 'heroui.min.css'))
   // the page's font (SIL OFL 1.1: the licence text travels with the files)
   const font = join(work, 'node_modules/@fontsource/bricolage-grotesque')
   for (const weight of FONT_WEIGHTS) {
@@ -88,13 +83,13 @@ try {
   // every font's licence text travels with the files; the libraries' MIT licences are listed beside them
   writeFileSync(join(vendorDir, 'OFL.txt'), licences.join('\n\n==========================================\n\n'))
   // (--legal-comments=none strips the notices from the bundles, so every bundled library's licence (MIT, and Apache-2.0 for htm) is kept here)
-  const LIBRARIES = ['react', 'react-dom', 'htm', '@heroui/react', '@heroui/styles', 'bot-avatars', 'border-beam', 'thinking-orbs', 'liquid-gooey', 'three']
+  const LIBRARIES = ['react', 'react-dom', 'htm', 'border-beam', 'thinking-orbs', 'liquid-gooey', 'three']
   const mit = LIBRARIES.map(name => {
     const version = JSON.parse(readFileSync(join(work, 'node_modules', name, 'package.json'), 'utf8')).version
     return `${name} ${version}\n${readFileSync(join(work, 'node_modules', name, 'LICENSE'), 'utf8')}`
   })
   writeFileSync(join(vendorDir, 'LICENSES.txt'), mit.join('\n\n==========================================\n\n'))
-  for (const name of ['libs.js', 'three.module.js', 'heroui.min.css', 'fonts.css']) console.error(`${name}: ${statSync(join(vendorDir, name)).size} bytes`)
+  for (const name of ['libs.js', 'three.module.js', 'fonts.css']) console.error(`${name}: ${statSync(join(vendorDir, name)).size} bytes`)
   const problems = writeSums(vendorDir) // the scan first: SHA256SUMS is written only for a clean build
   if (problems.length > 0) {
     console.error(problems.join('\n'))

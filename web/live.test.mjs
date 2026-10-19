@@ -73,12 +73,35 @@ async function members(page) {
   return [...new Map(list.map(c => [c.name, c])).values()]
 }
 
-/** Fits everything in view, then clicks an agent's card with a real mouse, as a person does. */
+/** The centre of the first visible card whose text matches `name`, or null. */
+const cardPoint = (page, name) => page.eval(`(() => { const re = new RegExp(${JSON.stringify(name)}, 'i'); const el = [...document.querySelectorAll(${JSON.stringify(SEL.agentCard)})].filter(e => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 }).find(e => re.test(e.textContent)); if (!el) return null; const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 } })()`)
+
+/** Waits until the card stops moving (the camera is still flying after Fit): two samples 150 ms apart that agree. */
+async function settledPoint(page, name) {
+  let before = null
+  for (let i = 0; i < 60; i++) {
+    const now = await cardPoint(page, name)
+    if (now && before && Math.abs(now.x - before.x) < 1 && Math.abs(now.y - before.y) < 1) return now
+    before = now
+    await sleep(150)
+  }
+  throw new Error(`the card for ${name} never held still`)
+}
+
+/** Fits everything in view, waits for the camera to settle, then clicks an agent's card with a real mouse, as a person does (one retry). */
 async function openCard(page, name) {
-  await page.click('button', BTN.fit)
-  await sleep(slow(500))
-  await page.mouseClickOn(`${SEL.agentCard}`, name)
-  await until(() => page.eval(`!!document.querySelector(${JSON.stringify(SEL.drawer)})`), 8000, 'the drawer')
+  const drawerOpen = () => page.eval(`!!document.querySelector(${JSON.stringify(SEL.drawer)})`)
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    await page.click('button', BTN.fit)
+    const point = await settledPoint(page, name)
+    await page.mouseClick(point.x, point.y)
+    const deadline = Date.now() + slow(2000)
+    while (Date.now() < deadline) {
+      if (await drawerOpen()) return
+      await sleep(100)
+    }
+  }
+  await until(drawerOpen, 5000, 'the drawer')
 }
 
 /** Types into the drawer's box and presses Send once the page has enabled it. */

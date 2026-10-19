@@ -258,9 +258,12 @@ test('/vendor serves the bundled libraries with the right content types', async 
   assert.equal(libs.status, 200)
   assert.match(libs.headers['content-type'], /^text\/javascript/)
   assert.equal(libs.body, readFileSync(join(WEB, 'vendor/libs.js'), 'utf8'))
-  const css = await call(server, { path: '/vendor/heroui.min.css' })
+  const css = await call(server, { path: '/vendor/fonts.css' })
   assert.equal(css.status, 200)
   assert.match(css.headers['content-type'], /^text\/css/)
+  // HeroUI and BotAvatar left with the old page: nothing of theirs is shipped
+  assert.equal((await call(server, { path: '/vendor/heroui.min.css' })).status, 404)
+  for (const name of ['heroui', 'BotAvatar']) assert.ok(!libs.body.includes(name), name)
 })
 
 test('every font fonts.css points at is served as font/woff2, and each family has its licence text beside it', async t => {
@@ -293,14 +296,14 @@ test('the bundled libraries ship with their licence texts', async t => {
   const server = await startServer(t)
   const licence = await call(server, { path: '/vendor/LICENSES.txt' })
   assert.equal(licence.status, 200)
-  for (const name of ['react', 'react-dom', 'htm', '@heroui/react', '@heroui/styles', 'bot-avatars', 'border-beam', 'thinking-orbs', 'liquid-gooey', 'three']) assert.match(licence.body, new RegExp(`^${name} \\d+\\.\\d+\\.\\d+$`, 'm'), name)
+  for (const name of ['react', 'react-dom', 'htm', 'border-beam', 'thinking-orbs', 'liquid-gooey', 'three']) assert.match(licence.body, new RegExp(`^${name} \\d+\\.\\d+\\.\\d+$`, 'm'), name)
   assert.match(licence.body, /Permission is hereby granted, free of charge/)
   assert.match(licence.body, /Apache License/) // htm
 })
 
 test('libs.js exports exactly the names the page imports', async () => {
   const libs = await import(join(WEB, 'vendor/libs.js'))
-  for (const name of ['useState', 'useEffect', 'useRef', 'useMemo', 'useCallback', 'useLayoutEffect', 'createRoot', 'htm', 'Card', 'Chip', 'ProgressBar', 'BotAvatar', 'BorderBeam', 'ThinkingOrb', 'Liquid']) {
+  for (const name of ['useState', 'useEffect', 'useRef', 'useMemo', 'useCallback', 'useLayoutEffect', 'createRoot', 'htm', 'BorderBeam', 'ThinkingOrb', 'Liquid']) {
     assert.ok(libs[name], name)
   }
   assert.equal(typeof libs.default.createElement, 'function')
@@ -378,10 +381,10 @@ test('the page\'s stylesheets are served from web/ as text/css, by plain lower-c
     assert.equal(res.body, readFileSync(join(WEB, name), 'utf8'))
   }
   assert.equal((await call(server, { path: '/space.css', cookie: null })).status, 403, 'like everything else, only with the cookie')
-  for (const path of ['/no-such.css', '/Space.css', '/space.CSS', '/space.css.map', '/..%2Fvendor%2Fheroui.min.css', '/%2E%2E/hooks/x.css', '/vendor.css', '/design/out.css', '/space.css/']) {
+  for (const path of ['/no-such.css', '/Space.css', '/space.CSS', '/space.css.map', '/..%2Fvendor%2Ffonts.css', '/%2E%2E/hooks/x.css', '/vendor.css', '/design/out.css', '/space.css/']) {
     assert.equal((await call(server, { path })).status, 404, path)
   }
-  assert.match((await call(server, { path: '/vendor/heroui.min.css' })).headers['content-type'], /^text\/css/) // the vendored one still works
+  assert.match((await call(server, { path: '/vendor/fonts.css' })).headers['content-type'], /^text\/css/) // the vendored one still works
 })
 
 test('/next is gone now that the new page is /', async t => {
