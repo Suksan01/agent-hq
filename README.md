@@ -2,6 +2,7 @@
 
 [![Claude Code mod](https://img.shields.io/badge/Claude_Code-mod-D97757)](#install)
 [![version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FSuksan01%2Fagent-hq%2Fmain%2F.claude-plugin%2Fplugin.json&query=%24.version&label=version&color=7858CA)](.claude-plugin/plugin.json)
+[![license: MIT](https://img.shields.io/badge/license-MIT-18883A)](LICENSE)
 
 A Claude Code mod for watching orchestrated agent teams work.
 
@@ -100,6 +101,10 @@ does not reach installed copies.
 
 The dotted progress tracks are adapted from the [plan-progress](https://github.com/zycck/claude-mods) mod by Kirill
 Serditov (MIT). See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## License
+
+Agent HQ is released under the [MIT license](LICENSE).
 
 ## Notes
 
