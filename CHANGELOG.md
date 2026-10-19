@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **A Team Assistant you can add.** The `/agent-hq:team` interview offers a Team Assistant once the lineup is set.
+  It reads the project and writes each member's brief and a short proposal for you (the parts, options, trade-offs)
+  before work starts, and drafts the lead's updates and closing report.
+- **Full role cards for new hires.** `hq_hire` takes tasks, rules, skills, tools, model, effort and playbook for a
+  new role and names them when it asks you to confirm, so a role added mid-session is as complete as one from the
+  interview.
+
+### Changed
+- **Briefs with the context members lack.** The lead is told that members see none of the conversation, so every
+  brief carries your words, the files and limits, conventions and commands, decisions so far and what "done" means.
+
+### Fixed
+- **The lead now works in the Claude desktop app.** The lead's system prompt section skipped "lean" prompts, which
+  is what the desktop app sends, so the main session there never became the lead.
+- **Reviewers can report back.** A role with a tools list (such as a Code Reviewer) could not use SubagentHandback,
+  so its report was rejected.
+
 ## 0.4.0 (2026-10-20)
 
 ### Added
