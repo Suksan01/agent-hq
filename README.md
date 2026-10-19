@@ -16,9 +16,6 @@ its transcript.
 
 ## Install
 
-This repository is private: you need read access on GitHub, and your machine needs a git credential for github.com
-(an SSH key, or `gh auth login` then `gh auth setup-git`).
-
 At the prompt of a Claude Code terminal session:
 
 ```
@@ -53,9 +50,7 @@ claude plugin update agent-hq@agent-hq
 
 Then restart Claude Code, or run `/reload-plugins` in a running session.
 
-- **Private repository:** background updates use the git credentials already saved on your machine and never prompt.
-  You need an SSH key, or `gh auth login` followed by `gh auth setup-git`; setting `GITHUB_TOKEN` alone is not
-  enough. If a check fails, you keep the version you have.
+- **A failed check** (offline, say) leaves you on the version you have; the next session tries again.
 - **Updates switched off:** `DISABLE_UPDATES=1`, `DISABLE_AUTOUPDATER=1` or `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`
   also stop plugin updates, unless `FORCE_AUTOUPDATE_PLUGINS=1` is set too.
 - **Teams:** an organization admin can turn auto-update on for everyone by listing this marketplace under
