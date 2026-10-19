@@ -52,7 +52,7 @@ export const TOOL_SPECS: ToolSpec[] = [
   {
     name: 'hq_hire',
     description:
-      'Take on more staff: raise a role\'s headcount (the number on staff is current staffing, not a ceiling), or create a new role. Use it when the person asks for more people or the work clearly needs more of a role than the team has; confirm with the person first. Then use hq_assign. At most 10 per role and 12 roles. It rewrites the team file the team was loaded from.',
+      'Take on more staff: raise a role\'s headcount (the number on staff is current staffing, not a ceiling), or create a new role with a full role card (tasks, rules, skills, model). Use it when the person asks for more people or the work clearly needs more of a role than the team has; confirm with the person first. Then use hq_assign. At most 10 per role and 12 roles. It rewrites the team file the team was loaded from.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -60,6 +60,13 @@ export const TOOL_SPECS: ToolSpec[] = [
         add: { type: 'integer', description: 'How many to add (default 1).' },
         title: { type: 'string', description: 'For a new role only: what it is called, e.g. "Security Reviewer". A reviewer-like title makes it read-only.' },
         mission: { type: 'string', description: 'For a new role only: what it is for.' },
+        tasks: { type: 'array', items: { type: 'string' }, description: 'For a new role only: what it does on each assignment, in order.' },
+        rules: { type: 'array', items: { type: 'string' }, description: 'For a new role only: what it must always or never do.' },
+        skills: { type: 'array', items: { type: 'string' }, description: 'For a new role only: installed skill names it should use, e.g. "tdd".' },
+        tools: { type: 'array', items: { type: 'string' }, description: 'For a new role only: limit it to these tools; leave out for every tool.' },
+        model: { type: 'string', description: 'For a new role only: "sonnet", "opus", "haiku" or a model id.' },
+        effort: { type: 'string', description: 'For a new role only: reasoning effort, e.g. "low" or "high".' },
+        playbook: { type: 'string', description: 'For a new role only: one paragraph on how it works.' },
       },
       required: ['role'],
     },
@@ -288,7 +295,7 @@ export async function hqHire(input: unknown, deps: ToolDeps): Promise<ToolAnswer
   const path = proposed.file.path
   const asked = await deps.confirm(
     first.created
-      ? `Rewrite ${path} to create the role "${first.roleId}" (${first.title}) with ${first.after} on staff?`
+      ? `Rewrite ${path} to create the role "${first.roleId}" (${first.title}) with ${first.after} on staff${first.card ? ` (${first.card})` : ''}?`
       : `Rewrite ${path} to add ${first.hired} ${first.hired === 1 ? first.title : `${first.title}s`} (${first.title} ${first.before} -> ${first.after} on staff)?`,
   )
   if (asked === 'unavailable') return fail('hq_hire: changing the team file needs the person\'s confirmation and nobody could be asked here (a run without a screen?); nothing was changed')
