@@ -2,7 +2,8 @@ import { expect, mock, test } from 'claude-code/testing'
 import type { AgentInfo, On, RenderElement } from 'claude-code'
 import type { Engine } from 'claude-code/testing'
 
-import { LEAD, MASCOT_W, SPECIES, cellText, fit, mascotText, speciesOf, trackCells } from '../hooks/cells'
+import { cellText, fit, spriteCells, trackCells } from '../hooks/cells'
+import { LEAD, LETTERS, MASCOT_COUNT, SMALL_H, SMALL_W, SPECIES, SPRITE_H, SPRITE_W, botState, paletteOf, speciesOf, spriteFrames } from '../hooks/sprites'
 import { MAIN, PLAN_TOOL, agentWork, barIdsIn, clearFinished, pickMascot, mergeTodos, planSteps, countTool, createTask, mergeAgents, overallProgress, teamTree, updateTask } from '../hooks/model'
 
 const lead: AgentInfo = { id: 'a1', name: 'researcher', type: 'Explore', description: 'Find auth code', status: 'running' }
@@ -109,7 +110,7 @@ test('sidebar shows the agent tree with each agent now and next', async ($, on) 
     for (const key of ['view-main', 'view-a1', 'view-a2']) if (!(await ui.find({ key }))) missing.push(key)
     expect(missing).toEqual([])
     expect(await ui.find({ text: /researcher/ })).toBeDefined()
-    expect(await ui.find({ text: /code-reviewer/ })).toBeDefined()
+    expect(await ui.find({ text: /reviewer/ })).toBeDefined() // its real name, after its nickname
     expect(await ui.find({ text: /└─ / })).toBeDefined()
     expect(await ui.find({ text: /▸ Summarizing/ })).toBeDefined()
     expect(await ui.find({ text: /next: Report back/ })).toBeDefined()
@@ -119,9 +120,7 @@ test('sidebar shows the agent tree with each agent now and next', async ($, on) 
       expect(await ui.find({ type: 'Raster', key: 'todo-main' })).toBeDefined()
       expect(await ui.find({ type: 'Raster', key: 'mascot-a1' })).toBeDefined()
     } else {
-      const faces = [LEAD, ...SPECIES].flatMap(s => [s.face, s.busy, s.blink, s.happy])
-      const anyFace = new RegExp(faces.map(f => f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'))
-      expect(await ui.find({ text: anyFace })).toBeDefined()
+      expect(await ui.find({ text: /●/ })).toBeDefined() // no Rasters on desktop: each bot as a dot in its colour
     }
 
     await ui.press({ key: 'toggle-hide' })
@@ -196,21 +195,38 @@ test('plan-progress bars read as todo lists, and an agent own todos win over its
   expect(mergeTodos({}, bars, owners, agents).gone).toBeUndefined()
 })
 
-test('every mascot hops while running, holds still otherwise, and stays one cell per column', () => {
-  for (const s of [LEAD, ...SPECIES]) {
-    for (const face of [s.face, s.busy, s.blink, s.happy, s.sad, s.think]) {
-      expect([...face].length).toBe(5)
-      expect(cellText(face)).toBe(face) // no glyph falls back to '·'
-    }
-    expect(cellText(s.accent)).toBe(s.accent)
-    expect(new Set([0, 220, 440, 660, 880].map(t => mascotText(s, 'running', t))).size).toBeGreaterThan(2)
-    expect(mascotText(s, 'done', 0)).toBe(mascotText(s, 'done', 5000))
-    expect(mascotText(s, 'error', 0)).toContain('×')
-    expect(mascotText(s, 'needs_input', 0)).toContain('?')
-    for (const tone of ['running', 'needs_input', 'done', 'error'] as const) {
-      for (let t = 0; t < 4000; t += 220) expect([...mascotText(s, tone, t)].length).toBeLessThan(MASCOT_W + 1)
+test('every bot sprite is 12×10, animates while working, sleeps when done, and draws as 12×5 cells; members also at 8×6', () => {
+  const letters = new Set([...LETTERS])
+  const all = Array.from({ length: MASCOT_COUNT }, (_, i) => speciesOf(i))
+  // 24 mascots, no two alike: shape × colour
+  expect(MASCOT_COUNT).toBeGreaterThanOrEqual(24)
+  expect(new Set(all.map(s => `${s.type} ${s.color}`)).size).toBe(MASCOT_COUNT)
+  for (const [small, W, H] of [[false, SPRITE_W, SPRITE_H], [true, SMALL_W, SMALL_H]] as const) {
+    for (const s of [LEAD, ...SPECIES]) {
+      for (const tone of ['running', 'needs_input', 'done', 'error'] as const) {
+        const frames = spriteFrames(s, tone, small)
+        const palette = paletteOf(s, tone)
+        for (const frame of frames) {
+          expect(frame.length).toBe(H)
+          for (const row of frame) {
+            expect(row.length).toBe(W)
+            for (const ch of row) expect(letters.has(ch)).toBe(true)
+          }
+          const bytes = (spriteCells(frame, palette, '#050507').length / 4) * 3
+          expect(bytes).toBeGreaterThanOrEqual(W * (H / 2) * 12)
+        }
+      }
+      expect(new Set(spriteFrames(s, 'running', small).map(f => f.join(''))).size).toBeGreaterThan(2)
+      // only a working bot moves: the other states are one still frame, so an idle view never redraws for them
+      for (const tone of ['needs_input', 'done', 'error'] as const) expect(spriteFrames(s, tone, small)).toHaveLength(1)
+      expect(spriteFrames(s, 'done', small).some(f => f.join('').includes('z'))).toBe(true)
+      expect(spriteFrames(s, 'error', small)[0]?.join('')).toContain('r')
     }
   }
+  expect(paletteOf(SPECIES[0]!, 'error').b).not.toBe(paletteOf(SPECIES[0]!, 'running').b) // failed slumps grey
+  expect(botState('running')).toBe('working')
+  expect(botState('done')).toBe('sleeping')
+  expect(cellText('▀')).toBe('▀')
 })
 
 test('each agent gets its own mascot and keeps it', () => {

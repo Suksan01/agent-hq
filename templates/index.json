@@ -1,0 +1,44 @@
+[
+  {
+    "id": "software-feature",
+    "title": "Software Feature Team",
+    "lead": "Tech Lead",
+    "members": "Senior Developer x3, QA Engineer, Code Reviewer",
+    "bestFor": "Building or extending a feature in an existing codebase"
+  },
+  {
+    "id": "product-team",
+    "title": "Product Team",
+    "lead": "Engineering Manager",
+    "members": "Architect, Senior Developer x3, QA Engineer, DevOps Engineer, Code Reviewer",
+    "bestFor": "Larger product work that needs design, build, test and release"
+  },
+  {
+    "id": "bug-squad",
+    "title": "Bug Squad",
+    "lead": "Tech Lead",
+    "members": "Debugger x2, QA Engineer",
+    "bestFor": "Triaging and fixing a batch of bugs quickly"
+  },
+  {
+    "id": "security-audit",
+    "title": "Security Audit Team",
+    "lead": "Audit Lead",
+    "members": "Security Reviewer, Code Reviewer, Test Engineer",
+    "bestFor": "Auditing a codebase for security and quality issues before release"
+  },
+  {
+    "id": "research-writing",
+    "title": "Research and Writing Team",
+    "lead": "Editor in Chief",
+    "members": "Researcher x2, Writer, Fact Checker",
+    "bestFor": "Researching a topic and producing a sourced, fact-checked article or report"
+  },
+  {
+    "id": "frontend-web",
+    "title": "Frontend Web Team",
+    "lead": "Frontend Lead",
+    "members": "UI Developer x2, Accessibility Reviewer, Visual QA",
+    "bestFor": "Building or polishing a web UI with accessibility and visual checks"
+  }
+]

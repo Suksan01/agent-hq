@@ -3,8 +3,14 @@
 
 export type Tone = 'running' | 'needs_input' | 'error' | 'done'
 
-// one lightness for every state (plan-progress's violet, amber, red and green), white on each reads at 4.5:1
-export const TONE_COLOR: Record<Tone, string> = { running: '#7858CA', needs_input: '#AD6400', error: '#C5353E', done: '#18883A' }
+// the space theme's status glows on a dark terminal: working electric blue, needs you amber, failed coral, done mint
+export const TONE_COLOR: Record<Tone, string> = { running: '#3D7BFF', needs_input: '#FFB547', error: '#FF5A5F', done: '#3DF2B0' }
+// on a light terminal the glows would wash out: one deeper lightness for every state, white on each reads at 4.5:1
+export const TONE_COLOR_LIGHT: Record<Tone, string> = { running: '#3A5BD9', needs_input: '#AD6400', error: '#C5353E', done: '#18883A' }
+export const tonesFor = (isLight: boolean) => (isLight ? TONE_COLOR_LIGHT : TONE_COLOR)
+// the lead's mark (✦) and colour: violet-white
+export const LEAD_COLOR = '#B9A6FF'
+const INK = [5, 5, 7] // text on a bright pill
 export const TONE_GLYPH: Record<Tone, string> = { running: '●', needs_input: '?', error: '!', done: '✓' }
 
 const DEFAULT = 0x01000000
@@ -29,8 +35,8 @@ const q = (m: number) => Math.round(Math.max(0, Math.min(1, m)) * 8) / 8
 
 // A Raster cell must be exactly one column wide or the engine refuses the whole tree.
 // shortcut: anything outside ASCII, Latin and the glyphs drawn here becomes '·' (CJK/emoji names show as dots); port plan-progress's width table if that matters.
-// The mascots' glyphs were each checked against plan-progress's width table (the engine's own measure): one column.
-const SAFE_GLYPHS = new Set([...'●↳…✓✕·│?!', ...'•ᴥωөᵔᴗᴖ‿◕◉⊙▽≧≦♪♫♥♡✦✧✿★ˇ°×'])
+// The half block the sprites draw with was checked against plan-progress's width table (the engine's own measure): one column.
+const SAFE_GLYPHS = new Set([...'●↳…✓✕·│?!▀✦'])
 const cellChar = (ch: string) => {
   const cp = ch.codePointAt(0) ?? 63
   const isPlain = (cp >= 0x20 && cp <= 0x7e) || (cp >= 0xa0 && cp <= 0x2ff) || (cp >= 0x2800 && cp <= 0x28ff)
@@ -70,113 +76,78 @@ class Grid {
   }
 }
 
-export type TrackSpec = { done: number; total: number; tone: Tone; label: string; count: string }
+/** `sweep`: no share is known, so a band of dots drifts along the track and the pill waits at the left (no percentage is implied). */
+export type TrackSpec = { done: number; total: number; tone: Tone; label: string; count: string; sweep?: boolean }
 
-/** One-row progress track: dots fill the finished share and twinkle while `t` moves; the pill rides the head.
- * `base` is the background under the track (a panel's colour), the terminal's when left out. */
+/** One-row progress track: a dim dotted rail; the finished share glows in the status hue, brighter towards its head, its
+ * dots twinkling while `t` moves; the count rides the head as a pill. `base` is the background under the track (a panel's
+ * colour), the terminal's when left out. */
 export function trackCells(spec: TrackSpec, W: number, t: number, isLight: boolean, base?: string): string {
   const g = new Grid(W, 1)
   const bgColor = base ? hex(base) : SCHEMES[isLight ? 'light' : 'dark'].bg
   const isDone = spec.tone === 'done'
   const fx = (isDone ? 1 : Math.min(1, spec.done / Math.max(1, spec.total))) * W
-  const acc = hex(TONE_COLOR[spec.tone])
-  const light = mix(acc, [255, 255, 255], 0.35)
-  const grey = [120, 118, 128]
-  const track = mix(bgColor, [128, 128, 128], isLight ? 0.14 : 0.18)
-  const fill = mix(track, acc, isDone ? 0.3 : 0.17)
-  for (let x = 0; x < W; x++) g.set(x, 0, ' ', DEFAULT, pack(x + 0.5 < fx ? fill : track))
+  const acc = hex(tonesFor(isLight)[spec.tone])
+  const glow = mix(acc, isLight ? [0, 0, 0] : [255, 255, 255], isLight ? 0.25 : 0.5)
+  const rail = mix(bgColor, isLight ? [0, 0, 0] : [255, 255, 255], 0.2)
+  for (let x = 0; x < W; x++) g.set(x, 0, '⠒', pack(rail), pack(bgColor)) // the dotted rail
 
-  // dots grow denser and warmer towards the head, each twinkling on its own period
   const TWINKLE = [2200, 2800, 1900, 3300]
-  for (let col = 0; col < Math.min(W, Math.ceil(fx)); col++) {
-    const u = Math.min(1, (col + 0.5) / Math.max(1, fx))
-    const dense = isDone ? 0.8 : 0.22 + 0.78 * Math.pow(u, 1.5)
-    let bits = 0
-    for (let r = 0; r < 4; r++) {
-      for (let c = 0; c < 2; c++) {
-        const sx = col * 2 + c
-        if (sx / 2 < fx && hash(sx, r, 1) <= dense * 0.6) bits |= BRAILLE_BITS[r]?.[c] ?? 0
-      }
+  if (spec.sweep) {
+    // no share known: a glow drifts along the rail
+    const head = ((t / 2400) % 1) * (W + 12) - 6
+    for (let col = 0; col < W; col++) {
+      const near = Math.max(0, 1 - Math.abs(col - head) / 6)
+      if (near === 0) continue
+      let bits = 0
+      for (let r = 0; r < 4; r++) for (let c = 0; c < 2; c++) if (hash(col * 2 + c, r, 1) <= 0.1 + 0.5 * near) bits |= BRAILLE_BITS[r]?.[c] ?? 0
+      g.set(col, 0, bits ? 0x2800 + bits : ' ', pack(mix(rail, glow, q(near))), pack(mix(bgColor, acc, q(0.22 * near))))
     }
-    if (bits === 0) continue
+  }
+  for (let col = 0; col < Math.min(W, Math.ceil(fx)); col++) {
+    const u = Math.min(1, (col + 0.5) / Math.max(1, fx)) // brighter towards the head, a glow pushed along
+    const fill = mix(bgColor, acc, q(isDone ? 0.4 : 0.2 + 0.36 * u))
+    let bits = 0
+    for (let r = 0; r < 4; r++) for (let c = 0; c < 2; c++) if (hash(col * 2 + c, r, 1) <= 0.25 + 0.4 * u) bits |= BRAILLE_BITS[r]?.[c] ?? 0
     const cls = Math.floor(hash(col, 0, 2) * 4)
-    const blink = 1 - (isDone ? 0.2 : 0.55) * wave(t + cls * 600, TWINKLE[cls] ?? 2200, 0.25)
-    const tone = mix(grey, light, isDone ? 1 : q(Math.min(1, Math.pow(u, 0.9) * 1.1)))
-    g.set(col, 0, 0x2800 + bits, pack(mix(fill, tone, q((0.35 + 0.65 * dense) * blink))), pack(fill))
+    const blink = 1 - (isDone ? 0.15 : 0.45) * wave(t + cls * 600, TWINKLE[cls] ?? 2200, 0.25)
+    g.set(col, 0, bits ? 0x2800 + bits : ' ', pack(mix(fill, glow, q((0.5 + 0.5 * u) * blink))), pack(fill))
   }
 
   const icon = spec.tone === 'running' ? '' : `${TONE_GLYPH[spec.tone]} `
   const name = fit(spec.label, Math.max(3, Math.floor(W * (W < 60 ? 0.7 : 0.5)) - icon.length - spec.count.length - 4))
   const shown = icon + name
+  if (!shown && !spec.count) return g.encode()
   const gap = shown && spec.count ? 1 : 0
   const kw = [...shown].length + gap + spec.count.length + 2
-  const kx = Math.round(Math.max(0, Math.min(W - kw, fx - kw / 2)))
-  const white = pack([255, 255, 255])
+  const kx = Math.round(Math.max(0, Math.min(W - kw, (spec.sweep ? 0 : fx) - kw / 2)))
+  const ink = pack(isLight ? [255, 255, 255] : INK)
   g.fill(0, kx, kx + kw, pack(acc))
-  const at = kx + 1 + g.text(kx + 1, 0, shown, white, pack(acc))
-  if (spec.count) g.text(at + gap, 0, spec.count, white, pack(acc))
+  const at = kx + 1 + g.text(kx + 1, 0, shown, ink, pack(acc))
+  if (spec.count) g.text(at + gap, 0, spec.count, ink, pack(acc))
   return g.encode()
 }
 
 
-// ---------- mascots: a little creature per agent, alive while it works ----------
+// ---------- sprites: two pixels per cell, the upper as the half block's ink, the lower as its background ----------
 
-type Species = {
-  name: string
-  color: string
-  face: string // resting, eyes open
-  busy: string // the working beat between resting ones
-  blink: string
-  happy: string
-  sad: string
-  think: string
-  accent: string // floats beside it while it works, sits by it once done
-}
-
-// every face is five cells; each glyph is one column wide (see SAFE_GLYPHS)
-const sp = (name: string, color: string, accent: string, [face, busy, blink, happy, sad, think]: string[]): Species => ({
-  name, color, accent, face: face ?? '', busy: busy ?? '', blink: blink ?? '', happy: happy ?? '', sad: sad ?? '', think: think ?? '',
-})
-/** The main session's mascot. */
-export const LEAD = sp('lead', '#FFB86C', '★', ['(◕ᴗ◕)', '(◕▽◕)', '(-ᴗ-)', '(≧▽≦)', '(×ᴗ×)', '(ˇᴗˇ)'])
-export const SPECIES: readonly Species[] = [
-  sp('cat', '#F2A65A', '♪', ['=•ω•=', '=°ω°=', '=-ω-=', '=ᵔωᵔ=', '=×ω×=', '=ˇωˇ=']),
-  sp('bear', '#C99A6E', '♫', ['ʕ•ᴥ•ʔ', 'ʕ°ᴥ°ʔ', 'ʕ-ᴥ-ʔ', 'ʕᵔᴥᵔʔ', 'ʕ×ᴥ×ʔ', 'ʕˇᴥˇʔ']),
-  sp('butterfly', '#F4A6C6', '✿', ['ʚ•ᴗ•ɞ', 'ʚ°ᴗ°ɞ', 'ʚ-ᴗ-ɞ', 'ʚᵔᴗᵔɞ', 'ʚ×ᴖ×ɞ', 'ʚˇᴗˇɞ']),
-  sp('owl', '#B39DDB', '✦', ['{◉,◉}', '{⊙,⊙}', '{-,-}', '{ᵔ,ᵔ}', '{×,×}', '{ˇ,ˇ}']),
-  sp('robot', '#7FC8F8', '✧', ['[•_•]', '[◕_◕]', '[-_-]', '[ᵔ‿ᵔ]', '[×_×]', '[ˇ_ˇ]']),
-  sp('chick', '#FFD166', '♪', ['(•ө•)', '(°ө°)', '(-ө-)', '(ᵔөᵔ)', '(×ө×)', '(ˇөˇ)']),
-  sp('puppy', '#E8C07D', '♥', ['U•ᴥ•U', 'U°ᴥ°U', 'U-ᴥ-U', 'UᵔᴥᵔU', 'U×ᴥ×U', 'UˇᴥˇU']),
-  sp('spirit', '#9BE3C3', '✧', ['(◕‿◕)', '(◉‿◉)', '(-‿-)', '(≧‿≦)', '(×‿×)', '(ˇ‿ˇ)']),
-]
-export const speciesOf = (mascot: number | undefined) => (mascot === undefined ? LEAD : (SPECIES[mascot % SPECIES.length] ?? LEAD))
-
-export const MASCOT_W = 9 // bounce (0-2) + face (5) + accent (1) + its drift (1)
-const BOUNCE = [0, 1, 2, 1] // cells from the left, one step per beat
-const BEAT_MS = 220
-
-/** A mascot's text at time `t`: hopping, busy-faced and blinking with a drifting accent while running; a blinking
- * "?" while waiting; happy with its accent once done; x-eyed when it failed. Always MASCOT_W cells or fewer. */
-export function mascotText(s: Species, tone: Tone, t: number): string {
-  const beat = Math.floor(t / BEAT_MS)
-  if (tone === 'running') {
-    const face = beat % 17 === 0 ? s.blink : beat % 4 < 2 ? s.face : s.busy
-    const at = BOUNCE[beat % BOUNCE.length] ?? 0
-    const drift = beat % 6 < 3 ? 0 : 1
-    return (' '.repeat(at) + face + ' '.repeat(drift) + s.accent).padEnd(MASCOT_W, ' ').slice(0, MASCOT_W)
+/** A sprite frame (rows of palette letters) as Raster cells, over the panel's background; clear pixels show it. */
+export function spriteCells(frame: readonly string[], palette: Record<string, string>, base: string): string {
+  const width = Math.max(...frame.map(row => row.length))
+  const rows = Math.ceil(frame.length / 2)
+  const g = new Grid(width, rows)
+  const bg = hex(base)
+  const colorOf = (ch: string | undefined): number[] => {
+    if (!ch || ch === '.') return bg
+    const value = palette[ch] ?? '#ff00ff'
+    // a see-through colour (a halo, a shadow) is mixed over the panel
+    const see = /^rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)$/.exec(value)
+    return see ? mix(bg, [Number(see[1]), Number(see[2]), Number(see[3])], Number(see[4])) : hex(value)
   }
-  if (tone === 'needs_input') return ` ${s.think}${beat % 4 < 2 ? '?' : ' '}`
-  if (tone === 'done') return ` ${s.happy}${s.accent}`
-  return ` ${s.sad}`
-}
-
-/** The mascot as one Raster row in its own colour (dimmed once it failed), over the panel's background. */
-export function mascotCells(s: Species, tone: Tone, t: number, base: string): string {
-  const g = new Grid(MASCOT_W, 1)
-  const bg = pack(hex(base))
-  const own = hex(s.color)
-  const fg = pack(tone === 'error' ? mix(own, [128, 128, 128], 0.55) : own)
-  g.fill(0, 0, MASCOT_W, bg)
-  g.text(0, 0, mascotText(s, tone, t), fg, bg)
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < width; x++) {
+      g.set(x, y, '▀', pack(colorOf(frame[y * 2]?.[x])), pack(colorOf(frame[y * 2 + 1]?.[x])))
+    }
+  }
   return g.encode()
 }

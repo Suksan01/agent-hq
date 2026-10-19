@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent HQ Space</title>
+<link rel="stylesheet" href="../vendor/fonts.css">
+<link rel="stylesheet" href="../space.css">
+<style>
+  html, body { margin: 0; background: #050507; }
+  body { color: #f2f2f5; font-family: 'Space Grotesk', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  #app { min-height: 100vh; }
+  .sc-wrap { max-width: 1280px; margin: 0 auto; padding: 0 28px 120px; }
+  .sc-hero { padding: 84px 0 52px; display: grid; gap: 22px; max-width: 880px; }
+  .sc-hero h1 { margin: 0; font: 700 clamp(44px, 7vw, 84px)/0.98 'Space Grotesk', sans-serif; letter-spacing: -0.035em; }
+  .sc-hero p { margin: 0; max-width: 620px; font: 400 17px/1.55 'Space Grotesk', sans-serif; color: rgba(242,242,245,.62); }
+  .sc-nav { position: sticky; top: 0; z-index: 50; display: flex; gap: 8px; overflow-x: auto; padding: 14px 28px; margin: 0 -28px; background: linear-gradient(180deg, rgba(5,5,7,.92), rgba(5,5,7,0)); scrollbar-width: none; }
+  .sc-nav a { flex: none; padding: 8px 14px; border-radius: 999px; font: 400 11px 'JetBrains Mono', monospace; letter-spacing: .06em; text-transform: uppercase; color: rgba(242,242,245,.62); text-decoration: none; background: rgba(255,255,255,.06); box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
+  .sc-nav a:hover { color: #fff; background: rgba(255,255,255,.12); }
+  .sc-sec { content-visibility: auto; contain-intrinsic-size: auto var(--sc-h, 900px); padding-top: 84px; scroll-margin-top: 40px; }
+  .sc-sec > h2 { margin: 0 0 10px; font: 700 42px/1 'Space Grotesk', sans-serif; letter-spacing: -0.03em; }
+  .sc-sec > .sc-lede { margin: 0 0 34px; max-width: 640px; font: 400 15px/1.55 'Space Grotesk', sans-serif; color: rgba(242,242,245,.55); }
+  .sc-inner > .sc-sec { padding-top: 0; } .sc-inner > .sc-sec > h2, .sc-inner > .sc-sec > .sc-lede { display: none; }
+  .sc-h3 { margin: 44px 0 16px; font: 400 11px 'JetBrains Mono', monospace; letter-spacing: .08em; text-transform: uppercase; color: rgba(242,242,245,.5); }
+  .sc-row { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; }
+  .sc-grid { display: grid; gap: 18px; }
+  .sc-cell { display: grid; gap: 10px; justify-items: start; }
+  .sc-cap { font: 400 10.5px 'JetBrains Mono', monospace; letter-spacing: .06em; text-transform: uppercase; color: rgba(242,242,245,.38); }
+  .sc-swatch { height: 92px; border-radius: 22px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08), 0 18px 40px -22px var(--c, #000); background: var(--c); }
+  .sc-matrix { display: grid; gap: 22px 18px; align-items: start; }
+  .sc-states { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px; }
+  .sc-blobcell { display: grid; justify-items: center; gap: 8px; padding: 14px 6px; border-radius: 24px; background: rgba(255,255,255,.03); box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); }
+  .sc-system { height: 640px; border-radius: 34px; overflow: hidden; position: relative; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); background: #020204; }
+  .sc-term { font: 400 12.5px/1.2 'JetBrains Mono', monospace; background: #07070a; border-radius: 22px; padding: 18px 20px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); overflow-x: auto; white-space: pre; color: #f2f2f5; }
+  .sc-term .t-dim { color: rgba(242,242,245,.38); }
+  .sc-term .t-row { display: flex; gap: 12px; align-items: flex-start; margin: 6px 0; }
+  .sc-term .t-spr { display: block; line-height: 1; font-size: 13px; letter-spacing: 0; flex: none; }
+  .sc-term .t-spr span { display: inline-block; width: .6em; }
+  @media (max-width: 640px) { .sc-wrap { padding: 0 16px 80px; } .sc-nav { padding: 12px 16px; margin: 0 -16px; } .sc-hero { padding: 56px 0 28px; } .sc-sec { padding-top: 56px; } .sc-sec > h2 { font-size: 32px; } .sk-agent, .sk-agent--lead, .sk-feed, .sk-inbox, .sk-drawer, .sk-hud { width: 100% !important; min-width: 0 !important; box-sizing: border-box; } .sc-system { height: 520px; } }
+</style>
+</head>
+<body class="dark">
+<div id="app"></div>
+<script type="module" src="showcase.js"></script>
+</body>
+</html>

@@ -1,5 +1,7 @@
 import type { HqAgent, HqStatus, HqTask, HqTaskStatus, HqTodo } from '../types'
-import { SPECIES } from './cells'
+import { pickNickname } from './names'
+import { DEFAULT_THEME, THEMES, type NameTheme } from './themes'
+import { MASCOT_COUNT, SPECIES } from './sprites'
 
 export const MAIN = 'main'
 const FINISHED: readonly HqStatus[] = ['completed', 'failed', 'killed']
@@ -12,6 +14,14 @@ export type ListedAgent = {
   status: HqStatus
   parentId?: string
 }
+
+/** Working is running a turn or about to; an agent idle between turns or held (waiting) is not. */
+export const isWorking = (status: HqStatus) => status === 'running' || status === 'pending'
+/** How many agents work right now (never the lead). */
+export const workingCount = (agents: Record<string, HqAgent>) => Object.values(agents).filter(a => a.id !== MAIN && isWorking(a.status)).length
+
+/** How results and toasts name an agent: "Mochi-chan (frontend-dev-1)", or just its name while it has no nickname. */
+export const who = (agent: Pick<HqAgent, 'name' | 'nickname'>) => (agent.nickname && agent.nickname !== agent.name ? `${agent.nickname} (${agent.name})` : agent.name)
 
 export const isFinished = (status: HqStatus) => FINISHED.includes(status)
 
@@ -30,6 +40,7 @@ export function mergeAgents(
   rows: Record<string, HqAgent>,
   listed: readonly ListedAgent[],
   now: number,
+  theme: NameTheme = THEMES[DEFAULT_THEME], // where new nicknames come from; agents that have one keep it
 ): Record<string, HqAgent> {
   const seen = new Set(listed.map(a => a.id))
   const next: Record<string, HqAgent> = { [MAIN]: rows[MAIN] ?? mainAgent(now) }
@@ -55,10 +66,34 @@ export function mergeAgents(
       tools: old?.tools ?? 0,
       lastTool: old?.lastTool,
       mascot,
+      nickname: old?.nickname,
     }
   }
 
-  return next
+  return withNicknames(uniqueMascots(next), theme)
+}
+
+/** Rows from older versions can share a bot: the later-started of two gets a free one. */
+function uniqueMascots(rows: Record<string, HqAgent>): Record<string, HqAgent> {
+  const byStart = Object.values(rows)
+    .filter(a => a.id !== MAIN && a.mascot !== undefined)
+    .sort((a, b) => a.startedAt - b.startedAt)
+  return byStart.reduce((acc, a, i) => {
+    if (!byStart.slice(0, i).some(b => acc[b.id]?.mascot === a.mascot)) return acc
+    const { [a.id]: _self, ...others } = acc
+    return { ...acc, [a.id]: { ...a, mascot: pickMascot(others, a.id) } }
+  }, rows)
+}
+
+/** Every row has a nickname of its own: the lead's from the lead pool; a clash (rows from older versions) goes to the later-started. */
+function withNicknames(rows: Record<string, HqAgent>, theme: NameTheme): Record<string, HqAgent> {
+  const ordered = Object.values(rows).sort((a, b) => Number(b.id === MAIN) - Number(a.id === MAIN) || a.startedAt - b.startedAt)
+  const taken = new Set<string>()
+  return ordered.reduce((acc, a) => {
+    const nickname = a.nickname !== undefined && !taken.has(a.nickname) ? a.nickname : pickNickname(a.id, taken, a.id === MAIN, theme)
+    taken.add(nickname)
+    return nickname === a.nickname ? acc : { ...acc, [a.id]: { ...a, nickname } }
+  }, rows)
 }
 
 /** A species no present agent has, starting from one the id hashes to; once all are taken, the hashed one. */
@@ -66,11 +101,14 @@ export function pickMascot(rows: Record<string, HqAgent>, id: string): number {
   const used = new Set(Object.values(rows).map(r => r.mascot))
   let start = 0
   for (const ch of id) start = (start * 31 + ch.charCodeAt(0)) >>> 0
-  for (let i = 0; i < SPECIES.length; i++) {
-    const pick = (start + i) % SPECIES.length
-    if (!used.has(pick)) return pick
+  // the eight shapes in their own colours first, then each further round of recoloured ones
+  for (let round = 0; round * SPECIES.length < MASCOT_COUNT; round++) {
+    for (let i = 0; i < SPECIES.length; i++) {
+      const pick = round * SPECIES.length + ((start + i) % SPECIES.length)
+      if (!used.has(pick)) return pick
+    }
   }
-  return start % SPECIES.length
+  return start % MASCOT_COUNT
 }
 
 const shortName = (description: string, type: string) =>
@@ -159,6 +197,12 @@ export function agentWork(agent: HqAgent, todos: Record<string, HqTodo[]>, tasks
 // ---------- plan-progress bars as todo lists ----------
 
 export const PLAN_TOOL = 'mcp__plan-progress__plan_progress'
+/**
+ * The tools every team member always has, whatever its role's tools list says: the ones it reports and coordinates
+ * with (a member that cannot SendMessage cannot answer the lead). The guard never refuses them and parseTeam adds them
+ * to every tools list.
+ */
+export const COORDINATION_TOOLS = ['SendMessage', 'TodoWrite', PLAN_TOOL, 'TaskCreate', 'TaskUpdate', 'TaskGet', 'TaskList']
 export type BarOwner = { owner: string; at: number }
 type Raw = Record<string, unknown>
 const isRaw = (v: unknown): v is Raw => typeof v === 'object' && v !== null
@@ -254,7 +298,10 @@ export function teamTree(agents: Record<string, HqAgent>): Record<string, HqAgen
   for (const a of Object.values(agents)) {
     if (a.id === MAIN) continue
     const parent = a.parentId && agents[a.parentId] ? a.parentId : MAIN
-    tree[parent] = [...(tree[parent] ?? []), a].sort((x, y) => x.startedAt - y.startedAt)
+    tree[parent] = [...(tree[parent] ?? []), a].sort((x, y) => RANK[x.status] - RANK[y.status] || x.startedAt - y.startedAt)
   }
   return tree
 }
+
+// siblings in the tree: working agents first, then those waiting, then the finished
+const RANK: Record<HqStatus, number> = { running: 0, pending: 0, waiting: 1, idle: 1, completed: 2, failed: 2, killed: 2 }

@@ -1,0 +1,20 @@
+#!/bin/sh
+# Before every commit: every team template keeps its lead on opus, and the mod's tests pass.
+# Git runs this through core.hooksPath (git config core.hooksPath .githooks). Skip once with: git commit --no-verify
+# shortcut: checks the working tree, not only what is staged; stash unstaged changes first for an exact check.
+cd "$(git rev-parse --show-toplevel)" || exit 1
+
+for tool in node claude; do
+  command -v "$tool" >/dev/null 2>&1 || { echo "pre-commit: $tool is not on PATH, so the checks cannot run" >&2; exit 1; }
+done
+
+node scripts/check-templates.mjs || exit 1
+
+# the full test output is long: print only the failures and the totals
+out=$(claude plugin test . 2>&1) || {
+  printf '%s\n' "$out" | grep -E -A12 '^\(fail\)' >&2
+  printf '%s\n' "$out" | tail -n 2 >&2
+  echo "pre-commit: the mod's tests failed; fix them or commit with --no-verify" >&2
+  exit 1
+}
+printf '%s\n' "$out" | tail -n 2

@@ -2,7 +2,31 @@
   "name": "agent-hq",
   "version": "0.2.3",
   "description": "Agent team command center: plan-progress style bars above the prompt, and a sidebar with the agent tree, each agent's now/next/last task, todo tracks and animated mascots.",
-  "author": { "name": "Suksan01" },
+  "author": {
+    "name": "Suksan01"
+  },
   "license": "MIT",
-  "types": "./types/index.d.ts"
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "nicknameTheme": {
+      "type": "string",
+      "title": "Nickname theme",
+      "description": "The cast your agents' nicknames are drawn from: futuristic planets with a star for the lead by default. A new theme applies to agents named from now on.",
+      "default": "planets",
+      "options": [
+        "planets",
+        "japanese-snacks",
+        "pirates",
+        "space-crew",
+        "forest-friends",
+        "robots"
+      ]
+    },
+    "sounds": {
+      "type": "boolean",
+      "title": "Sounds",
+      "description": "Play a short sound when an agent finishes, needs you, fails, or the team levels up (terminals with audio only).",
+      "default": true
+    }
+  }
 }
