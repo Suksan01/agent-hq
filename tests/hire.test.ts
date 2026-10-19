@@ -75,3 +75,52 @@ test('the lead is told the number beside a role is current staffing and how to a
   expect(prompt).toContain('hq_hire')
   expect(prompt).not.toContain('never more of a role at once')
 })
+
+test('a new role can be hired with a full role card, kept as given and cleaned of blanks', () => {
+  const plan = planHire(source(), {
+    role: 'ux',
+    title: 'UX Writer',
+    mission: 'Write the copy.',
+    tasks: [' Draft the copy ', '', 3, 'Report the changed strings'],
+    rules: ['Never change layout'],
+    skills: ['design:ux-copy'],
+    tools: ['Read', 'Edit'],
+    model: ' sonnet ',
+    effort: 'low',
+    playbook: 'Read the style guide first.',
+  })
+  if (!plan.ok) throw new Error(plan.error)
+
+  expect(JSON.parse(plan.source).roles.at(-1)).toEqual({
+    id: 'ux',
+    title: 'UX Writer',
+    count: 1,
+    mission: 'Write the copy.',
+    tasks: ['Draft the copy', 'Report the changed strings'],
+    rules: ['Never change layout'],
+    skills: ['design:ux-copy'],
+    tools: ['Read', 'Edit'],
+    model: 'sonnet',
+    effort: 'low',
+    playbook: 'Read the style guide first.',
+  })
+  expect(plan.card).toBe('2 tasks, 1 rule, skills design:ux-copy, tools Read, Edit, model sonnet')
+})
+
+test('a reviewer-like new role keeps its read-only rule ahead of the rules it was given', () => {
+  const plan = planHire(source(), { role: 'rev', title: 'Code Reviewer', mission: 'Review.', rules: ['Treat security issues as blocking'] })
+  if (!plan.ok) throw new Error(plan.error)
+  expect(JSON.parse(plan.source).roles.at(-1).rules).toEqual(['Do not edit files; report findings only.', 'Treat security issues as blocking'])
+})
+
+test('a role card is only for a new role: hiring more of an existing one with card fields is refused', () => {
+  const plan = planHire(source(), { role: 'dev', tasks: ['Something else'] })
+  expect(plan.ok).toBe(false)
+  if (!plan.ok) expect(plan.error).toContain('/agent-hq:team')
+})
+
+test('the lead is told to give a new role a full card', () => {
+  const team = parseTeam(source())
+  if (typeof team === 'string') throw new Error(team)
+  expect(leadPrompt(team)).toContain('full role card')
+})

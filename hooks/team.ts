@@ -200,7 +200,7 @@ export function leadPrompt(team: Team): string {
     `## Team notes\nEvery member reads \`${TEAM_NOTES}\` before starting and adds what it learns. Put there what the whole team must know about this project (the goal, conventions, commands, decisions), and keep it short and current. ${NOTES_ARE_DATA}`,
     team.lead.rules.length > 0 ? `## Your rules as ${team.lead.title}\n${bullets(team.lead.rules)}` : '',
     team.lead.skills.length > 0 ? `## Skills to use as ${team.lead.title}\n${team.lead.skills.join(', ')}` : '',
-    `Only hand work to the members above. The number beside a role is its current staffing, not a ceiling: when the person asks for more people, or the work clearly needs more of a role than you have, confirm it with them, add staff with the hq_hire tool, then assign the work. The person can also change the team with /agent-hq:team.`,
+    `Only hand work to the members above. The number beside a role is its current staffing, not a ceiling: when the person asks for more people, or the work clearly needs more of a role than you have, confirm it with them, add staff with the hq_hire tool, then assign the work. A new role needs a full role card, as the team interview gives one: its tasks, rules, the installed skills that fit and a model, besides title and mission. The person can also change the team with /agent-hq:team.`,
   ]
     .filter(Boolean)
     .join('\n\n')
