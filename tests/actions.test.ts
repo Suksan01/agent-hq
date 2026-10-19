@@ -722,7 +722,7 @@ test('after /hq web, a session.start (a hot reload) starts the live page again w
   await s.clock.settle()
 
   expect(s.spawnArgv).toHaveLength(2)
-  expect(s.spawnArgv[1].some(arg => arg.endsWith('/web/server.mjs'))).toBe(true)
+  expect(s.spawnArgv[1]?.some(arg => arg.endsWith('/web/server.mjs'))).toBe(true)
   expect(s.commands.filter(argv => argv[0] === 'open')).toHaveLength(opensBefore)
 })
 
