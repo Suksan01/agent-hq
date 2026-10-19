@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.3 (2026-10-20)
+
+### Changed
+- **Agents get ordinary first names by default.** The new **People** nickname theme (80 first names for members, 12
+  for leads) is the default. Planets and the other themes are still options. Changing the theme now renames every agent
+  whose name is from another theme. XP and badges are kept per name, so a renamed agent starts its own.
+- Each session's lead is named from its own session, so two sessions' leads are no longer named alike.
+
+### Fixed
+- **Two sessions of the same team in the same folder are told apart on the live page**: they read "Team #1" and
+  "Team #2" in every title, chip, list and toast. Chips no longer repeat the folder unless the same team name runs in
+  another folder too.
+
 ## 0.3.2 (2026-10-19)
 
 ### Fixed
