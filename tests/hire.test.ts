@@ -144,3 +144,12 @@ test('with a Team Assistant on the team, the lead has it write the briefs and pr
   expect(prompt).toContain('have the Team Assistant ("agent-hq:assistant") write')
   expect(prompt).toContain('proposal')
 })
+
+test('the lead is pointed to /agent-hq:feature for a big feature, and told it moves only on the person\'s yes', () => {
+  const team = parseTeam(source())
+  if (typeof team === 'string') throw new Error(team)
+  const prompt = leadPrompt(team)
+  expect(prompt).toContain('/agent-hq:feature')
+  expect(prompt).toContain('brainstorm, spec, prototype variants, plan, build')
+  expect(prompt).toContain('approval gate')
+})

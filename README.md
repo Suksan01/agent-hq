@@ -22,7 +22,7 @@ Open the sidebar with `/hq`. In the sidebar, `h` hides finished items, `c` clear
 opens its transcript.
 
 Commands: `/hq` (sidebar), `/hq web` (live page), `/hq report` (session report), `/hq trust` (use a project's team
-file). Skills: `/agent-hq:team`, `/agent-hq:standup`, `/agent-hq:retro`, `/agent-hq:handoff`, and
+file). Skills: `/agent-hq:team`, `/agent-hq:feature`, `/agent-hq:standup`, `/agent-hq:retro`, `/agent-hq:handoff`, and
 `agent-hq:self-evaluation`, which every team member carries.
 
 ## Teams
@@ -103,7 +103,9 @@ The lead (the main session) gets four tools, offered as `mcp__agent-hq__hq_assig
 
 Only the lead can use them; a subagent that calls one gets an error. The `/agent-hq:handoff` skill describes a good
 brief, `/agent-hq:standup` collects a three-line status from every running member, and `/agent-hq:retro` turns a
-finished task into proposed edits to the team's rules (applied only after you approve each).
+finished task into proposed edits to the team's rules (applied only after you approve each). `/agent-hq:feature`
+runs a big feature in six phases (brainstorm, spec, parallel UI prototype variants, plan, build one reviewed task at
+a time, finish), each ending at a gate you approve; the spec and plan are saved to `docs/specs/` and `docs/plans/`.
 
 ## Rule guard
 
@@ -404,6 +406,7 @@ From the mod folder:
   call it makes, and `tsc -p . --noUnusedLocals` type-checks it.
 - `node --test web/server.test.mjs web/build-design.test.mjs` tests the local server, the hub and the design build
   (real server processes on free ports, in temp folders).
+- `node --test skills/feature/skill.test.mjs` checks the feature skill's six phases, their gates and its build rules.
 - `node --test skills/self-evaluation/skill.test.mjs` checks that the self-evaluation skill teaches the same evidence
   rule as the role prompt, and that every `Self-check` example in it follows that rule (the mod's test sandbox cannot
   read Markdown).
