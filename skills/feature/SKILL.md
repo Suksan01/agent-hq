@@ -73,43 +73,60 @@ Give each a short name and one line: its style, its flow, and who it suits. Then
 the project's design system and the person's constraints first. The top one is the **Recommended** variant, and the
 rank is the order everywhere after this: the briefs, the canvas and the gate.
 
+**Use the project's own stack.** Build the variants in the project's own stack and UI library: the framework, the
+component library and the design tokens the real feature will use (in a Next.js app with `components/ui/`, its routes
+and those components). Variants share those components and differ by layout, flow and theme tokens; a component a
+variant needs and the library lacks goes in that variant's own folder. A React project with no UI library yet uses
+shadcn/ui on Tailwind, whose components are copied in and themed by tokens. Then a variant shows what can really ship, and the chosen one is a head start for phase 5. Use
+raw HTML only when the project has no frontend app yet. A native app (React Native, iOS, Android) cannot sit in an
+iframe: use its web build where it has one (Expo web), else each screen is a screenshot from the simulator.
+
 **Build them in parallel.** Brief one frontend member per variant with hq_assign, **in parallel**: each builds
 **one variant** only, from the approved spec and its line above, with mock data and no backend changes, on a
-**throwaway** route of its own (`<app>/_prototype/<feature>/<variant>/**` or the project's equivalent). Give each
-`files` limited to its own variant folder, `done` as "every screen of the main flow renders at desktop and mobile width
-on its own URL, `flow.json` lists them, and the report gives the URLs", and `limits` as "no backend, no shared
-components, no real data". With fewer frontend members than variants, run them one after another, or offer hq_hire.
+**throwaway** route of its own (`<app>/prototypes/<feature>/<variant>/**`, in a folder the router serves: the Next.js
+App Router never serves a folder whose name starts with `_`). Give each `files` limited to its own variant folder and
+its flow file, `done` as "every screen of the main flow renders at desktop and mobile width on its own URL, the flow
+file lists them, and the report gives the URLs", and `limits` as "no backend, no shared components, no real data, no
+change to package.json". With fewer frontend members than variants, run them one after another, or offer hq_hire.
 
-Each variant also writes `flow.json` in its folder: its screens and how one leads to the next, for the canvas to draw.
+Each variant also writes its flow file, `flows/<variant>.json` next to the canvas (below): its screens and how one leads
+to the next. A screen has a `url`, or an `"image"` (a screenshot path) where it cannot be shown live.
 
 ```json
 {
   "variant": "wizard",
   "screens": [
-    { "id": "list", "title": "My bookings", "url": "/_prototype/booking-cancellation/wizard/list" },
-    { "id": "confirm", "title": "Confirm cancel", "url": "/_prototype/booking-cancellation/wizard/confirm" }
+    { "id": "list", "title": "My bookings", "url": "/prototypes/booking-cancellation/wizard/list" },
+    { "id": "confirm", "title": "Confirm cancel", "url": "/prototypes/booking-cancellation/wizard/confirm" }
   ],
   "links": [{ "from": "list", "to": "confirm", "trigger": "Tap Cancel" }]
 }
 ```
 
-**Lay them out on a canvas.** At the same time, one more member (or you) builds the canvas page at
-`<app>/_prototype/<feature>/` (its own `files`, nothing shared). Like a design tool's prototype canvas, it reads every
-variant's `flow.json` and shows them all at once:
-- each screen is a labelled frame holding its URL in an iframe; a variant's screens sit side by side in one row, in
-  flow order, and the rows go in rank order, so the Recommended variant is the top row and its first frame the
+**Lay them out on a canvas.** At the same time, one more member (or you) builds the canvas with React Flow: one static
+page, `index.html` in the app's public folder under `prototypes/<feature>/` (for Next.js,
+`public/prototypes/<feature>/index.html`, served at `/prototypes/<feature>/index.html`, the same origin as the
+variants). It loads React and `@xyflow/react@12.11.6` (or a newer exact version at least two weeks old) and its
+`dist/style.css` from a CDN such as esm.sh, so nothing is installed and package.json does not change; if the project
+already depends on `@xyflow/react`, it may be a route instead. Its own `files` are that folder, nothing shared. Like a
+design tool's prototype canvas, it reads every `flows/*.json` and shows them all at once:
+- each screen is a custom node, a labelled frame holding its URL in an iframe (or its `image`), with the classes
+  `nodrag` and `nowheel` on the iframe so the person can use the screen; a variant's screens sit side by side in one
+  row, in flow order, and the rows go in rank order, so the Recommended variant is the top row and its first frame the
   leftmost, with a "Recommended" badge and one line on why;
-- each row is headed by the variant's name, its style and flow line, and its main trade-off; a toggle switches every
-  frame between desktop and mobile width;
-- every link is a connection drawn from a node on the edge of one frame to a node on the next, as an arrow labelled
-  with its trigger; hovering a frame lights up the path through it;
+- each row is headed by the variant's name, its style and flow line, and its main trade-off; a toggle in a `Panel`
+  switches every frame between desktop and mobile width;
+- every frame has a `Handle` node on its left and right edge, and every link is a connection between them: an edge with
+  an arrow (`MarkerType.ArrowClosed`) labelled with its trigger; hovering a frame lights up the path through it;
 - the person can drag from a frame's node to a frame in another row to add a connection across variants, sketching a
-  mix ("Wizard's list, then Single page's confirm"); new connections are drawn dashed, can be deleted, and a "Copy mix"
-  button copies them as plain lines (`wizard/list -> single-page/confirm: Tap Cancel`);
-- the person can pan the canvas (drag on empty space or scroll) and zoom it (pinch, ctrl+scroll, and buttons for zoom
-  in, zoom out and fit all), on a neutral dotted background, and a double click on a frame opens that screen full size.
+  mix ("Wizard's list, then Single page's confirm"): `onConnect` adds it with `addEdge`, drawn dashed; Backspace
+  deletes a selected one, and a "Copy mix" button in a `Panel` copies the new connections as plain lines
+  (`wizard/list -> single-page/confirm: Tap Cancel`);
+- the person can pan the canvas (drag on empty space or scroll) and zoom it (pinch, ctrl+scroll), with `Controls` for
+  zoom in, zoom out and fit view, a `MiniMap`, and a `Background` of dots; a double click on a frame opens that screen
+  full size.
 
-When the members report, check every screen URL, every `flow.json` and the canvas render. Open the canvas for the
+When the members report, check every screen URL, every flow file and the canvas render. Open the canvas for the
 person in a browser when the session has one (the in-app browser or a preview), else give them its URL and how to start
 the dev server.
 
