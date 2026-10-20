@@ -57,3 +57,23 @@ test('nobody pushes or merges, and the finish leaves that to the person', () => 
   assert.match(skill, /never push or merge/i)
   assert.match(section('Finish'), /closing report/i)
 })
+
+test('the variants are shown on one canvas page, like a design tool: framed side by side, pan and zoom', () => {
+  const text = section('Prototype')
+  assert.match(text, /canvas/i)
+  assert.match(text, /side by side/i)
+  assert.match(text, /\bpan\b/i)
+  assert.match(text, /\bzoom\b/i)
+  assert.match(text, /frame/i)
+  assert.match(text, /desktop and mobile/i)
+})
+
+test('variants differ in UI and UX style, and are ranked with the recommendation first everywhere', () => {
+  const text = section('Prototype')
+  assert.match(text, /visual style/i)
+  assert.match(text, /UX/)
+  assert.match(text, /rank/i)
+  assert.match(text, /Recommended/)
+  assert.match(text, /leftmost|first frame/i)
+  assert.match(text, /same order/i) // the gate's options follow the canvas order
+})
