@@ -1,0 +1,39 @@
+// The two ways the live page's server talks to the mod, and nothing else: its stdout lines (read here) and the live
+// state file (written here). `AGENT_HQ_URL <url>` says where the page is; `AGENT_HQ_ACTION <json>` carries one request
+// the page made, until the mod acknowledges it with `lastAction` in the state file (see web/server.mjs).
+export const URL_PREFIX = 'AGENT_HQ_URL ';
+export const ACTION_PREFIX = 'AGENT_HQ_ACTION ';
+const MAX_PENDING_LINE = 64 * 1024; // a "line" with no end this long is not the server's; drop it
+/** Pieces of a stream in, whole lines out: a line may span two pieces and one piece may hold several. */
+export function lineBuffer() {
+    let rest = '';
+    return {
+        push(text) {
+            const parts = (rest + text).split('\n');
+            rest = (parts.pop() ?? '').slice(0, MAX_PENDING_LINE);
+            return parts.map(line => line.replace(/\r$/, ''));
+        },
+    };
+}
+/** What one stdout line of the server means to the mod, or null for any other line (logs, noise, a bad action). */
+export function parseChannelLine(line) {
+    if (line.startsWith(URL_PREFIX)) {
+        const url = line.slice(URL_PREFIX.length).trim();
+        return /^\S+$/.test(url) ? { kind: 'url', url } : null;
+    }
+    if (!line.startsWith(ACTION_PREFIX))
+        return null;
+    let parsed;
+    try {
+        parsed = JSON.parse(line.slice(ACTION_PREFIX.length));
+    }
+    catch {
+        return null;
+    }
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed))
+        return null;
+    const id = parsed.id;
+    if (typeof id !== 'number' || !Number.isInteger(id) || id < 1)
+        return null;
+    return { kind: 'action', action: { ...parsed, id } };
+}

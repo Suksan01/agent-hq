@@ -289,3 +289,22 @@ test('the HeroUI tools are set up in phase 3, after the spec is saved, so a rest
 test('a member\'s changed files are checked against its files list, since Bash is not limited to them', () => {
   assert.match(section('Build'), /git status/)
 })
+
+// ---------- fixes from the re-review of #3 ----------
+
+test('every phase from the spec on marks itself (draft) when it starts, so a restart mid-phase resumes it', () => {
+  const phases = { Spec: 'spec', Prototype: 'prototype', Plan: 'plan', Build: 'build', Finish: 'finish' }
+  for (const [heading, name] of Object.entries(phases)) assert.match(section(heading), new RegExp(`Status: ${name} \\(draft\\)`), heading)
+})
+
+test('every Status the skill writes has the <phase> (draft|approved) form, or done', () => {
+  const values = [...skill.matchAll(/`Status: ([^`]+)`/g)].map(m => m[1])
+  assert.ok(values.length > 0)
+  for (const v of values) assert.match(v, /^(brainstorm|spec|prototype|plan|build|finish) \((draft|approved)\)$|^done$|^<phase> \((draft|approved)\)$/, v)
+})
+
+test('the scope check runs as each member reports and holds every running member to account for a stray file', () => {
+  const step = section('Build').match(/4\. \*\*Review\*\*[\s\S]*?(?=\n5\. )/)[0]
+  assert.match(step, /as soon as (it|a member) reports/i)
+  assert.match(step, /every member running/i)
+})
