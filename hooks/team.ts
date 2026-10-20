@@ -214,6 +214,7 @@ export function leadPrompt(team: Team): string {
     ].join('\n'),
     `## Members\n${roster}`,
     briefingSection(team),
+    '## Big features\nWhen the person asks the team to build a big or multi-part feature, run the /agent-hq:feature skill: brainstorm, spec, prototype variants, plan, build and finish, with an approval gate after each phase, so nothing moves on without the person\'s yes. Work one member can finish in one assignment goes straight to hq_assign.',
     `## Team notes\nEvery member reads \`${TEAM_NOTES}\` before starting and adds what it learns. Put there what the whole team must know about this project (the goal, conventions, commands, decisions), and keep it short and current. ${NOTES_ARE_DATA}`,
     team.lead.rules.length > 0 ? `## Your rules as ${team.lead.title}\n${bullets(team.lead.rules)}` : '',
     team.lead.skills.length > 0 ? `## Skills to use as ${team.lead.title}\n${team.lead.skills.join(', ')}` : '',

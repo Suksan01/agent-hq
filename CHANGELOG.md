@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Added
+- **A gated feature workflow.** `/agent-hq:feature` runs a big feature in six phases: brainstorm, a spec in
+  `docs/specs/`, clickable UI prototype variants built in parallel by separate members, a task plan in `docs/plans/`,
+  a build that reviews and tests each task before the next one that depends on it, and a finish. Each phase ends at a
+  gate you approve, and the lead is pointed to it for any big feature.
 - **A Team Assistant you can add.** The `/agent-hq:team` interview offers a Team Assistant once the lineup is set.
   It reads the project and writes each member's brief and a short proposal for you (the parts, options, trade-offs)
   before work starts, and drafts the lead's updates and closing report.
