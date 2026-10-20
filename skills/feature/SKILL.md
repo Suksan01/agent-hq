@@ -76,27 +76,48 @@ rank is the order everywhere after this: the briefs, the canvas and the gate.
 **Build them in parallel.** Brief one frontend member per variant with hq_assign, **in parallel**: each builds
 **one variant** only, from the approved spec and its line above, with mock data and no backend changes, on a
 **throwaway** route of its own (`<app>/_prototype/<feature>/<variant>/**` or the project's equivalent). Give each
-`files` limited to its own variant folder, `done` as "the route renders every screen of the main flow at desktop and
-mobile width, and the report gives its URL", and `limits` as "no backend, no shared components, no real data". With
-fewer frontend members than variants, run them one after another, or offer hq_hire.
+`files` limited to its own variant folder, `done` as "every screen of the main flow renders at desktop and mobile width
+on its own URL, `flow.json` lists them, and the report gives the URLs", and `limits` as "no backend, no shared
+components, no real data". With fewer frontend members than variants, run them one after another, or offer hq_hire.
+
+Each variant also writes `flow.json` in its folder: its screens and how one leads to the next, for the canvas to draw.
+
+```json
+{
+  "variant": "wizard",
+  "screens": [
+    { "id": "list", "title": "My bookings", "url": "/_prototype/booking-cancellation/wizard/list" },
+    { "id": "confirm", "title": "Confirm cancel", "url": "/_prototype/booking-cancellation/wizard/confirm" }
+  ],
+  "links": [{ "from": "list", "to": "confirm", "trigger": "Tap Cancel" }]
+}
+```
 
 **Lay them out on a canvas.** At the same time, one more member (or you) builds the canvas page at
-`<app>/_prototype/<feature>/` (its own `files`, nothing shared). Like a design tool's canvas, it shows every variant at
-once:
-- each variant is a labelled frame holding its route in an iframe, side by side in rank order, the Recommended variant
-  the leftmost, first frame with a "Recommended" badge and one line on why;
-- each frame shows the variant at desktop and mobile width, with its name, its style and flow line, and its main
-  trade-off under it;
-- the person can pan the canvas (drag or scroll) and zoom it (pinch, ctrl+scroll, and buttons for zoom in, zoom out
-  and fit all), on a neutral dotted background, and a click on a frame opens that variant full size.
+`<app>/_prototype/<feature>/` (its own `files`, nothing shared). Like a design tool's prototype canvas, it reads every
+variant's `flow.json` and shows them all at once:
+- each screen is a labelled frame holding its URL in an iframe; a variant's screens sit side by side in one row, in
+  flow order, and the rows go in rank order, so the Recommended variant is the top row and its first frame the
+  leftmost, with a "Recommended" badge and one line on why;
+- each row is headed by the variant's name, its style and flow line, and its main trade-off; a toggle switches every
+  frame between desktop and mobile width;
+- every link is a connection drawn from a node on the edge of one frame to a node on the next, as an arrow labelled
+  with its trigger; hovering a frame lights up the path through it;
+- the person can drag from a frame's node to a frame in another row to add a connection across variants, sketching a
+  mix ("Wizard's list, then Single page's confirm"); new connections are drawn dashed, can be deleted, and a "Copy mix"
+  button copies them as plain lines (`wizard/list -> single-page/confirm: Tap Cancel`);
+- the person can pan the canvas (drag on empty space or scroll) and zoom it (pinch, ctrl+scroll, and buttons for zoom
+  in, zoom out and fit all), on a neutral dotted background, and a double click on a frame opens that screen full size.
 
-When the members report, check every route and the canvas render. Open the canvas for the person in a browser when the
-session has one (the in-app browser or a preview), else give them its URL and how to start the dev server.
+When the members report, check every screen URL, every `flow.json` and the canvas render. Open the canvas for the
+person in a browser when the session has one (the in-app browser or a preview), else give them its URL and how to start
+the dev server.
 
 **Gate:** AskUserQuestion, header "Variant": one option per variant in the same order as the canvas, the Recommended
-one first with "(Recommended)" in its label and why in its description, plus "Mix them" (the person says which parts in
-"Other") and "Try again". The next phase starts once a direction is picked. Write the choice and what to keep from the
-others into the spec. Prototype code, the canvas included, is a reference, never merged as it is.
+one first with "(Recommended)" in its label and why in its description, plus "Mix them" (the person pastes the copied
+connections, or says which parts, in "Other") and "Try again". The next phase starts once a direction is picked. Write
+the choice, and for a mix the connections that make up the chosen flow, into the spec. Prototype code, the canvas
+included, is a reference, never merged as it is.
 
 ## 4. Plan the build
 
