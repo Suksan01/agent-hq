@@ -2,7 +2,7 @@ import type { Elements, RenderElement } from 'claude-code'
 
 import type { HqActivity, HqAgent, HqAssignment, HqStatus, HqTask, HqTaskStatus, HqTeam, HqTodo } from '../types'
 import { roleTitle } from './team'
-import { LEAD_COLOR, TONE_GLYPH, cellText, fit, spriteCells, tonesFor, trackCells } from './cells'
+import { LEAD_COLOR, TONE_GLYPH, TRACK_PX, cellText, fit, spriteCells, tonesFor, trackCells, trackSvg } from './cells'
 import { SMALL_H, SMALL_W, SPRITE_H, SPRITE_W, paletteOf, speciesOf, spriteFrames } from './sprites'
 import type { Tone, TrackSpec } from './cells'
 import { MAIN, agentWork, elapsed, isFinished, isWorking, overallProgress, progressOf, teamTree, workingCount } from './model'
@@ -104,7 +104,8 @@ export type HqActions = {
 
 export type BandActions = { onOpenSidebar: () => void; onHide: () => void }
 
-export type Raster = { key: string; columns: number; rows: number; cells: string }
+/** A drawing in cells; a track also carries its spec, which a surface without Rasters draws as an Svg (textTrack). */
+export type Raster = { key: string; columns: number; rows: number; cells: string; spec?: TrackSpec }
 
 // ---------- tones, shared by band and sidebar ----------
 
@@ -162,15 +163,16 @@ export function bandRasters(data: HqData, W: number, t: number, isLight: boolean
   const out: Raster[] = []
   const p = teamProgress(data)
   if (p.total > 0) {
-    const label = teamTrackLabel(team, p)
-    out.push({ key: 'track-team', columns: W, rows: 1, cells: trackCells({ ...p, tone: toneOf(p, team), label, count: `${p.done}/${p.total}` }, W, t, isLight) })
+    const spec = { ...p, tone: toneOf(p, team), label: teamTrackLabel(team, p), count: `${p.done}/${p.total}` }
+    out.push({ key: 'track-team', columns: W, rows: 1, cells: trackCells(spec, W, t, isLight), spec })
   }
   const tasks = Object.values(data.tasks)
   if (tasks.length > 0) {
     const tp = progressOf(tasks)
     const current = tasks.find(x => x.status === 'in_progress')
     const label = current ? (current.activeForm ?? current.subject) : tp.done === tp.total ? 'Done' : 'Tasks'
-    out.push({ key: 'track-tasks', columns: W, rows: 1, cells: trackCells({ ...tp, tone: tp.done === tp.total ? 'done' : 'running', label, count: `${tp.done}/${tp.total}` }, W, t, isLight) })
+    const spec: TrackSpec = { ...tp, tone: tp.done === tp.total ? 'done' : 'running', label, count: `${tp.done}/${tp.total}` }
+    out.push({ key: 'track-tasks', columns: W, rows: 1, cells: trackCells(spec, W, t, isLight), spec })
   }
   return out
 }
@@ -313,7 +315,8 @@ export function sidebarRasters(data: HqData, t: number): Raster[] {
     const fallback = work.todos ? undefined : fallbackOf(agent, data.tasks)
     if (fallback) {
       const W = textWidth(data.columns, prefix, size.columns)
-      const bar = { key: `todo-${agent.id}`, columns: W, rows: 1, cells: trackCells(fallbackSpec(fallback, agent), W, t, data.isLight, base) }
+      const spec = fallbackSpec(fallback, agent)
+      const bar = { key: `todo-${agent.id}`, columns: W, rows: 1, cells: trackCells(spec, W, t, data.isLight, base), spec }
       return [mascot, bar]
     }
     if (!work.todos) return [mascot]
@@ -322,7 +325,8 @@ export function sidebarRasters(data: HqData, t: number): Raster[] {
     const tone: Tone = p.done === p.total ? 'done' : TONE_OF[agent.status] === 'error' ? 'error' : 'running'
     const count = `${p.done}/${p.total}`
     // the pill is the count alone: the line above already says what is in progress
-    const todo = { key: `todo-${agent.id}`, columns: W, rows: 1, cells: trackCells({ ...p, tone, label: '', count }, W, mood === 'running' ? t : 0, data.isLight, base) }
+    const spec = { ...p, tone, label: '', count }
+    const todo = { key: `todo-${agent.id}`, columns: W, rows: 1, cells: trackCells(spec, W, mood === 'running' ? t : 0, data.isLight, base), spec }
     return [mascot, todo]
   })
 }
@@ -711,71 +715,22 @@ export function SidebarView(els: Els, data: HqData, actions: HqActions, draw: Dr
   )
 }
 
-const BAR_PX = 8 // an Svg bar's height in CSS pixels
-const COLUMN_PX = 7 // about one monospace column, so an Svg bar is as wide as the track it stands for
-const BAR_TRACK = { dark: '#3F3F46', light: '#C9C8C3' }
-
-/** A bar as an Svg: a rounded track with its done part in the tone's colour, its words in `alt` for a reader. */
-function svgBar(Svg: Elements['desktop']['Svg'], key: string, fraction: number, color: string, isLight: boolean, alt: string, columns: number) {
-  const w = columns * COLUMN_PX
-  const done = Math.round(Math.max(0, Math.min(1, fraction)) * w)
-  const track = isLight ? BAR_TRACK.light : BAR_TRACK.dark
-  const fill = done > 0 ? `<rect width="${done}" height="${BAR_PX}" rx="4" fill="${color}"/>` : ''
-  const source = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${BAR_PX}" viewBox="0 0 ${w} ${BAR_PX}"><rect width="${w}" height="${BAR_PX}" rx="4" fill="${track}"/>${fill}</svg>`
-  return <Svg key={key} source={source} alt={alt} width={w} height={BAR_PX} />
-}
+const COLUMN_PX = 7 // about one monospace column, so an Svg track is as wide as the Raster it stands for
 
 /**
- * Where Rasters are not drawn (desktop, vscode, mobile), a track is an Svg bar of the same width with its words beside
- * it, or a plain block bar on a surface without Svg.
+ * Where Rasters are not drawn (desktop, vscode, mobile), a track is the terminal's track as an Svg (trackSvg): the same
+ * share, tone and pill, what it shows said in `alt` for a reader.
  */
 export function textTrack(els: Els, rasters: Raster[], data: HqData): DrawRaster {
-  const { Box, Text } = els
   const { Svg } = els as Partial<Elements['desktop']>
-  const TONE_COLOR = tonesFor(data.isLight)
-  const progressFor = (key: string): Progress | undefined => {
-    if (key === 'track-team') return teamProgress(data)
-    if (key === 'track-tasks') return progressOf(Object.values(data.tasks))
-    const list = data.todos[key.replace(/^todo-/, '')]
-    return list ? progressOf(list) : undefined
-  }
   return key => {
     const r = rasters.find(x => x.key === key)
-    // an agent with no todos: the fallback bar's words (a task's status, or "getting started") where no Raster is drawn
-    const owner = key.startsWith('todo-') ? data.agents[key.slice('todo-'.length)] : undefined
-    const fallback = owner && !data.todos[owner.id]?.length ? fallbackOf(owner, data.tasks) : undefined
-    if (fallback) {
-      const spec = fallbackSpec(fallback, owner as HqAgent)
-      const width = Math.min(r?.columns ?? 30, 30)
-      const done = Math.round(spec.done * width)
-      const words = spec.sweep ? spec.label : spec.count
-      if (Svg) {
-        return (
-          <Box gap={1}>
-            {svgBar(Svg, key, spec.done, TONE_COLOR[spec.tone], data.isLight, words, width)}
-            <Text dimColor>{words}</Text>
-          </Box>
-        )
-      }
-      return spec.sweep ? (
-        <Text dimColor>{'⠶⠶⠶ '}{spec.label}</Text>
-      ) : (
-        <Text>
-          <Text color={TONE_COLOR[spec.tone]}>{'█'.repeat(done)}</Text>
-          <Text dimColor>{'░'.repeat(Math.max(0, width - done))} {spec.count}</Text>
-        </Text>
-      )
-    }
-    const p = progressFor(key)
-    if (!r || !p) return null
-    const width = Math.min(r.columns, 30)
-    const done = p.total === 0 ? 0 : Math.round((p.done / p.total) * width)
-    if (Svg) return svgBar(Svg, key, p.total === 0 ? 0 : p.done / p.total, TONE_COLOR[p.done === p.total ? 'done' : 'running'], data.isLight, `${p.done} of ${p.total} done`, width)
-    return (
-      <Text>
-        <Text color={TONE_COLOR[p.done === p.total ? 'done' : 'running']}>{'█'.repeat(done)}</Text>
-        <Text dimColor>{'░'.repeat(Math.max(0, width - done))}</Text>
-      </Text>
-    )
+    if (!r?.spec || !Svg) return null
+    const { spec } = r
+    // a working agent with no todos says what stands in for them: a task's status, or "getting started"
+    const isFallback = key.startsWith('todo-') && !data.todos[key.slice('todo-'.length)]?.length
+    const alt = spec.sweep ? spec.label : isFallback ? spec.count : `${spec.done} of ${spec.total} done`
+    const W = r.columns * COLUMN_PX
+    return <Svg key={key} source={trackSvg(spec, W, data.isLight)} alt={alt} width={W} height={TRACK_PX} />
   }
 }

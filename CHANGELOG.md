@@ -31,6 +31,10 @@
 ### Changed
 - **Briefs with the context members lack.** The lead is told that members see none of the conversation, so every
   brief carries your words, the files and limits, conventions and commands, decisions so far and what "done" means.
+- **Bars in the desktop app look like plan-progress's.** The band's Team and Tasks tracks and the sidebar's bars were
+  plain 8 px strips; each is now a dot grid in its state's colour filling to its share, with the terminal's pill at its
+  head: `1/3`, `in progress`, `2 running 1/4`. A working agent with no todos yet gets a glow drifting along its bar,
+  "getting started" in the pill, and the words are no longer repeated beside the bar.
 
 ### Fixed
 - **The feature workflow can run as written.** From a review of #3: the Team Assistant can now save the spec and plan
