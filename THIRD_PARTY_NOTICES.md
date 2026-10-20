@@ -1,7 +1,8 @@
 # Third-party notices
 
 `hooks/cells.ts` adapts parts of the [plan-progress](https://github.com/zycck/claude-mods) mod: its dotted
-braille track drawing, its state colours and its character-width checks. That code is used under the MIT license:
+braille track drawing, its Svg dot-grid track and pill, its state colours and its character-width checks. That code
+is used under the MIT license:
 
 ```
 MIT License
