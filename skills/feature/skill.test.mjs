@@ -77,3 +77,27 @@ test('variants differ in UI and UX style, and are ranked with the recommendation
   assert.match(text, /leftmost|first frame/i)
   assert.match(text, /same order/i) // the gate's options follow the canvas order
 })
+
+test('each variant reports its screens and the links between them in a flow file the canvas reads', () => {
+  const text = section('Prototype')
+  assert.match(text, /flow\.json/)
+  assert.match(text, /"screens"/)
+  assert.match(text, /"links"/)
+  assert.match(text, /"trigger"/)
+})
+
+test('the canvas joins frames with node-to-node connections, inside a variant and across variants', () => {
+  const text = section('Prototype')
+  assert.match(text, /connection/i)
+  assert.match(text, /node/i)
+  assert.match(text, /arrow/i)
+  assert.match(text, /across variants/i)
+  assert.match(text, /drag/i) // the person draws a new connection to sketch a mix
+  assert.match(text, /copy/i) // and copies it into the gate's answer
+})
+
+test('the gate takes a mix the person drew on the canvas', () => {
+  const gate = section('Prototype').split('**Gate:**')[1] ?? ''
+  assert.match(gate, /Mix them/)
+  assert.match(gate, /connections/i)
+})
