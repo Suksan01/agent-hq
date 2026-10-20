@@ -66,7 +66,7 @@ export const TOOL_SPECS: ToolSpec[] = [
         tools: { type: 'array', items: { type: 'string' }, description: 'For a new role only: limit it to these tools; leave out for every tool.' },
         model: { type: 'string', description: 'For a new role only: "sonnet", "opus", "haiku" or a model id.' },
         effort: { type: 'string', description: 'For a new role only: reasoning effort, e.g. "low" or "high".' },
-        playbook: { type: 'string', description: 'For a new role only: one paragraph on how it works.' },
+        playbook: { type: 'string', description: 'For a new role only: the absolute path of a Markdown file (a SKILL.md) the role reads and follows at the start of every run.' },
       },
       required: ['role'],
     },

@@ -87,7 +87,7 @@ test('a new role can be hired with a full role card, kept as given and cleaned o
     tools: ['Read', 'Edit'],
     model: ' sonnet ',
     effort: 'low',
-    playbook: 'Read the style guide first.',
+    playbook: '/work/app/.claude/skills/ux/SKILL.md',
   })
   if (!plan.ok) throw new Error(plan.error)
 
@@ -102,9 +102,9 @@ test('a new role can be hired with a full role card, kept as given and cleaned o
     tools: ['Read', 'Edit'],
     model: 'sonnet',
     effort: 'low',
-    playbook: 'Read the style guide first.',
+    playbook: '/work/app/.claude/skills/ux/SKILL.md',
   })
-  expect(plan.card).toBe('2 tasks, 1 rule, skills design:ux-copy, tools Read, Edit, model sonnet')
+  expect(plan.card).toBe('2 tasks, 1 rule, skills design:ux-copy, tools Read, Edit, model sonnet, effort low, playbook /work/app/.claude/skills/ux/SKILL.md')
 })
 
 test('a reviewer-like new role keeps its read-only rule ahead of the rules it was given', () => {
@@ -152,4 +152,21 @@ test('the lead is pointed to /agent-hq:feature for a big feature, and told it mo
   expect(prompt).toContain('/agent-hq:feature')
   expect(prompt).toContain('brainstorm, spec, prototype variants, plan, build')
   expect(prompt).toContain('approval gate')
+})
+
+test('a new role\'s playbook is the absolute path of a Markdown file, and anything else is refused', () => {
+  const ok = planHire(source(), { role: 'ux', title: 'UX Writer', mission: 'Write.', playbook: '/work/app/.claude/skills/t-ux/SKILL.md' })
+  if (!ok.ok) throw new Error(ok.error)
+  expect(JSON.parse(ok.source).roles.at(-1).playbook).toBe('/work/app/.claude/skills/t-ux/SKILL.md')
+  for (const playbook of ['Read the style guide first.', 'skills/t-ux/SKILL.md', '/work/app/notes.txt']) {
+    const plan = planHire(source(), { role: 'ux', title: 'UX Writer', mission: 'Write.', playbook })
+    expect(plan.ok, playbook).toBe(false)
+    if (!plan.ok) expect(plan.error).toContain('playbook')
+  }
+})
+
+test('the confirmation names a new role\'s effort and playbook too, so the person sees everything it will follow', () => {
+  const plan = planHire(source(), { role: 'ux', title: 'UX Writer', mission: 'Write.', model: 'sonnet', effort: 'low', playbook: '/p/SKILL.md' })
+  if (!plan.ok) throw new Error(plan.error)
+  expect(plan.card).toBe('model sonnet, effort low, playbook /p/SKILL.md')
 })

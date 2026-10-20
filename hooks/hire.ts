@@ -15,6 +15,8 @@ const TEXT_FIELDS = ['model', 'effort', 'playbook'] as const
 const CARD_FIELDS = [...LIST_FIELDS, ...TEXT_FIELDS]
 const strings = (v: unknown) => (Array.isArray(v) ? v.flatMap(x => (typeof x === 'string' && x.trim() !== '' ? [x.trim()] : [])) : [])
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+// a playbook is a file the role is told to read and follow at every start (rolePrompt), so only a Markdown file by full path
+const PLAYBOOK = /^(\/|[A-Za-z]:[\\/]).*\.md$/i
 
 /** The role card fields a new role was given: lists without blanks or non-strings, texts trimmed, empty ones left out. */
 function cardOf(input: Record<string, unknown>): Record<string, string | string[]> {
@@ -32,6 +34,8 @@ function describeCard(role: Record<string, unknown>): string {
     list('skills').length > 0 ? `skills ${list('skills').join(', ')}` : '',
     list('tools').length > 0 ? `tools ${list('tools').join(', ')}` : '',
     typeof role.model === 'string' ? `model ${role.model}` : '',
+    typeof role.effort === 'string' ? `effort ${role.effort}` : '',
+    typeof role.playbook === 'string' ? `playbook ${role.playbook}` : '',
   ]
     .filter(Boolean)
     .join(', ')
@@ -79,6 +83,7 @@ export function planHire(source: string, input: unknown): HirePlan {
     after = add
     const readOnly = READ_ONLY_TITLE.test(title)
     const card = cardOf(input)
+    if (typeof card.playbook === 'string' && !PLAYBOOK.test(card.playbook)) return { ok: false, error: `"playbook" must be the absolute path of a Markdown file the role reads and follows (got "${card.playbook.slice(0, 80)}")` }
     const rules = [...(readOnly ? ['Do not edit files; report findings only.'] : []), ...((card.rules as string[] | undefined) ?? [])]
     roles = [
       ...raw.roles,
