@@ -102,15 +102,23 @@ test('the gate takes a mix the person drew on the canvas', () => {
   assert.match(gate, /connections/i)
 })
 
-test('variants use the project\'s real stack and UI library, and native apps fall back to screenshots', () => {
+test('prototypes use HeroUI by default, set up once, with the project\'s own library as the alternative', () => {
   const text = section('Prototype')
-  assert.match(text, /project's own stack/i)
-  assert.match(text, /UI library/i)
-  assert.match(text, /raw HTML/i) // only when there is no frontend app
-  assert.match(text, /shadcn\/ui/) // the default when a React project has no UI library
+  assert.match(text, /HeroUI/)
+  assert.match(text, /@heroui\/react/)
+  assert.match(text, /@heroui\/styles/)
+  assert.match(text, /heroui-native/) // React Native apps
+  assert.match(text, /@heroui\/react-mcp/) // members read component APIs from it, not from memory
+  assert.match(text, /React 19/)
+  assert.match(text, /Tailwind (CSS )?v?4/)
+  assert.match(text, /setup task/i) // one member installs it before the variants start, so package.json has one writer
+  assert.match(text, /project's own (stack|UI library)/i)
   assert.match(text, /theme tokens/i)
+  assert.match(text, /raw HTML/i)
   assert.match(text, /screenshot/i)
-  assert.match(text, /"image"/) // a flow.json screen can carry a screenshot instead of a url
+  assert.match(text, /"image"/)
+  assert.match(text, /port/i) // the gate asks whether to port the chosen variant or adopt HeroUI
+  assert.match(section('Finish'), /HeroUI/) // removed again unless adopted
 })
 
 test('the canvas is a React Flow page that adds no dependency to the project', () => {
@@ -118,4 +126,109 @@ test('the canvas is a React Flow page that adds no dependency to the project', (
   assert.match(text, /@xyflow\/react@\d+\.\d+\.\d+/) // an exact, pinned version
   assert.match(text, /package\.json/)
   for (const api of ['Handle', 'onConnect', 'addEdge', 'Background', 'Controls', 'MiniMap', 'Panel', 'nodrag', 'nowheel']) assert.match(text, new RegExp(api), api)
+})
+
+// ---------- the thirteen additions ----------
+
+test('1. the project\'s own rules become plan tasks and review checks', () => {
+  assert.match(section('Spec'), /CLAUDE\.md/)
+  assert.match(section('Spec'), /project rules/i)
+  assert.match(section('Plan'), /project rule/i)
+  assert.match(section('Build'), /review checklist/i)
+})
+
+test('2. parallel builders each get a worktree, or never share a dev server, lockfile or test run', () => {
+  const text = section('Build')
+  assert.match(text, /worktree/i)
+  assert.match(text, /lockfile/i)
+  assert.match(text, /dev server/i)
+})
+
+test('3. work lands on a feature branch, one commit per reviewed task, and a PR is offered', () => {
+  assert.match(skill, /feature branch/i)
+  assert.match(section('Build'), /commit/i)
+  assert.match(section('Finish'), /pull request/i)
+})
+
+test('4. acceptance criteria are written as Given/When/Then and QA writes the failing test first', () => {
+  assert.match(section('Spec'), /Given\/When\/Then/)
+  assert.match(section('Build'), /failing test/i)
+})
+
+test('5. prototypes and built screens cover every state, not just the happy path', () => {
+  for (const name of ['Prototype', 'Build']) assert.match(section(name), /loading, empty, error/i, name)
+})
+
+test('6. auth, money or personal data adds a risk review the person must pass', () => {
+  const text = section('Spec')
+  assert.match(text, /auth, money or personal data/i)
+  assert.match(text, /security review/i)
+  assert.match(text, /money-path-audit/)
+})
+
+test('7. the plan covers rollout: a feature flag, migrations, and how to roll back', () => {
+  const text = section('Plan')
+  assert.match(text, /feature flag/i)
+  assert.match(text, /migration/i)
+  assert.match(text, /roll back/i)
+})
+
+test('8. before finishing, QA checks the built feature in a real browser against the chosen variant', () => {
+  const text = section('Finish')
+  assert.match(text, /browser/i)
+  assert.match(text, /chosen variant/i)
+  assert.match(text, /desktop and mobile/i)
+})
+
+test('9. the person can skip a phase on purpose, and the spec records it', () => {
+  assert.match(skill, /skip a phase/i)
+  assert.match(skill, /Skipped:/)
+})
+
+test('10. the plan gate shows an estimate of agents and time before a large build', () => {
+  const gate = section('Plan').split('**Gate:**')[1] ?? ''
+  assert.match(gate, /estimate/i)
+  assert.match(gate, /agents/i)
+})
+
+test('11. docs, changelogs and change notes are tasks in the plan', () => {
+  const text = section('Plan')
+  assert.match(text, /changelog/i)
+  assert.match(text, /change notes/i)
+  assert.match(text, /docs/i)
+})
+
+test('12. the finish offers a retro so the team\'s rules improve', () => {
+  assert.match(section('Finish'), /\/agent-hq:retro/)
+})
+
+test('13. the spec and the canvas can be shared as a page for others to review at a gate', () => {
+  assert.match(skill, /share/i)
+  assert.match(skill, /Artifact/)
+})
+
+test('HeroUI means v3 only: the v2 and NextUI setup is named so members do not use it', () => {
+  const text = section('Prototype')
+  assert.match(text, /HeroUI v3/)
+  for (const old of ['HeroUIProvider', '@heroui/theme', 'heroui()', 'NextUI']) assert.ok(text.includes(old), old)
+})
+
+test('UI work calls the HeroUI MCP: set up before the prototypes, and every UI brief looks components up first', () => {
+  assert.match(skill, /claude mcp add heroui-react -- npx -y @heroui\/react-mcp@latest/)
+  assert.match(skill, /@heroui\/native-mcp/)
+  const proto = section('Prototype')
+  for (const tool of ['list_components', 'get_component_docs', 'get_theme_variables']) assert.match(proto, new RegExp(tool), tool)
+  assert.match(proto, /before (it|they) (write|use)/i)
+  assert.match(section('Build'), /HeroUI MCP/) // a UI task in the build looks components up too, when HeroUI was adopted
+  assert.match(skill, /mcp__heroui-react__get_component_docs/) // a role with a tools list needs the MCP tools added, by full name
+  assert.doesNotMatch(skill, /mcp__heroui-react__\*/)
+})
+
+test('UI work also loads the official HeroUI skills, installed with the person\'s yes, and names them on each UI role', () => {
+  assert.match(skill, /npx skills add heroui-inc\/heroui/)
+  assert.match(skill, /HEROUI_SKILL_SCOPE=project/)
+  assert.match(skill, /`heroui-react`/)
+  assert.match(skill, /`heroui-native`/)
+  assert.match(section('Prototype'), /heroui-react/) // each variant brief loads the skill
+  assert.match(skill, /ask the person/i) // installing a skill or an MCP server changes their setup
 })
