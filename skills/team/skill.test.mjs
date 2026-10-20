@@ -18,3 +18,9 @@ test('UI roles list the official HeroUI skill when it is installed', () => {
   assert.match(skill, /`heroui-native`/)
   assert.match(skill, /npx skills add heroui-inc\/heroui/)
 })
+
+test('the Team Assistant can write the spec and plan files, and only those', () => {
+  const card = JSON.parse(skill.match(/```json\n(\{\n  "id": "assistant"[\s\S]*?\n\})\n```/)[1])
+  assert.ok(card.tools.includes('Write') && card.tools.includes('Edit'), 'it can write files')
+  assert.deepEqual(card.guard.paths, ['docs/specs/**', 'docs/plans/**'])
+})
