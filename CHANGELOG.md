@@ -33,6 +33,14 @@
   brief carries your words, the files and limits, conventions and commands, decisions so far and what "done" means.
 
 ### Fixed
+- **The feature workflow can run as written.** From a review of #3: the Team Assistant can now save the spec and plan
+  (it was read-only); parallel members share the checkout, since `hq_assign` has no worktree option; QA's failing
+  tests have their own files and are committed before the developer starts; the canvas stays until the finish compares
+  the build against it; the HeroUI setup is its own assignment that runs first; every gate fits AskUserQuestion's 4
+  options; `Status:` marks a phase draft or approved, and the brainstorm is saved, so a restart for the HeroUI MCP server
+  resumes cleanly; and each member's changed files are checked against its scope.
+- **`hq_hire` playbooks are files.** A new role's playbook must be the absolute path of a Markdown file, and the
+  confirmation names its effort and playbook.
 - **The lead now works in the Claude desktop app.** The lead's system prompt section skipped "lean" prompts, which
   is what the desktop app sends, so the main session there never became the lead.
 - **Reviewers can report back.** A role with a tools list (such as a Code Reviewer) could not use SubagentHandback,

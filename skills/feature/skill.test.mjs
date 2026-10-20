@@ -98,7 +98,7 @@ test('the canvas joins frames with node-to-node connections, inside a variant an
 
 test('the gate takes a mix the person drew on the canvas', () => {
   const gate = section('Prototype').split('**Gate:**')[1] ?? ''
-  assert.match(gate, /Mix them/)
+  assert.match(gate, /Mix or try again/)
   assert.match(gate, /connections/i)
 })
 
@@ -231,4 +231,61 @@ test('UI work also loads the official HeroUI skills, installed with the person\'
   assert.match(skill, /`heroui-native`/)
   assert.match(section('Prototype'), /heroui-react/) // each variant brief loads the skill
   assert.match(skill, /ask the person/i) // installing a skill or an MCP server changes their setup
+})
+
+// ---------- fixes from the review of #3 ----------
+
+test('parallel members share this checkout: hq_assign has no worktree option, so no step merges member branches', () => {
+  const text = section('Build')
+  assert.match(text, /no worktree option/i)
+  assert.doesNotMatch(text, /merge its branch/i)
+  assert.doesNotMatch(text, /worktree isolation/i)
+})
+
+test('QA writes the failing tests in its own files, and they are committed before the developer starts', () => {
+  assert.match(section('Plan'), /test files/i)
+  const step = section('Build').match(/1\. \*\*Test first\*\*[\s\S]*?(?=\n2\. )/)[0]
+  assert.match(step, /test files/i)
+  assert.match(step, /commit/i)
+})
+
+test('the plan never removes the prototypes: phase 6 compares against the canvas, then cleans up once', () => {
+  assert.doesNotMatch(section('Plan'), /remove the prototype/i)
+  const finish = section('Finish')
+  assert.ok(finish.indexOf('In a real browser') < finish.indexOf('Clean up'), 'the browser check comes before the clean-up')
+  assert.match(finish, /files/) // the clean-up assignment names its files (package.json, the lockfile, the prototype folders)
+})
+
+test('the HeroUI setup is its own assignment with its own files, and it finishes before the variants and the canvas start', () => {
+  const text = section('Prototype')
+  assert.match(text, /finishes before the variants and the canvas start/i)
+  assert.match(text, /`files`: package\.json, the lockfile/i)
+})
+
+test('every question fits AskUserQuestion\'s limit of 4 options: 2 or 3 variants, and one option for mixing or trying again', () => {
+  const text = section('Prototype')
+  assert.match(text, /2 or 3 variants/)
+  assert.doesNotMatch(text, /2 to 4 variants/)
+  assert.match(text, /at most 4 options/i)
+  assert.match(text, /"Mix or try again"/)
+})
+
+test('Status says whether a phase is a draft or approved, and the brainstorm is saved when its gate passes', () => {
+  assert.match(skill, /\(draft\)/)
+  assert.match(skill, /\(approved\)/)
+  assert.match(section('Brainstorm').split('**Gate:**')[1], /docs\/specs\/<feature>\.md/)
+})
+
+test('the HeroUI tools are set up in phase 3, after the spec is saved, so a restart can resume', () => {
+  const before = skill.slice(0, skill.indexOf('## 1. Brainstorm'))
+  assert.doesNotMatch(before, /claude mcp add/)
+  const text = section('Prototype')
+  assert.match(text, /claude mcp add heroui-react/)
+  assert.match(text, /restart/i)
+  assert.match(text, /\/agent-hq:feature/) // resume by running the skill again
+  assert.match(text, /llms\.txt/) // a role whose tools list lacks the MCP tools falls back to the docs
+})
+
+test('a member\'s changed files are checked against its files list, since Bash is not limited to them', () => {
+  assert.match(section('Build'), /git status/)
 })

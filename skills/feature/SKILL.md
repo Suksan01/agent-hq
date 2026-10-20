@@ -8,6 +8,8 @@ description: Build a big feature with the Agent HQ team in six phases - brainsto
 You are the team's lead (the main session). A big feature goes through six phases. Each phase ends at a **gate**: you
 show the person what the phase produced and ask with AskUserQuestion whether to go on. The next phase starts only on
 their yes; a "change it" answer repeats the phase with their notes. Never skip a gate because the answer seems obvious.
+The spec's `Status:` line records where the feature is: `<phase> (draft)` while a phase is being worked on, and
+`<phase> (approved)` once its gate passes, committed on the feature branch each time.
 Members never push or merge, and you push, merge or open a pull request only on the person's explicit yes.
 
 Keep every question short, use AskUserQuestion for choices (a `preview` on every option, plain text in a monospace box,
@@ -18,8 +20,9 @@ phase you are in at the start of each one ("Phase 3 of 6: prototypes").
 ## Before you start
 
 - **Name the feature**: a short kebab-case slug (`booking-cancellation`). The spec and plan files use it.
-- **Resume, don't restart**: if `docs/specs/<feature>.md` already exists, read its `Status:` line and carry on from the
-  phase it names, after telling the person where you are picking up.
+- **Resume, don't restart**: if `docs/specs/<feature>.md` already exists, read its `Status:` line and tell the person
+  where you are picking up: at `<phase> (draft)`, finish that phase's work and hold its gate again; at
+  `<phase> (approved)`, start the next phase.
 - **Work on a feature branch**: create `feature/<feature>` from the base branch (or the project's own branch naming)
   before anything is written, unless the person is already on a branch for it. Every commit in this skill lands there.
 - **Map the phases to the team**: read the "Members" section of your system prompt. The writer of the spec and the plan
@@ -31,15 +34,6 @@ phase you are in at the start of each one ("Phase 3 of 6: prototypes").
   on. A feature with no user interface skips phase 3 by itself.
 - **Share at any gate**: when the person wants someone else to review a phase, share the spec, the plan or the canvas as
   a page they can send on: publish it as an Artifact when the session can, else give the file path or the canvas URL.
-- **HeroUI tools for UI work**: when the feature has a user interface, check that the session has the official HeroUI
-  skill (`heroui-react` for web, `heroui-native` for React Native) and the HeroUI MCP server (tools named
-  `mcp__heroui-react__...`, or `mcp__heroui-native__...`). For whichever is missing, ask the person before installing it,
-  since it changes their setup: the skills with `npx skills add heroui-inc/heroui` (add `HEROUI_SKILL_SCOPE=project`
-  to the `curl -fsSL https://heroui.com/install | bash -s heroui-react` form to keep it to this project), the MCP
-  server with `claude mcp add heroui-react -- npx -y @heroui/react-mcp@latest` (`@heroui/native-mcp` and the name
-  `heroui-native` for React Native; it needs Node 22 or later, and Claude Code must restart to load it). If the person
-  says no, members read `https://heroui.com/react/llms.txt` instead. A UI role with a tools list also needs the
-  MCP tools added by full name (such as `mcp__heroui-react__get_component_docs`), through `/agent-hq:team`.
 - **Small work skips this skill**: a change one member can finish in one assignment goes straight to hq_assign.
 
 ## 1. Brainstorm
@@ -53,14 +47,16 @@ Understand the feature before anyone writes it down.
 - Propose 2 or 3 approaches with their trade-offs and your recommendation.
 
 **Gate:** AskUserQuestion, header "Direction": the approaches as options, each preview a 3-line sketch of the flow, your
-pick first. The next phase starts once the person has chosen one.
+pick first. The next phase starts once the person has chosen one. Then save the brainstorm so it survives a restart:
+create `docs/specs/<feature>.md` with the feature's title, `Status: brainstorm (approved)`, the chosen direction and
+the person's answers, and commit it.
 
 ## 2. Spec
 
 The Team Assistant (or you) writes `docs/specs/<feature>.md`:
 
-- `Status: spec` on the first line under the title (each phase updates it: `prototype`, `plan`, `build`, `finish`,
-  `done`), and any `Skipped:` lines under it.
+- `Status: spec (draft)` on the first line under the title, and any `Skipped:` lines under it; the brainstorm's
+  direction and answers stay in it.
 - Goal and who it is for, in the person's own words where they gave them.
 - User flows, step by step, and every screen or endpoint they touch.
 - Data: what is stored or changed, and what existing data it must not break.
@@ -82,14 +78,14 @@ gate and show its findings with the spec.
 
 **Gate:** AskUserQuestion, header "Spec": "Approve" (Recommended), "Change it" (the person says what in "Other"),
 "Stop". Preview the spec's headings with one line each, and the risk review's result when there is one. The next phase
-starts on "Approve". Commit the spec on the feature branch.
+starts on "Approve": set `Status: spec (approved)` and commit the spec on the feature branch.
 
 ## 3. Prototype variants
 
 Skip this phase when the feature has no user interface (an API, a job, a migration): say so, set `Status: plan` and go
-to phase 4. Otherwise, show the person a few real, clickable directions before anyone builds the real thing.
+to phase 4 (`Status: prototype (approved)` with a `Skipped:` line). Otherwise, show the person a few real, clickable directions before anyone builds the real thing.
 
-**Choose and rank the variants.** Pick 2 to 4 variants that differ in both UI and UX, never in colour alone:
+**Choose and rank the variants.** Pick 2 or 3 variants that differ in both UI and UX, never in colour alone:
 - **visual style**: for example minimal and airy, dense and data-first, card-based, or bold and editorial;
 - **UX**: the flow and where the action lives, for example one page against a step-by-step wizard, inline editing
   against a side panel, or the main action up front against behind a menu.
@@ -114,11 +110,25 @@ component set and differs by layout, flow and theme tokens (HeroUI themes throug
 - Use the project's own stack and UI library instead when the person asks for it, or when the app cannot take HeroUI
   (React older than 19, Tailwind older than v4). Use raw HTML only when the project has no frontend app yet.
 
-**First, one setup task.** Before the variants start, one member (the canvas builder below, or you) installs HeroUI if
-the app does not have it, at the exact versions its quick start names, and adds a prototypes-only stylesheet
-(`@import "tailwindcss";` then `@import "@heroui/styles";`) loaded by the prototypes folder's own layout, so the real
-app's styles do not change. This setup task is the only one that touches package.json or the lockfile; note in the spec
-what it added, so phase 6 can take it out again.
+**Set up the HeroUI tools.** Check that the session has the official HeroUI skill (`heroui-react` for web,
+`heroui-native` for React Native) and the HeroUI MCP server (tools named `mcp__heroui-react__...`, or
+`mcp__heroui-native__...`). For whichever is missing, ask the person before installing it, since it changes their
+setup: the skills with `npx skills add heroui-inc/heroui` (add `HEROUI_SKILL_SCOPE=project` to the
+`curl -fsSL https://heroui.com/install | bash -s heroui-react` form to keep it to this project), the MCP server with
+`claude mcp add heroui-react -- npx -y @heroui/react-mcp@latest` (`@heroui/native-mcp` and the name `heroui-native` for
+React Native; it needs Node 22 or later). The MCP server loads only after a restart of Claude Code: the approved spec is
+already saved, so tell the person to restart and run `/agent-hq:feature` again, which resumes here. A UI role with a
+tools list needs the MCP tools by full name (such as `mcp__heroui-react__get_component_docs`), which only
+`/agent-hq:team` can add to an existing role; until then that member uses the `heroui-react` skill and
+`https://heroui.com/react/llms.txt`, as does everyone when the person says no to the MCP server.
+
+**First, one setup task.** One frontend member (or you) installs HeroUI if the app does not have it, at the exact
+versions its quick start names, and adds a prototypes-only stylesheet (`@import "tailwindcss";` then
+`@import "@heroui/styles";`) loaded by the prototypes folder's own layout, so the real app's styles do not change. It is
+an hq_assign of its own, with `files`: package.json, the lockfile, the prototypes layout and its stylesheet, and `done`
+as "a HeroUI `Button` renders at `/prototypes/<feature>`". It finishes before the variants and the canvas start, and it
+is the only assignment that touches package.json or the lockfile; note in the spec what it added, so phase 6 can take
+it out again.
 
 **Build them in parallel.** Brief one frontend member per variant with hq_assign, **in parallel**: each builds
 **one variant** only, from the approved spec and its line above, with HeroUI components and mock data and no backend
@@ -145,7 +155,7 @@ it shows one (`"empty"`, `"error"`).
 }
 ```
 
-**Lay them out on a canvas.** At the same time, one more member (or you) builds the canvas with React Flow: one static
+**Lay them out on a canvas.** At the same time as the variants, one more member (or you) builds the canvas with React Flow: one static
 page, `index.html` in the app's public folder under `prototypes/<feature>/` (for Next.js,
 `public/prototypes/<feature>/index.html`, served at `/prototypes/<feature>/index.html`, the same origin as the
 variants). It loads React and `@xyflow/react@12.11.6` (or a newer exact version at least two weeks old) and its
@@ -172,11 +182,11 @@ When the members report, check every screen URL, every flow file and the canvas 
 person in a browser when the session has one (the in-app browser or a preview), else give them its URL and how to start
 the dev server.
 
-**Gate:** AskUserQuestion, header "Variant": one option per variant in the same order as the canvas, the Recommended
-one first with "(Recommended)" in its label and why in its description, plus "Mix them" (the person pastes the copied
-connections, or says which parts, in "Other") and "Try again". Then, when the project has its own UI library, ask
+**Gate:** AskUserQuestion, header "Variant" (it takes at most 4 options): one option per variant in the same order as
+the canvas, the Recommended one first with "(Recommended)" in its label and why in its description, plus
+"Mix or try again", where the person pastes the copied connections, says which parts to mix, or says what to try instead. Then, when the project has its own UI library, ask
 header "Build with": port the chosen variant to the project's own UI library (Recommended: what ships matches the rest of
-the app) or adopt HeroUI for this feature. The next phase starts once both are answered. Write the choice, for a mix
+the app) or adopt HeroUI for this feature. The next phase starts once both are answered: set `Status: prototype (approved)`. Write the choice, for a mix
 the connections that make up the chosen flow, and the library into the spec. Prototype code, the canvas included, is a
 reference, never merged as it is.
 
@@ -185,8 +195,8 @@ reference, never merged as it is.
 The Team Assistant (or you) writes `docs/plans/<feature>.md` from the approved spec and the chosen variant:
 
 - Tasks small enough that one member finishes each in one assignment, numbered, as a checklist (`- [ ] 3. ...`).
-- For each task: the owner role, the files it may change, the acceptance criteria it meets (`AC2`), the failing tests
-  QA writes first, what "done" means, and the tasks it depends on.
+- For each task: the owner role, the files it may change, the acceptance criteria it meets (`AC2`), the test files QA
+  writes first (separate from the developer's files), what "done" means, and the tasks it depends on.
 - Order: what others depend on first (data and API before the screens that use them).
 - Mark which tasks can run in parallel: no dependency between them and no file they both change.
 - **Project rules**: each project rule from the spec becomes a task (a change note, a translation in every locale) or a
@@ -194,12 +204,12 @@ The Team Assistant (or you) writes `docs/plans/<feature>.md` from the approved s
 - **Rollout**: whether it ships behind a feature flag (and its name), or why not; each migration, in order, backward
   compatible with the running code, never editing one already applied; and how to roll back each step.
 - **Docs**: the docs, README, changelogs and change notes the project keeps, as tasks of their own.
-- The last tasks are always: remove the prototype routes, the canvas and the prototype setup, and the full test run.
+- The last task is always the full test run. The prototypes stay until phase 6, which compares the build against them.
 
 **Gate:** AskUserQuestion, header "Plan": "Approve" (Recommended), "Change it", "Stop". Preview the task list with
 owners, and an estimate: how many tasks, how many agents at once at most, and roughly how long. For a large build (more
-than about 10 tasks or 4 agents at once) say so plainly in the question. The next phase starts on "Approve". Commit the
-plan on the feature branch.
+than about 10 tasks or 4 agents at once) say so plainly in the question. The next phase starts on "Approve": set `Status: plan (approved)` and
+commit the plan on the feature branch.
 
 ## 5. Build, one task at a time
 
@@ -207,19 +217,21 @@ Run the plan task by task, with a review after every task before the next one th
 
 For each task that is ready (its dependencies done):
 
-1. **Test first**: the QA role writes the failing tests for the task's acceptance criteria (the developer does, in the
-   same assignment, when the team has no QA role) and shows they fail for the right reason.
+1. **Test first**: the QA role writes the failing tests for the task's acceptance criteria in the task's test files
+   (an hq_assign with those test files as its `files`; the developer does it, in the same assignment, when the team has
+   no QA role) and shows they fail for the right reason. Commit them on the feature branch
+   (`test: failing tests for task 3`) before step 2, so the developer starts from them.
 2. **Assign** with hq_assign: the task from `docs/plans/<feature>.md` word for word, plus pointers to the spec, the plan
    and the failing tests, the `files` from the plan, its `done`, and `limits` (the rest of the code, and never push or
    merge). A screen task covers its loading, empty, error and partial states from the spec, not only the happy path.
    When the person adopted HeroUI, a UI task's brief has the member load `heroui-react` and look up every component
    with the HeroUI MCP (`get_component_docs`) before it uses it; when porting to the project's own library, the brief
    names that library's components instead.
-3. **Keep parallel members apart**: give each member working in parallel its own worktree when the platform can (the
-   Agent tool's worktree isolation), and merge its branch into the feature branch after review. Without worktrees, run
-   in parallel only tasks that touch no lockfile or shared config and need no dev server or test run of their own at
-   the same time; run the rest one after another. Never two members on the same files.
-4. **Review** when it reports: hq_review to the review role, with `focus` on the review checklist (the project rules
+3. **Keep parallel members apart**: hq_assign starts every member in this checkout (it has no worktree option), so run
+   tasks in parallel only when they share no files, touch no lockfile or shared config, and need no dev server or test
+   run of their own at the same time; run the rest one after another. Never two members on the same files.
+4. **Review** when it reports. First run `git status` and check that every file it changed is inside its `files`
+   (Bash is not limited to them); a file outside goes back as a finding. Then hq_review to the review role, with `focus` on the review checklist (the project rules
    for this task and the spec's edge cases and states). Have the QA role run the task's tests. Do not accept the task
    until both pass.
 5. **Fix**: findings go back to the same member with SendMessage, or a new hq_assign with the findings, then review
@@ -231,7 +243,8 @@ If the build shows the spec or the plan is wrong (a missing case, a task bigger 
 and ask the person with AskUserQuestion, header "Re-plan", before changing either file.
 
 **Gate:** when every task is ticked, AskUserQuestion, header "Build": "Finish up" (Recommended), "Change something",
-listing what was built and the review results in the preview. The next phase starts on "Finish up".
+listing what was built and the review results in the preview. The next phase starts on "Finish up": set
+`Status: build (approved)`.
 
 ## 6. Finish
 
@@ -241,8 +254,9 @@ listing what was built and the review results in the preview. The next phase sta
 - **In a real browser**: the QA role opens the built feature (the in-app browser, or the project's end-to-end tool) at
   desktop and mobile width, walks every acceptance criterion and state, and compares it with the chosen variant on the
   canvas. Differences the person did not ask for go back to phase 5 as tasks.
-- **Clean up**: the prototype routes, the flow files, the canvas and the prototype setup are gone, and HeroUI too
-  unless the person chose to adopt it; nothing from them is left behind.
+- **Clean up**, after the browser check: one hq_assign removes the prototype routes, the flow files, the canvas and the
+  prototype setup, with `files`: the prototypes folders, `public/prototypes/<feature>/`, and, unless the person chose to
+  adopt HeroUI, package.json, the lockfile and the prototypes stylesheet; nothing from them is left behind.
 - Set `Status: done` in the spec and commit.
 - Give the person the closing report: what was built and by whom, who reviewed each part, the test and browser results,
   anything deferred or still open, the feature branch and its commits. Offer to push it and open a pull request, and do
