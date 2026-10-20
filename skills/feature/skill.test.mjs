@@ -80,7 +80,7 @@ test('variants differ in UI and UX style, and are ranked with the recommendation
 
 test('each variant reports its screens and the links between them in a flow file the canvas reads', () => {
   const text = section('Prototype')
-  assert.match(text, /flow\.json/)
+  assert.match(text, /flows\/<variant>\.json/)
   assert.match(text, /"screens"/)
   assert.match(text, /"links"/)
   assert.match(text, /"trigger"/)
@@ -100,4 +100,22 @@ test('the gate takes a mix the person drew on the canvas', () => {
   const gate = section('Prototype').split('**Gate:**')[1] ?? ''
   assert.match(gate, /Mix them/)
   assert.match(gate, /connections/i)
+})
+
+test('variants use the project\'s real stack and UI library, and native apps fall back to screenshots', () => {
+  const text = section('Prototype')
+  assert.match(text, /project's own stack/i)
+  assert.match(text, /UI library/i)
+  assert.match(text, /raw HTML/i) // only when there is no frontend app
+  assert.match(text, /shadcn\/ui/) // the default when a React project has no UI library
+  assert.match(text, /theme tokens/i)
+  assert.match(text, /screenshot/i)
+  assert.match(text, /"image"/) // a flow.json screen can carry a screenshot instead of a url
+})
+
+test('the canvas is a React Flow page that adds no dependency to the project', () => {
+  const text = section('Prototype')
+  assert.match(text, /@xyflow\/react@\d+\.\d+\.\d+/) // an exact, pinned version
+  assert.match(text, /package\.json/)
+  for (const api of ['Handle', 'onConnect', 'addEdge', 'Background', 'Controls', 'MiniMap', 'Panel', 'nodrag', 'nowheel']) assert.match(text, new RegExp(api), api)
 })
