@@ -41,6 +41,11 @@
   resumes cleanly; and each member's changed files are checked against the scope of the members running as soon as it reports.
 - **`hq_hire` playbooks are files.** A new role's playbook must be the absolute path of a Markdown file, and the
   confirmation names its effort and playbook.
+- **The sidebar reads as one tidy list in the Claude desktop app.** The team heading stays on one line, the folder
+  name giving way first; each agent's dot and tree branch sit on its name's line, the lines under a name start under
+  it, and no blank rows are left before a bar. The dot shows the agent's state in the header's colours (blue working,
+  amber needs you, green done, red failed) instead of its bot's colour, which could look like an error on a working
+  agent. The terminal sidebar is unchanged.
 - **The lead now works in the Claude desktop app.** The lead's system prompt section skipped "lean" prompts, which
   is what the desktop app sends, so the main session there never became the lead.
 - **Reviewers can report back.** A role with a tools list (such as a Code Reviewer) could not use SubagentHandback,
