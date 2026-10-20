@@ -453,19 +453,14 @@ function TreeLine(els: Els, data: HqData, actions: HqActions, row: TreeRow | Mor
   return isCompact(row.agent) ? CompactNode(els, data, actions, row) : AgentNode(els, data, actions, row, draw)
 }
 
-function AgentNode(els: Els, data: HqData, actions: HqActions, row: TreeRow, draw: DrawRaster) {
-  const { Box, Text, Button } = els
-  const { agent, prefix, indent, work } = row
+/** What a full row says, its text in `room` columns: the name line's parts and time, the live line, the task and next lines. */
+function rowWords(data: HqData, { agent, work }: TreeRow, room: number) {
   const isMain = agent.id === MAIN
   const team = teamOf(data)
   const time = isMain ? `${agent.tools} tools` : ranFor(agent, data.now)
-  const room = textWidth(data.columns, prefix, spriteSize(agent).columns)
   const status = activityLine(agent, work, data, room)
-  const label = labelOf(agent, data.team)
-  const botColor = speciesOf(agent.mascot).color
-  const TONE_COLOR = tonesFor(data.isLight)
   const mark = isMain ? '✦ ' : '' // the lead's star
-  const title = titleParts(agent, label, room - time.length - 1 - mark.length)
+  const title = titleParts(agent, labelOf(agent, data.team), room - time.length - 1 - mark.length)
   const task = currentTask(agent, work, data)
   // between calls the live line already says what it works on; the task line then shows only an assignment it does not
   const ownTask = task && (status.isLive || task !== work.now) ? `task: ${task}` : ''
@@ -473,6 +468,14 @@ function AgentNode(els: Els, data: HqData, actions: HqActions, row: TreeRow, dra
   const crew = isMain && team.length > 0 ? `${workingCount(data.agents)} of ${team.length} working` : ''
   const taskLine = [crew, ownTask].filter(Boolean).join(' · ')
   const after = work.next && !isFinished(agent.status) ? `○ next: ${work.next}` : work.last && !isMain ? `✓ last: ${work.last}` : ''
+  return { time, status, mark, title, taskLine, after, botColor: speciesOf(agent.mascot).color }
+}
+
+function AgentNode(els: Els, data: HqData, actions: HqActions, row: TreeRow, draw: DrawRaster) {
+  const { Box, Text, Button } = els
+  const { agent, prefix, indent, work } = row
+  const { time, status, mark, title, taskLine, after, botColor } = rowWords(data, row, textWidth(data.columns, prefix, spriteSize(agent).columns))
+  const TONE_COLOR = tonesFor(data.isLight)
   // the tree's lines run down beside the row: its branch on the first line, its siblings' line below
   const gutter = prefix ? [prefix, ...Array.from({ length: ROW_LINES - 1 }, () => indent || ' ')] : []
   return (
