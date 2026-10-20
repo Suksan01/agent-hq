@@ -3,14 +3,24 @@
 ## Unreleased
 
 ### Added
-- **A gated feature workflow.** `/agent-hq:feature` runs a big feature in six phases: brainstorm, a spec in
-  `docs/specs/`, UI prototype variants in different visual and UX styles, built in parallel by separate members and laid out side
-  by side on one pan-and-zoom canvas page with the recommended variant first; each screen is a frame joined to
-  the next by a labelled connection, and you can drag new connections across variants to sketch a mix. Variants are built in the project's own
-  stack and UI library (shadcn/ui when a React project has none); the canvas is a React Flow page loaded from a CDN, so
-  nothing is installed, a task plan in `docs/plans/`,
-  a build that reviews and tests each task before the next one that depends on it, and a finish. Each phase ends at a
-  gate you approve, and the lead is pointed to it for any big feature.
+- **A gated feature workflow.** `/agent-hq:feature` runs a big feature in six phases, each ending at a gate you
+  approve, and the lead is pointed to it for any big feature:
+  - brainstorm, then a spec in `docs/specs/` with Given/When/Then acceptance criteria, the project's own rules from
+    `CLAUDE.md`, and a security or money audit when auth, money or personal data is touched;
+  - UI prototype variants in different visual and UX styles, built in parallel with HeroUI v3 by default (the
+    project's own UI library on request) through the official `heroui-react`/`heroui-native` skills and the HeroUI MCP
+    server, and laid out on one React Flow canvas page (loaded from a CDN, nothing installed): one row of screen
+    frames per variant, recommended first, joined by labelled connections, with drag-to-connect across variants to
+    sketch a mix;
+  - a task plan in `docs/plans/` with feature flag, migration and rollback steps, docs and change notes as tasks, and an
+    estimate of agents and time before a large build;
+  - a build on a feature branch: QA writes the failing tests first, parallel members work in their own worktrees, and
+    each task is reviewed and committed before the next one that depends on it;
+  - a finish with the full suites, a real-browser check against the chosen variant, clean-up, and an offer of a pull
+    request and a retro.
+  You can skip a phase on purpose, and share a phase's spec or canvas as a page.
+- **HeroUI in the team interview.** UI roles get the official HeroUI skill, a rule to look every component up with the
+  HeroUI MCP server, and its tools by full name when they have a tools list.
 - **A Team Assistant you can add.** The `/agent-hq:team` interview offers a Team Assistant once the lineup is set.
   It reads the project and writes each member's brief and a short proposal for you (the parts, options, trade-offs)
   before work starts, and drafts the lead's updates and closing report.
