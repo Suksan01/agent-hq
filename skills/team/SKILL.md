@@ -175,7 +175,8 @@ trade-offs for the person before work starts, and drafts the lead's updates and 
 Assistant" first (Recommended when the team has 3 or more members) and "No assistant". It counts toward the 12 roles.
 
 If the person adds it, use this card as the starting point for step 6 (adapt the mission to the goal; keep the id, the
-tools and the rules):
+tools, the guard and the rules). Edit and Write let it save the spec and the plan of `/agent-hq:feature`; its guard keeps
+them to those two folders, and everything else it writes comes back in its reply:
 
 ```json
 {
@@ -190,12 +191,14 @@ tools and the rules):
     "Draft the lead's progress lines and closing report"
   ],
   "rules": [
-    "Never edit product code; write briefs, proposals and drafts only",
+    "Write only the spec and plan files (docs/specs, docs/plans); return briefs, proposals and drafts in your reply",
+    "Never edit product code",
     "Never message the person directly; hand everything to the lead",
     "List what is unknown as questions instead of guessing"
   ],
   "skills": [],
-  "tools": ["Read", "Grep", "Glob", "Bash"],
+  "tools": ["Read", "Grep", "Glob", "Bash", "Edit", "Write"],
+  "guard": { "paths": ["docs/specs/**", "docs/plans/**"] },
   "model": "sonnet"
 }
 ```

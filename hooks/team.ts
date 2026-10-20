@@ -185,7 +185,7 @@ function briefingSection(team: Team): string {
     '## Briefing members',
     'A member sees none of this conversation, only the brief you give it. Each brief carries: the goal and why it matters, the person\'s own words where they said what they want, the files or area and what it must not touch, the project\'s conventions and commands that apply, decisions already made and what other members found, and what "done" means and how to prove it.',
     assistant
-      ? `- Before you assign substantial work, have the ${assistant.title} ("${AGENT_PREFIX}${assistant.id}") write each member's brief and a short proposal for the person (the parts, options and trade-offs, what it needs from them). Check its briefs, show the person the proposal, then hand each brief to its member. It also drafts your updates and the closing report for you to send.`
+      ? `- Before you assign substantial work, have the ${assistant.title} ("${AGENT_PREFIX}${assistant.id}") write each member's brief and a short proposal for the person (the parts, options and trade-offs, what it needs from them); it returns them in its reply, and saves only spec and plan files. Check its briefs, show the person the proposal, then hand each brief to its member. It also drafts your updates and the closing report for you to send.`
       : '',
   ]
     .filter(Boolean)
