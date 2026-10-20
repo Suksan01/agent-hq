@@ -37,8 +37,8 @@
   (it was read-only); parallel members share the checkout, since `hq_assign` has no worktree option; QA's failing
   tests have their own files and are committed before the developer starts; the canvas stays until the finish compares
   the build against it; the HeroUI setup is its own assignment that runs first; every gate fits AskUserQuestion's 4
-  options; `Status:` marks a phase draft or approved, and the brainstorm is saved, so a restart for the HeroUI MCP server
-  resumes cleanly; and each member's changed files are checked against its scope.
+  options; `Status:` marks every phase draft when it starts and approved at its gate, and the brainstorm is saved, so a restart for the HeroUI MCP server
+  resumes cleanly; and each member's changed files are checked against the scope of the members running as soon as it reports.
 - **`hq_hire` playbooks are files.** A new role's playbook must be the absolute path of a Markdown file, and the
   confirmation names its effort and playbook.
 - **The lead now works in the Claude desktop app.** The lead's system prompt section skipped "lean" prompts, which

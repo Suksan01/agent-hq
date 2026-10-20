@@ -82,8 +82,8 @@ starts on "Approve": set `Status: spec (approved)` and commit the spec on the fe
 
 ## 3. Prototype variants
 
-Skip this phase when the feature has no user interface (an API, a job, a migration): say so, set `Status: plan` and go
-to phase 4 (`Status: prototype (approved)` with a `Skipped:` line). Otherwise, show the person a few real, clickable directions before anyone builds the real thing.
+Skip this phase when the feature has no user interface (an API, a job, a migration): say so, set
+`Status: prototype (approved)` with a `Skipped:` line, and go to phase 4. Otherwise, set `Status: prototype (draft)` and show the person a few real, clickable directions before anyone builds the real thing.
 
 **Choose and rank the variants.** Pick 2 or 3 variants that differ in both UI and UX, never in colour alone:
 - **visual style**: for example minimal and airy, dense and data-first, card-based, or bold and editorial;
@@ -192,7 +192,8 @@ reference, never merged as it is.
 
 ## 4. Plan the build
 
-The Team Assistant (or you) writes `docs/plans/<feature>.md` from the approved spec and the chosen variant:
+Set `Status: plan (draft)`. The Team Assistant (or you) writes `docs/plans/<feature>.md` from the approved spec and the
+chosen variant:
 
 - Tasks small enough that one member finishes each in one assignment, numbered, as a checklist (`- [ ] 3. ...`).
 - For each task: the owner role, the files it may change, the acceptance criteria it meets (`AC2`), the test files QA
@@ -213,7 +214,8 @@ commit the plan on the feature branch.
 
 ## 5. Build, one task at a time
 
-Run the plan task by task, with a review after every task before the next one that depends on it starts.
+Set `Status: build (draft)`. Run the plan task by task, with a review after every task before the next one that
+depends on it starts.
 
 For each task that is ready (its dependencies done):
 
@@ -230,8 +232,11 @@ For each task that is ready (its dependencies done):
 3. **Keep parallel members apart**: hq_assign starts every member in this checkout (it has no worktree option), so run
    tasks in parallel only when they share no files, touch no lockfile or shared config, and need no dev server or test
    run of their own at the same time; run the rest one after another. Never two members on the same files.
-4. **Review** when it reports. First run `git status` and check that every file it changed is inside its `files`
-   (Bash is not limited to them); a file outside goes back as a finding. Then hq_review to the review role, with `focus` on the review checklist (the project rules
+4. **Review** as soon as it reports, before anyone else's work lands. First run `git status`: every accepted task and
+   every set of failing tests is committed, so it shows only what the members running now changed. Each file must be
+   inside the `files` of the member that reported or of another member running now (Bash is not limited to them). A
+   changed file inside no one's `files` cannot be traced to one member: send it as a finding to every member running,
+   and keep parallel tasks few so this stays rare. Then hq_review to the review role, with `focus` on the review checklist (the project rules
    for this task and the spec's edge cases and states). Have the QA role run the task's tests. Do not accept the task
    until both pass.
 5. **Fix**: findings go back to the same member with SendMessage, or a new hq_assign with the findings, then review
@@ -247,6 +252,8 @@ listing what was built and the review results in the preview. The next phase sta
 `Status: build (approved)`.
 
 ## 6. Finish
+
+Set `Status: finish (draft)`, then:
 
 - **Full checks**: the QA role runs the full unit and end-to-end suites and the build command the project's rules name;
   the review role reads the whole diff against the spec and the review checklist; any risk review from the spec runs
