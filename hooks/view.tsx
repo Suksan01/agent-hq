@@ -33,6 +33,8 @@ export type HqData = {
   activity?: Record<string, HqActivity>
   /** What the lead assigned each agent (hq_assign), by agent name. */
   assignments?: Record<string, HqAssignment>
+  /** The surface draws its own text (desktop, vscode, mobile): no Rasters, a proportional font, rows as tall as what they hold. */
+  isAppDrawn?: boolean
 }
 
 // the section's own spacing around its title: a space each side and the dot and aside between
@@ -356,12 +358,39 @@ export function currentTask(agent: HqAgent, work: AgentWork, data: HqData): stri
   return assigned || work.now
 }
 
-function Section({ Box, Text }: Els, title: string, columns: number, aside?: string) {
+const DOT_W = 2 // where no bot is drawn, its place on the name line: a dot and a space
+
+/** Where the app draws the text: the tree branch and the agent's dot, in its state's colour, as one monospaced run the lines below line up with. */
+function dotGutter({ Text }: Els, prefix: string, color: string) {
+  return (
+    <Text mono>
+      <Text dimColor>{prefix}</Text>
+      <Text color={color}>●</Text>
+      {' '}
+    </Text>
+  )
+}
+
+function Section(els: Els, data: HqData, title: string, aside?: string) {
+  const { Box, Text } = els
+  if (data.isAppDrawn) {
+    // no rule: a run of ─ is wider than its count of columns in the app's font and wraps; the title gives way at its end, the count stays
+    return (
+      <Box marginTop={1} gap={1}>
+        <Box flexShrink={1}>
+          <Text bold wrap="truncate-end">
+            {title}
+          </Text>
+        </Box>
+        {aside ? <Text dimColor>· {aside}</Text> : null}
+      </Box>
+    )
+  }
   const label = ` ${title} ${aside ? `· ${aside} ` : ''}`
   return (
     <Box marginTop={1}>
       <Text bold>{label}</Text>
-      <Text dimColor>{'─'.repeat(Math.max(0, columns - label.length))}</Text>
+      <Text dimColor>{'─'.repeat(Math.max(0, data.columns - label.length))}</Text>
     </Box>
   )
 }
@@ -412,11 +441,12 @@ function CompactNode(els: Els, data: HqData, actions: HqActions, { agent, prefix
   const lastRoom = work.last && head ? Math.min(width(work.last), COMPACT_LAST_MIN) : 0
   const title = titleParts(agent, label, data.columns - fixed - lastRoom + headW)
   const room = data.columns - fixed - width(title.tail)
+  const appDrawn = data.isAppDrawn === true
   return (
     <Box key={`agent-${agent.id}`} justifyContent="space-between">
       <Box flexShrink={1}>
-        <Text dimColor>{prefix}</Text>
-        <Text color={botColor}>● </Text>
+        {appDrawn ? dotGutter(els, prefix, TONE_COLOR[tone]) : <Text dimColor>{prefix}</Text>}
+        {appDrawn ? null : <Text color={botColor}>● </Text>}
         <Button key={`view-${agent.id}`} plain onPress={() => actions.onView(agent.id)}>
           <Text bold color={botColor}>
             {title.head}
@@ -445,12 +475,75 @@ function TreeLine(els: Els, data: HqData, actions: HqActions, row: TreeRow | Mor
     return (
       <Button key={`more-${row.prefix}`} plain onPress={actions.onToggleExpand}>
         <Text dimColor>
-          {row.prefix}+{row.more} more idle/done ›
+          {data.isAppDrawn ? <Text mono>{row.prefix}</Text> : row.prefix}+{row.more} more idle/done ›
         </Text>
       </Button>
     )
   }
-  return isCompact(row.agent) ? CompactNode(els, data, actions, row) : AgentNode(els, data, actions, row, draw)
+  if (isCompact(row.agent)) return CompactNode(els, data, actions, row)
+  return data.isAppDrawn ? AppAgentNode(els, data, actions, row, draw) : AgentNode(els, data, actions, row, draw)
+}
+
+/** A full row where the app draws the text: dot and branch on the name's line, each line below behind a gutter as wide, no blank lines. */
+function AppAgentNode(els: Els, data: HqData, actions: HqActions, row: TreeRow, draw: DrawRaster) {
+  const { Box, Text, Button } = els
+  const { agent, prefix, indent, work } = row
+  const { time, status, mark, title, taskLine, after, botColor } = rowWords(data, row, data.columns - [...prefix].length - DOT_W)
+  const TONE_COLOR = tonesFor(data.isLight)
+  // the tree's line carried down, as wide as branch and dot; inside each line, so it shares the line's baseline
+  const gutter = () => (
+    <Text mono dimColor>
+      {indent + ' '.repeat(DOT_W)}
+    </Text>
+  )
+  return (
+    <Box key={`agent-${agent.id}`} flexDirection="column">
+      <Box justifyContent="space-between">
+        <Box flexShrink={1}>
+          {dotGutter(els, prefix, TONE_COLOR[mascotTone(agent, data)])}
+          {mark && <Text color={LEAD_COLOR}>{mark}</Text>}
+          <Button key={`view-${agent.id}`} plain onPress={() => actions.onView(agent.id)}>
+            <Text bold color={botColor}>
+              {title.head}
+            </Text>
+          </Button>
+          <Text dimColor wrap="truncate-end">
+            {title.tail}
+          </Text>
+        </Box>
+        <Text dimColor tabular>
+          {time}
+        </Text>
+      </Box>
+      <Text wrap="truncate-end">
+        {gutter()}
+        <Text bold={status.isLive} color={TONE_COLOR[status.tone]}>
+          {status.text}
+        </Text>
+      </Text>
+      {taskLine ? (
+        <Text wrap="truncate-end" dimColor>
+          {gutter()}
+          {taskLine}
+        </Text>
+      ) : null}
+      {after ? (
+        <Text wrap="truncate-end" dimColor>
+          {gutter()}
+          {after}
+        </Text>
+      ) : null}
+      {(work.todos || fallbackOf(agent, data.tasks)) && (
+        <Box>
+          {gutter()}
+          <Box gap={1}>
+            {draw(`todo-${agent.id}`)}
+            {work.todos && <Text dimColor>{pctText(work.todos)}</Text>}
+          </Box>
+        </Box>
+      )}
+    </Box>
+  )
 }
 
 /** What a full row says, its text in `room` columns: the name line's parts and time, the live line, the task and next lines. */
@@ -600,7 +693,7 @@ export function SidebarView(els: Els, data: HqData, actions: HqActions, draw: Dr
           </Button>
         ) : null}
       </Box>
-      {Section(els, teamHeading(data.team, data.project, data.columns - agentCount.length - HEADING_PADDING), data.columns, agentCount)}
+      {Section(els, data, teamHeading(data.team, data.project, data.columns - agentCount.length - HEADING_PADDING), agentCount)}
       {!data.team && (
         <Box gap={1}>
           <Text dimColor>No team yet.</Text>
@@ -612,7 +705,7 @@ export function SidebarView(els: Els, data: HqData, actions: HqActions, draw: Dr
       {rows.map(row => TreeLine(els, data, actions, row, draw))}
       {team.length === 0 && <Text dimColor>No sub-agents yet. They appear here once one is spawned.</Text>}
       {hiddenAgents > 0 && <Text dimColor>{hiddenAgents} finished agent(s) hidden</Text>}
-      {taskP.total > 0 && Section(els, 'TASK BOARD', data.columns, `${taskP.done}/${taskP.total}`)}
+      {taskP.total > 0 && Section(els, data, 'TASK BOARD', `${taskP.done}/${taskP.total}`)}
       {taskP.total > 0 && TaskList(els, data, actions)}
     </Box>
   )
@@ -648,11 +741,6 @@ export function textTrack(els: Els, rasters: Raster[], data: HqData): DrawRaster
   }
   return key => {
     const r = rasters.find(x => x.key === key)
-    const mascotOf = key.startsWith('mascot-') ? data.agents[key.slice('mascot-'.length)] : undefined
-    if (mascotOf) {
-      // no Rasters on this surface: the bot's colour as a dot
-      return <Text color={speciesOf(mascotOf.mascot).color}>● </Text>
-    }
     // an agent with no todos: the fallback bar's words (a task's status, or "getting started") where no Raster is drawn
     const owner = key.startsWith('todo-') ? data.agents[key.slice('todo-'.length)] : undefined
     const fallback = owner && !data.todos[owner.id]?.length ? fallbackOf(owner, data.tasks) : undefined

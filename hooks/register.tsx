@@ -886,7 +886,7 @@ export const register: Register = (on, options) => {
     }
     if (e.surface !== 'terminal') {
       const els = $.ui.resolve(e)
-      return SidebarView(els, data, actions, textTrack(els, sidebarRasters(data, data.now), data))
+      return SidebarView(els, { ...data, isAppDrawn: true }, actions, textTrack(els, sidebarRasters(data, data.now), data))
     }
     const els = $.ui.resolve(e)
     const { Raster } = els
