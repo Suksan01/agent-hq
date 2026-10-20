@@ -1,5 +1,5 @@
-// Terminal drawing adapted from the plan-progress mod (MIT, see THIRD_PARTY_NOTICES.md): a Raster track of twinkling braille dots with a coloured
-// pill at its head. Cells are packed per RasterProps: [char, fg, bg] as uint32s.
+// Track drawing adapted from the plan-progress mod (MIT, see THIRD_PARTY_NOTICES.md): a Raster track of twinkling braille dots with a coloured
+// pill at its head, and the same track as an Svg dot grid where the app draws pictures. Cells are packed per RasterProps: [char, fg, bg] as uint32s.
 
 export type Tone = 'running' | 'needs_input' | 'error' | 'done'
 
@@ -126,6 +126,88 @@ export function trackCells(spec: TrackSpec, W: number, t: number, isLight: boole
   const at = kx + 1 + g.text(kx + 1, 0, shown, ink, pack(acc))
   if (spec.count) g.text(at + gap, 0, spec.count, ink, pack(acc))
   return g.encode()
+}
+
+// ---------- the same track as an Svg, where the app draws pictures, not cells (desktop, vscode, mobile) ----------
+
+export const TRACK_PX = 22 // an Svg track's height in CSS pixels, as plan-progress draws its bars
+const SWEEP_PX = 48 // the drifting glow's width while no share is known
+const PILL_FONT = "'Anthropic Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif"
+const rgb = (c: readonly number[]) => `rgb(${c.join(',')})`
+const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c)
+// about how wide a text runs in the pill's 12px font: narrow letters, wide ones, CJK
+const textPx = (s: string) => [...s].reduce((w, ch) => w + (/[　-鿿]/.test(ch) ? 12 : /[ilI.,:;'|!]/.test(ch) ? 3.4 : /[mwMW]/.test(ch) ? 9.5 : 6.7), 0)
+
+/** 2px dots on a 3px grid in 7 rows across `width` pixels, thicker towards its right end; each look (colour step, twinkle) one path. */
+function gridDots(width: number): string {
+  const dots = new Map<string, string>()
+  for (let col = 0; col * 3 < width; col++) {
+    const x = col * 3
+    const u = Math.min(1, (x + 1.5) / width)
+    const dense = 0.22 + 0.78 * Math.pow(u, 1.5)
+    const step = Math.min(4, Math.floor(Math.min(1, Math.pow(u, 0.9) * 1.1) * 4.99))
+    for (let r = 0; r < 7; r++) {
+      if (hash(col, r, 1) > dense + 0.1) continue
+      const cls = `b${step} t${Math.floor(hash(col, r, 2) * 4)}`
+      dots.set(cls, `${dots.get(cls) ?? ''}M${x} ${1 + r * 3}h2v2h-2z`)
+    }
+  }
+  return [...dots].map(([cls, d]) => `<path class="${cls}" d="${d}"/>`).join('')
+}
+
+/**
+ * trackCells as an Svg `W` pixels wide, in plan-progress's look: a faint capsule, the done share filled with a dot grid
+ * that warms from grey to the tone's colour over a tint deepening towards its head (twinkling while it runs), and the
+ * pill at the head, a solid capsule of the tone. With no share known a short glow drifts along it, the pill at its start.
+ */
+export function trackSvg(spec: TrackSpec, W: number, isLight: boolean): string {
+  const H = TRACK_PX
+  const color = tonesFor(isLight)[spec.tone]
+  const acc = hex(color)
+  const fx = spec.sweep ? 0 : (spec.tone === 'done' ? 1 : Math.min(1, spec.done / Math.max(1, spec.total))) * W
+  const light = mix(acc, [255, 255, 255], 0.32)
+  const looks = [0, 1, 2, 3, 4]
+    .map(b => {
+      const dense = 0.22 + 0.78 * Math.pow(b / 4, 1.5)
+      return `.b${b}{fill:${rgb(mix([132, 130, 138], light, b / 4))};fill-opacity:${(0.35 + 0.65 * dense).toFixed(2)}}`
+    })
+    .join('')
+  // only a working track moves, as only a working bot does
+  const motion =
+    spec.tone !== 'running'
+      ? ''
+      : `.t0,.t1,.t2,.t3{animation:tw 2.2s ease-in-out infinite}.t1{animation-duration:2.8s;animation-delay:-.7s}` +
+        `.t2{animation-duration:1.9s;animation-delay:-1.3s}.t3{animation-duration:3.3s;animation-delay:-.4s}` +
+        `@keyframes tw{0%,100%{opacity:1}50%{opacity:.45}}` +
+        `.sw{animation:sw 2.4s linear infinite}@keyframes sw{from{transform:translateX(-${SWEEP_PX}px)}to{transform:translateX(${W}px)}}` +
+        `@media (prefers-reduced-motion:reduce){.t0,.t1,.t2,.t3,.sw{animation:none}}`
+  const ink = rgb(isLight ? [255, 255, 255] : INK)
+  const style = `<style>${looks}${motion}.kt{font:500 12px ${PILL_FONT};fill:${ink}}.kc{font-weight:400}</style>`
+  const tint = `<linearGradient id="tint" x1="0" x2="${fx.toFixed(1)}" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="${rgb(acc)}" stop-opacity=".05"/><stop offset="1" stop-color="${rgb(acc)}" stop-opacity=".33"/></linearGradient>`
+  const fill = fx > 0 ? `<rect width="${fx.toFixed(1)}" height="${H}" fill="url(#tint)"/>${gridDots(fx)}` : ''
+  const sweep = spec.sweep ? `<g class="sw">${gridDots(SWEEP_PX)}</g>` : ''
+
+  // the pill says what the terminal's does, its label cut before its count is
+  const icon = spec.tone === 'running' ? '' : `${TONE_GLYPH[spec.tone]} `
+  const countPx = spec.count ? textPx(spec.count) + 6 : 0
+  const maxPx = Math.max(80, W * 0.6)
+  let label = spec.label
+  while ([...label].length > 3 && 20 + textPx(icon + label) + countPx > maxPx) label = [...label].slice(0, -1).join('')
+  const shown = icon + (label === spec.label ? label : `${label.trimEnd()}…`)
+  let pill = ''
+  if (shown.trim() || spec.count) {
+    const kw = Math.round(20 + (shown.trim() ? textPx(shown) + countPx : countPx - 6))
+    const kx = Math.max(kw / 2, Math.min(W - kw / 2, spec.sweep ? 0 : fx))
+    const count = spec.count ? `<tspan class="kc"${shown.trim() ? ' dx="6"' : ''}>${esc(spec.count)}</tspan>` : ''
+    pill =
+      `<g transform="translate(${kx.toFixed(1)} 0)"><rect x="${-kw / 2}" width="${kw}" height="${H}" rx="${H / 2}" fill="${color}"/>` +
+      `<text y="${H / 2 + 4.2}" text-anchor="middle" class="kt">${esc(shown.trim())}${count}</text></g>`
+  }
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${style}` +
+    `<defs><clipPath id="track"><rect width="${W}" height="${H}" rx="${H / 2}"/></clipPath>${tint}</defs>` +
+    `<g clip-path="url(#track)"><rect width="${W}" height="${H}" fill="#808080" fill-opacity=".16"/>${fill}${sweep}</g>${pill}</svg>`
+  )
 }
 
 
