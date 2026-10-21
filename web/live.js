@@ -75,11 +75,13 @@ function App() {
   const [adding, setAdding] = useState(false) // false, or true / a session id: the team the dialog starts on
   const [inboxOpen, setInboxOpen] = useState(false) // on a phone the needs-you tile is a pill until it is opened
   const [clearing, setClearing] = useState(false)
+  const [draft, setDraft] = useState(null) // a next step pressed on a lead deck: { for: selected, text, n }, put in that lead's box once, never sent from here
   const view = useRef(null)
   const [barHeight, bar] = useHeight()
   const [lastLang, keepLang] = useStored('agent-hq.lang', 'en') // so the screens before any session (connecting, none) speak it too
 
   useEffect(() => pauseOffscreen(document.body), [])
+  useEffect(() => { if (draft && draft.for !== selected) setDraft(null) }, [selected]) // the draft goes with the box it was put in
 
   const list = sessions ?? []
   const lang = langOf(list) ?? lastLang
@@ -144,6 +146,15 @@ function App() {
   }
   const talkTo = s => { const lead = leadOf(s); if (lead) setSelected(`${keyOf(s)}|${lead.id}`) }
   const leadOf = s => s?.snapshot.agents.find(a => a.isMain)
+  const suggest = (session, text) => {
+    const s = list.find(x => x.session === session)
+    const lead = leadOf(s)
+    if (!lead) return
+    const uid = `${keyOf(s)}|${lead.id}`
+    setSelected(uid)
+    setDraft(d => ({ for: uid, text, n: (d?.n ?? 0) + 1 }))
+  }
+  const drafted = draft?.for === selected ? draft : null // a draft is for the box it was pressed into; another agent's drawer starts empty
   const hidden = Boolean(current?.snapshot.hideFinished)
   const clock = pick ? live.clockOf(pick.session.session) : 0
   const drawer = pick ? drawerOf(pick.agent, pick.session, clock, pick.index, isMulti ? names.get(pick.session.session)?.flag : undefined) : null
@@ -159,7 +170,7 @@ function App() {
   return html`<${SpaceCanvas} className="hq-app">
     <div className="hq-stage">
       <${LiveView} mode=${mode} Space=${Space} onFallback=${fallBack} onNotice=${text => live.toast(false, text)} groups=${groups} focus=${focused} selected=${selected} inset=${inset}
-        onSelect=${choose} onLeadMessage=${session => talkTo(list.find(s => s.session === session))} onLeadHire=${session => setAdding(session ?? true)}
+        onSelect=${choose} onLeadMessage=${session => talkTo(list.find(s => s.session === session))} onLeadSuggest=${suggest} onLeadHire=${session => setAdding(session ?? true)}
         onMove=${move => live.sound.nav('travel', move)} onLeadTasks=${() => setBoardOpen(!boardOpen)} onReady=${api => { view.current = api }} />
     </div>
     <div className="hq-left">
@@ -170,7 +181,7 @@ function App() {
       ${drawer?.lead && teams.length > 1 ? html`<${SegmentedToggle} label=${t('live.teamToMessage')} value=${keyOf(pick.session)} options=${teams.map(s => ({ id: keyOf(s), label: names.get(s.session)?.flag ?? s.label }))}
         onChange=${key => talkTo(list.find(s => keyOf(s) === key))} />` : null}
       ${drawer
-        ? html`<${Drawer} key=${selected} ...${drawer} onClose=${() => setSelected(null)}
+        ? html`<${Drawer} key=${drafted ? `${selected}|${drafted.n}` : selected} ...${drawer} draft=${drafted?.text} onClose=${() => setSelected(null)}
             onSend=${text => send(drawer.lead ? { type: 'lead', text } : { type: 'message', agent: pick.agent.id, text }, pick.session)}
             onStop=${() => send({ type: 'stop', agent: pick.agent.id }, pick.session)} />`
         : html`${inbox.length === 0 ? null : wide || inboxOpen

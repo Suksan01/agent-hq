@@ -282,15 +282,22 @@ export function TextInput({ multiline, className, children, ...field }) {
 export function SendButton({ label = t('send'), ...rest }) {
   return html`<${IconButton} icon="send" label=${label} primary ...${rest} />`
 }
-/** A message box: a field and a send button; Enter sends. */
-export function SendInput({ placeholder = `${t('lead.messageLabel')}…`, onSend, className }) {
-  const [text, setText] = useState('')
+/** A message box: a field and a send button; Enter sends. `draft` starts it filled and focused, the cursor at the end (never sent by itself). */
+export function SendInput({ placeholder = `${t('lead.messageLabel')}…`, draft, onSend, className }) {
+  const [text, setText] = useState(draft ?? '')
+  const field = useRef(null)
+  useEffect(() => {
+    const el = field.current
+    if (!draft || !el) return
+    el.focus()
+    el.setSelectionRange(el.value.length, el.value.length)
+  }, [])
   const send = () => {
     if (!text.trim()) return
     onSend?.(text.trim())
     setText('')
   }
-  return html`<${TextInput} className=${className} placeholder=${placeholder} value=${text} onChange=${e => setText(e.target.value)} onKeyDown=${e => e.key === 'Enter' && send()}>
+  return html`<${TextInput} ref=${field} className=${className} placeholder=${placeholder} value=${text} onChange=${e => setText(e.target.value)} onKeyDown=${e => e.key === 'Enter' && send()}>
     <${SendButton} disabled=${!text.trim()} onClick=${send} />
   <//>`
 }
@@ -305,7 +312,7 @@ export function TitleHud({ team, folder, counts = {} }) {
 
 /** The agent detail drawer. `stats` is [[label, value, suffix?]], `timeline` is [{ time, status, text }].
  *  Stop asks first, inline; `confirmStop` opens that question from the start. */
-export function Drawer({ nickname, name, role, team, status = 'working', seed, index, lead, pct, task, says, activity, elapsed, now, next, stats = [], level, xp, xpNext, badges = [], timeline = [], finished = false, confirmStop = false, onClose, onSend, onStop }) {
+export function Drawer({ nickname, name, role, team, status = 'working', seed, index, lead, pct, task, says, activity, elapsed, now, next, stats = [], level, xp, xpNext, badges = [], timeline = [], finished = false, confirmStop = false, draft, onClose, onSend, onStop }) {
   const [confirming, setConfirming] = useState(confirmStop)
   const shown = PCT_STATUS[status] ?? pct
   const stoppable = !lead && !['done', 'stopped'].includes(status) // the lead is messaged, never stopped from here
@@ -336,7 +343,7 @@ export function Drawer({ nickname, name, role, team, status = 'working', seed, i
       ${timeline.map((t, i) => html`<div key=${i} className="sk-timeline__item" data-status=${t.status}><span className="sk-timeline__dot"></span><span>${t.text}</span><${DotNumber} value=${t.time} size="xs" /></div>`)}
     </div></div>` : null}
     ${finished ? html`<div className="sk-drawer__sec sk-body-text sk-dim">${t('drawer.finished')}</div>` : html`<div className="sk-drawer__sec">
-      <${SendInput} placeholder=${t('drawer.messageTo', { name: nickname })} onSend=${onSend} />
+      <${SendInput} placeholder=${t('drawer.messageTo', { name: nickname })} draft=${draft} onSend=${onSend} />
       ${!stoppable ? null : confirming
         ? html`<div className="sk-confirm" role="alertdialog" aria-label=${t('drawer.stopAsk', { name: nickname })}><span>${t('drawer.stopWarn', { name: nickname })}</span>
             <${PillButton} small onClick=${() => setConfirming(false)}>${t('drawer.keep')}<//><${PillButton} small danger autoFocus=${!confirmStop} onClick=${() => { setConfirming(false); onStop?.() }}>${t('drawer.stop')}<//></div>`

@@ -31,6 +31,9 @@ test('the glossary words the person approved are the ones used', () => {
   assert.equal(th['talk.lead'], 'หัวหน้า')
   assert.equal(th['status.lead'], 'หัวหน้าทีม')
   assert.equal(th['unit.s'], '{n} วิ')
+  assert.equal(th['next.title'], 'ขั้นตอนถัดไป', "the lead's next steps: ขั้นตอน + ถัดไป, as the board's steps and the card's Next")
+  assert.equal(th['next.notNow'], 'ไว้ทีหลัง')
+  assert.match(th['next.use'], /คุยกับหัวหน้า/, 'a suggestion names the box it drafts into')
 })
 
 test('t fills placeholders in the language set; an unknown language or key falls back to English, then the key', () => {

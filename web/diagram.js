@@ -74,16 +74,17 @@ export function cardProps(agent, uid, selected, onSelect, group) {
   }
 }
 
-/** The lead deck's props from the lead agent and its group; the callbacks (`handlers`) are the page's: onSelect(session, id), onLeadMessage(session), onLeadHire(session), onLeadTasks(). */
+/** The lead deck's props from the lead agent and its group; the callbacks (`handlers`) are the page's: onSelect(session, id), onLeadMessage(session), onLeadHire(session), onLeadTasks(), onLeadSuggest(session, text). */
 export function leadDeckProps(agent, group, handlers = {}) {
   const session = group.session ?? null
   return {
     id: agent.id, nickname: agent.nickname || agent.name, title: agent.role || undefined, team: group.team || group.folder, seed: agent.seed ?? agent.nickname ?? agent.id, index: agent.index,
-    status: normStatus(agent.status), pct: agent.progress ?? agent.pct, says: agent.says, activity: agent.activity, elapsed: agent.elapsed, now: agent.now, next: agent.next,
+    status: normStatus(agent.status), pct: agent.progress ?? agent.pct, says: agent.says, activity: agent.activity, elapsed: agent.elapsed, now: agent.now, next: agent.next, suggestions: agent.suggestions,
     crew: group.agents.filter(m => !m.isLead).map(m => ({ id: m.id, nickname: m.nickname || m.name, seed: m.seed ?? m.nickname ?? m.id, index: m.index, status: normStatus(m.needsYou ? 'waiting' : m.status) })),
     onMessage: handlers.onLeadMessage ? () => handlers.onLeadMessage(session) : undefined,
     onHire: handlers.onLeadHire ? () => handlers.onLeadHire(session) : undefined,
     onTasks: handlers.onLeadTasks ? () => handlers.onLeadTasks(session) : undefined,
+    onSuggest: handlers.onLeadSuggest ? text => handlers.onLeadSuggest(session, text) : undefined,
     onSelect: handlers.onSelect ? memberId => handlers.onSelect(session, memberId) : undefined,
     onOpen: handlers.onSelect ? () => handlers.onSelect(session, agent.id) : undefined,
   }
@@ -104,9 +105,9 @@ function Node({ card, agent, group, selected, onSelect, handlers, measure }) {
   </div>`
 }
 
-export function Diagram({ groups = [], focus = null, selected = null, inset, onSelect: choose, onLeadMessage, onLeadHire, onLeadTasks, onMove, onReady, className = '', style }) {
+export function Diagram({ groups = [], focus = null, selected = null, inset, onSelect: choose, onLeadMessage, onLeadHire, onLeadTasks, onLeadSuggest, onMove, onReady, className = '', style }) {
   const onSelect = choose ? (session, id) => { if (id !== null && id !== undefined) playNav('select'); choose(session, id) } : undefined // a card chosen makes a soft click
-  const handlers = { onSelect, onLeadMessage, onLeadHire, onLeadTasks }
+  const handlers = { onSelect, onLeadMessage, onLeadHire, onLeadTasks, onLeadSuggest }
   useLayoutEffect(ensureStyles, [])
   const still = useReducedMotion()
   const root = useRef(null)

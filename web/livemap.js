@@ -67,6 +67,7 @@ export function groupsOf(sessions, names, clockOf = () => 0) {
         next: a.next || undefined,
         activity: a.activity?.text || undefined, // the cards draw the ▸ themselves
         says: a.says || undefined,
+        suggestions: a.isMain ? suggestionsOf(s.snapshot) : undefined,
         bubble: bubbleOf(talk.get(a.id), s.snapshot.agents, clock),
         elapsed: status === 'working' && a.activity?.since ? Math.max(0, Math.round((clock - a.activity.since) / 1000)) : undefined,
         seed: a.id,
@@ -80,6 +81,18 @@ export function groupsOf(sessions, names, clockOf = () => 0) {
     const tidy = shown.map(m => (m.parentId && !ids.has(m.parentId) ? { ...m, parentId: leadId } : m))
     return { session: s.session, team: n.flag ?? n.team, folder: n.sub || n.folder, tag: n.tag, alive: s.alive, agents: tidy }
   })
+}
+
+const SUGGESTIONS_MAX = 3
+const SUGGESTION_CHARS = 120
+
+/** The lead's drafted next steps, { recap, items, at }, or null with none. The mod masks and clamps them; they are model
+ *  output, so the page checks their shape again and only ever shows them as text. */
+export function suggestionsOf(snapshot) {
+  const s = snapshot?.suggestions
+  const items = Array.isArray(s?.items) ? s.items.filter(x => typeof x === 'string' && x.trim()).map(x => x.trim().slice(0, SUGGESTION_CHARS)).slice(0, SUGGESTIONS_MAX) : []
+  if (items.length === 0) return null
+  return { recap: typeof s.recap === 'string' && s.recap.trim() ? s.recap.trim() : null, items, at: Number(s.at) || 0 }
 }
 
 /** The snapshot's talk bubbles by the card they sit on; the mod keeps one per card, and should two come, the newer one is kept. */

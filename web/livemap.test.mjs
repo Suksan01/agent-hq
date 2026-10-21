@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import { sessionNames } from './labels.js'
-import { signatureOf, agentStatus, addRequest, attentionOf, boardSections, countsOf, drawerOf, feedItems, groupsOf, hudOf, inboxItems, keyOf, nicknamed, pctOf, progressOf, sessionsOf, statusOf, whoOf } from './livemap.js'
+import { signatureOf, agentStatus, addRequest, attentionOf, boardSections, countsOf, drawerOf, feedItems, groupsOf, hudOf, inboxItems, keyOf, nicknamed, pctOf, progressOf, sessionsOf, statusOf, suggestionsOf, whoOf } from './livemap.js'
 
 const agent = (id, over = {}) => ({ id, parentId: 'main', name: id, nickname: id.toUpperCase(), role: 'Dev', status: 'running', isMain: false, now: 'Working', next: null, last: null, todos: null, fallback: null, tools: 3, lastTool: 'Edit', activity: null, startedAt: 1000, endedAt: null, xp: null, ...over })
 const session = (id, label, agents, extra = {}) => ({ session: id, label, alive: true, snapshot: { at: 5000, team: { name: `${label} Team`, purpose: 'p', lead: 'Lead' }, agents, tasks: [], roles: [], overall: { done: 1, active: 0, total: 4 }, tasksProgress: { done: 1, active: 1, total: 2 }, events: [], ...extra } })
@@ -244,4 +244,20 @@ test("the overview's waiting count is agents held for the person (also in the in
   assert.deepEqual(inboxItems(sessionsOf({ v: 2, sessions: [s] }), new Map(), false).map(i => i.agent), ['held'], 'the counted agent is one that waits on the person')
   assert.equal(STRINGS.th['crew.waiting'], 'รอคุณ')
   assert.equal(STRINGS.th['crew.waiting'], STRINGS.th['status.waiting'], "the same word as the lead deck's count and the inbox title")
+})
+
+test("the lead's next steps: up to three non-empty strings kept as plain text, a recap or null; nothing to show is null", () => {
+  const html = '<img src=x onerror=alert(1)> <b>Ship</b> it'
+  assert.deepEqual(suggestionsOf({ suggestions: { recap: ' Search page shipped ', items: ['Review it', html, 'Write the changelog'], at: 7 } }), { recap: 'Search page shipped', items: ['Review it', html, 'Write the changelog'], at: 7 })
+  assert.deepEqual(suggestionsOf({ suggestions: { recap: null, items: ['a', 'b', 'c', 'd'], at: 1 } }).items, ['a', 'b', 'c'], 'never more than three')
+  assert.deepEqual(suggestionsOf({ suggestions: { items: ['ok', 3, null, { text: 'x' }, '  '], at: 1 } }), { recap: null, items: ['ok'], at: 1 }, 'only non-empty strings')
+  assert.equal(suggestionsOf({ suggestions: { items: ['x'.repeat(300)], at: 1 } }).items[0].length, 120, 'clamped to the contract')
+  for (const none of [{}, { suggestions: null }, { suggestions: { recap: 'r', items: [], at: 1 } }, { suggestions: { items: 'Review it', at: 1 } }, null]) assert.equal(suggestionsOf(none), null)
+})
+
+test("groups give the lead (only) its session's next steps", () => {
+  const s = session('s1', 'alpha', [lead, agent('dev1')], { suggestions: { recap: null, items: ['Review it'], at: 3 } })
+  const [group] = groupsOf(sessionsOf({ v: 2, sessions: [s] }), new Map())
+  assert.deepEqual(group.agents.find(a => a.isLead).suggestions, { recap: null, items: ['Review it'], at: 3 })
+  assert.equal(group.agents.find(a => !a.isLead).suggestions, undefined)
 })
