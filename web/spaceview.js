@@ -16,7 +16,7 @@
 import React from './vendor/libs.js'
 import { AgentCard, GlassTile, TalkBubble, html } from './spacekit.js'
 import { t } from './i18n.js'
-import { LeadDeck } from './leadcard.js'
+import { LeadDeck, LeadNext } from './leadcard.js'
 import { cardProps, leadDeckProps, useOffscreenClass } from './diagram.js'
 import { loadEngine } from './spaceengine.js'
 import { webglAvailable } from './webgl.js'
@@ -55,7 +55,7 @@ function startAngles(groups) {
   return angles
 }
 
-export function SpaceView({ groups = [], focus = null, selected = null, inset = {}, onSelect: choose, onLeadMessage, onLeadHire, onLeadTasks, onMove, onReady, onContextLost, onError, className = '', style }) {
+export function SpaceView({ groups = [], focus = null, selected = null, inset = {}, onSelect: choose, onLeadMessage, onLeadHire, onLeadTasks, onLeadSuggest, onMove, onReady, onContextLost, onError, className = '', style }) {
   useLayoutEffect(ensureStyles, [])
   const onSelect = choose ? (session, id) => { if (id !== null && id !== undefined) playNav('select'); choose(session, id) } : undefined // a card chosen makes a soft click
   const sceneRef = useRef(null)
@@ -277,7 +277,7 @@ export function SpaceView({ groups = [], focus = null, selected = null, inset = 
   if (failure) {
     return html`<div className=${`spv ${className}`} style=${style}><div className="spv-note"><${GlassTile}><h3>${t('space.unavailableTitle')}</h3><p>${t('space.unavailable')}</p><p style=${{ opacity: 0.6 }}>${String(failure.message ?? failure)}</p><//></div></div>`
   }
-  const handlers = { onSelect, onLeadMessage, onLeadHire, onLeadTasks }
+  const handlers = { onSelect, onLeadMessage, onLeadHire, onLeadTasks, onLeadSuggest }
   const drawn = uid => {
     const list = [...new Set([kinds[uid], ...[...leaving.current.keys()].filter(k => k.startsWith(`${uid}|`)).map(k => k.slice(uid.length + 1))].filter(Boolean))]
     return list
@@ -298,13 +298,15 @@ export function SpaceView({ groups = [], focus = null, selected = null, inset = 
           return html`<button key=${`${uid}|chip`} type="button" className=${`spv-chip${group.alive === false ? ' spv-chip--lost' : ''}`} style=${{ '--hue': STATUS_HUE[agent.isLead ? 'lead' : state] }} ref=${el => measure(`${uid}|chip`, el)} onClick=${() => onSelect?.(group.session ?? null, agent.id)}><i></i><span>${agent.nickname || agent.name}</span></button>`
         }
         const needs = `${agent.needsYou && state !== 'waiting' ? ' spv-card--needs' : ''}${group.alive === false ? ' spv-card--lost' : ''}`
-        const card = kind === 'lead' ? html`<${LeadDeck} variant="compact" ...${leadDeckProps(agent, group, handlers)} />` : html`<${AgentCard} ...${p} compact=${kind === 'compact'} orbs=${false} />`
+        const lead = kind === 'lead' ? leadDeckProps(agent, group, handlers) : null
+        const card = lead ? html`<${LeadDeck} variant="compact" ...${lead} ownNext=${false} />` : html`<${AgentCard} ...${p} compact=${kind === 'compact'} orbs=${false} />`
         const hoverable = kind === 'compact' ? { onMouseEnter: () => setHover(uid), onMouseLeave: () => setHover(h => (h === uid ? null : h)) } : {}
         const bubble = kind === kinds[uid] ? agent.bubble : undefined // on the card shown now, not on one fading out
         return html`<div key=${`${uid}|${kind}`} className=${`spv-card${kind === 'compact' ? ' spv-card--compact' : ''}${needs}${bubble ? ' spv-card--talk' : ''}`} ref=${el => measure(`${uid}|${kind}`, el)} ...${hoverable}>
           <div className="spv-measure" style=${kind === 'lead' ? { width: LEAD_WIDTH } : undefined}>${card}</div>
           ${kind === 'compact' && hover === uid ? html`<div className="spv-full"><${AgentCard} ...${p} orbs=${false} /></div>` : null}
           ${bubble ? html`<${TalkBubble} key=${bubble.key} ...${bubble} />` : null}
+          ${lead ? html`<div className="spv-next lc lc--compact"><${LeadNext} suggestions=${lead.suggestions} working=${lead.status === 'working'} onSuggest=${lead.onSuggest} /></div>` : null}
         </div>`
       }))}
     </div>

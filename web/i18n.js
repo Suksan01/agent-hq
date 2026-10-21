@@ -45,6 +45,7 @@ export const STRINGS = {
     'badge.first_task': 'First Task', 'badge.ten_tools': 'Getting Handy', 'badge.hundred_tools': 'Toolbelt Titan', 'badge.test_streak_5': 'Green Streak',
     'badge.bug_squasher': 'Bug Squasher', 'badge.reviewer_eagle': 'Reviewer Eagle', 'badge.speedy': 'Speedy', 'badge.comeback': 'Comeback',
     'talk.lead': 'Lead', 'talk.to': 'to {who}', 'talk.from': 'from {who}',
+    'next.title': 'Next steps', 'next.list': 'Suggested by the lead', 'next.use': 'Draft in Message lead: {text}', 'next.notNow': 'Not now',
     'unit.s': '{n}s', 'unit.m': '{n}m', 'unit.h': '{n}h',
   },
   th: {
@@ -87,6 +88,7 @@ export const STRINGS = {
     'badge.first_task': 'งานแรก', 'badge.ten_tools': 'เริ่มคล่องมือ', 'badge.hundred_tools': 'เจ้าแห่งเครื่องมือ', 'badge.test_streak_5': 'เทสต์ผ่านรวด',
     'badge.bug_squasher': 'นักปราบบั๊ก', 'badge.reviewer_eagle': 'ตาเหยี่ยวรีวิว', 'badge.speedy': 'ไวสุด', 'badge.comeback': 'กลับมาได้',
     'talk.lead': 'หัวหน้า', 'talk.to': 'ถึง {who}', 'talk.from': 'จาก {who}',
+    'next.title': 'ขั้นตอนถัดไป', 'next.list': 'หัวหน้าแนะนำ', 'next.use': 'ร่างในช่องคุยกับหัวหน้า: {text}', 'next.notNow': 'ไว้ทีหลัง',
     'unit.s': '{n} วิ', 'unit.m': '{n} นาที', 'unit.h': '{n} ชม.',
   },
 }

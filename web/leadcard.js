@@ -5,6 +5,8 @@
 // htm/React like spacekit.js; styles are one <style id="lc-style"> injected on first render (prefix lc-). Light comes from
 // gradients and box-shadows (no blur filters, no backdrop-filter); only a working lead moves (transform/opacity), and
 // nothing moves offscreen, in a hidden tab or under reduced motion. Props only: callbacks, nothing fetched.
+// Between the lead's turns the deck can hang its drafted next steps under it (NextSteps): pressing one hands its text to
+// `onSuggest`, which only drafts it into the Message lead box; it is model output, so it is shown as text and never sent from here.
 
 import React from './vendor/libs.js'
 import { Blob, DotNumber, Elapsed, Icon, Orb, html, statusLabel } from './spacekit.js'
@@ -26,6 +28,8 @@ const ROSTER_SHOWN = 6 // the board's crew list; the rest (sorted last: idle and
 const STEP_GLYPH = { done: '✓', now: '▸', next: '○' }
 const ORB_SIZES = [20, 32, 64] // the orb sizes the kit draws
 export const BOARD_KEY = 'agent-hq:lead-board-open'
+export const NEXT_KEY = 'agent-hq:next-dismissed' // the `at` of each set of next steps the viewer dismissed or used
+const NEXT_REMEMBERED = 20
 
 /** How many members are in each status: working, waiting (needs you), done, failed (stopped counts as failed), idle. */
 export function crewCounts(crew = []) {
@@ -61,6 +65,22 @@ function writeOpen(open) {
     localStorage.setItem(BOARD_KEY, open ? '1' : '0')
   } catch {
     // remembered for this view only
+  }
+}
+
+// the dismissed sets, per viewer; kept in memory too, so both views agree where storage is refused
+const dismissed = new Set()
+try {
+  for (const at of JSON.parse(localStorage.getItem(NEXT_KEY) ?? '[]')) dismissed.add(at)
+} catch {
+  // no storage: dismissals last for this page
+}
+function dismiss(at) {
+  dismissed.add(at)
+  try {
+    localStorage.setItem(NEXT_KEY, JSON.stringify([...dismissed].slice(-NEXT_REMEMBERED)))
+  } catch {
+    // remembered for this page only
   }
 }
 
@@ -132,6 +152,28 @@ function Live({ activity, elapsed }) {
   return html`<div className="lc-live"><span className="lc-live__cursor" aria-hidden="true">▸</span><span className="lc-live__text">${activity}</span>${elapsed === undefined ? null : html`<span className="lc-live__time"> · <${Elapsed} secs=${elapsed} /></span>`}</div>`
 }
 
+/** The lead's drafted next steps: a recap and up to three buttons, each drafting its text (`onUse`); "Not now" hides the set. */
+function NextSteps({ recap, items, onUse, onDismiss }) {
+  return html`<section className="lc-next" aria-label=${t('next.title')}>
+    <div className="lc-next__head">
+      <span className="sk-label lc-next__title">${t('next.title')}</span>
+      <button type="button" className="lc-next__dismiss" onClick=${onDismiss}>${t('next.notNow')}</button>
+    </div>
+    ${recap ? html`<p className="lc-next__recap" title=${recap}>${recap}</p>` : null}
+    <ul className="lc-next__list" aria-label=${t('next.list')}>
+      ${items.map((text, i) => html`<li key=${i}><button type="button" className="lc-next__item" aria-label=${t('next.use', { text })} title=${text} disabled=${!onUse} onClick=${() => onUse(text)}><span className="lc-next__arrow" aria-hidden="true">→</span><span className="lc-next__text">${text}</span></button></li>`)}
+    </ul>
+  </section>`
+}
+
+/** The next steps as the deck shows them: nothing while the lead works, with none, or once this set (`at`) was used or dismissed. */
+export function LeadNext({ suggestions, working, onSuggest }) {
+  const [, redraw] = useState(0)
+  if (working || !(suggestions?.items?.length > 0) || dismissed.has(suggestions.at)) return null
+  const done = () => { dismiss(suggestions.at); redraw(n => n + 1) }
+  return html`<${NextSteps} recap=${suggestions.recap} items=${suggestions.items} onDismiss=${done} onUse=${onSuggest ? text => { done(); onSuggest(text) } : undefined} />`
+}
+
 /** The mission board: the lead's plan steps and the crew, needs-you first; folds away with its chevron. */
 function Board({ plan, crew, open, onToggle, onSelect, id }) {
   const done = plan.filter(s => s.status === 'done').length
@@ -168,9 +210,12 @@ function Board({ plan, crew, open, onToggle, onSelect, id }) {
  * working|waiting|done|failed|idle|stopped. `pct` the team's progress 0–100; `says` the lead's own sentence; `activity` + `elapsed` the live line;
  * `plan`: [{ text, status: done|now|next }] for the board (or `now` / `next` alone). `state` is derived from the crew
  * (leadState) unless given. `board` false hides the board; `boardOpen` is its default before the viewer chooses.
- * Callbacks: onMessage, onHire, onTasks (opens the task board), onSelect(memberId), onOpen.
+ * `suggestions`: { recap, items, at } or null, the lead's drafted next steps, shown under the deck (not the chip) while the lead
+ * is not working, until used or dismissed (per `at`, remembered per viewer); `ownNext` false leaves them to the caller (LeadNext),
+ * as the Space view does, which hangs them outside the deck's measured box.
+ * Callbacks: onMessage, onHire, onTasks (opens the task board), onSelect(memberId), onOpen, onSuggest(text) (drafts, never sends).
  */
-export function LeadDeck({ variant = 'full', id, nickname, title = t('lead.title'), team, seed, index, status, state, pct, says, activity, elapsed, now, next, plan, crew = [], board = true, boardOpen = true, orbs = true, onMessage, onHire, onTasks, onSelect, onOpen, className }) {
+export function LeadDeck({ variant = 'full', id, nickname, title = t('lead.title'), team, seed, index, status, state, pct, says, activity, elapsed, now, next, plan, crew = [], board = true, boardOpen = true, orbs = true, suggestions, ownNext = true, onMessage, onHire, onTasks, onSelect, onOpen, onSuggest, className }) {
   ensureStyles()
   const ref = useOffscreen()
   const [open, setOpen] = useState(() => readOpen(boardOpen))
@@ -220,6 +265,7 @@ export function LeadDeck({ variant = 'full', id, nickname, title = t('lead.title
   </article>`
   return html`<div ref=${ref} className=${cx('lc', compact ? 'lc--compact' : 'lc--full', className)} data-state=${mood} data-working=${working ? '' : undefined} data-agent=${id} data-card="lead" style=${style}>
     ${deck}
+    ${ownNext ? html`<${LeadNext} suggestions=${suggestions} working=${working} onSuggest=${onSuggest} />` : null}
     ${!compact && board ? html`<${Board} plan=${steps} crew=${crew} open=${open} onToggle=${toggle} onSelect=${onSelect} id=${uid} />` : null}
   </div>`
 }
@@ -339,6 +385,26 @@ const STYLE = `
 .lc-roster__m[data-status='done'] .lc-roster__word { color: var(--st-done); }
 .lc-roster__more { padding: 2px 4px; font: 400 11px var(--sk-font-mono); color: var(--sk-text-3); }
 .lc-empty { margin: 0; font-size: 13px; color: var(--sk-text-3); }
+
+/* the lead's next steps, hung under the deck like the board (and above it); wrap and clamp, never wider than the deck */
+.lc-next { position: relative; z-index: 0; margin: -22px 0 0; padding: 34px 20px 14px; border-radius: 0 0 30px 30px; display: grid; gap: 8px;
+  background: linear-gradient(180deg, #100d22, #09080f); box-shadow: inset 0 -1px 0 rgba(255,255,255,.08), inset 0 0 0 1px rgba(185,166,255,.12), 0 24px 50px -34px var(--st-lead); }
+.lc-next:has(+ .lc-board) { padding-bottom: 36px; border-radius: 0; } /* the board hangs over its lower edge */
+.lc-next__head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.lc-next__title { color: var(--st-lead); }
+.lc-next__dismiss { all: unset; margin-left: auto; flex: none; padding: 4px 10px; border-radius: 999px; cursor: pointer; font: 500 12px var(--sk-font-title); color: var(--sk-text-2); background: rgba(255,255,255,.06); }
+.lc-next__dismiss:hover { color: var(--sk-text); background: rgba(255,255,255,.1); }
+.lc-next__recap { margin: 0; font: 400 13px/1.4 var(--sk-font-title); color: var(--sk-text-2); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+.lc-next__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; min-width: 0; }
+.lc-next__item { all: unset; box-sizing: border-box; width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; align-items: baseline; padding: 8px 12px; border-radius: 14px; cursor: pointer;
+  font: 500 13.5px/1.35 var(--sk-font-title); color: var(--sk-text); background: rgba(255,255,255,.045); box-shadow: inset 0 0 0 1px rgba(185,166,255,.18); transition: background .15s var(--sk-ease); }
+.lc-next__item:hover { background: color-mix(in srgb, var(--st-lead) 18%, transparent); }
+.lc-next__item:disabled { cursor: default; opacity: .6; }
+.lc-next__item:focus-visible, .lc-next__dismiss:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.lc-next__arrow { color: var(--st-lead); font-family: var(--sk-font-mono); }
+.lc-next__text { min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+.lc--compact .lc-next { padding: 30px 14px 12px; border-radius: 0 0 24px 24px; }
+.lc--compact .lc-next__item { padding: 6px 10px; font-size: 12.5px; }
 
 /* compact: the deck alone, stacked tighter */
 .lc--compact .lc-deck { min-height: 0; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: 'left head' 'left counts' 'says says' 'live live' 'foot foot'; gap: 8px 12px; padding: 12px 14px 14px 12px; border-radius: 64px 30px 30px 64px; }

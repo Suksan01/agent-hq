@@ -69,6 +69,9 @@ const CSS = String.raw`/* The live diagram (diagram.js): groups, connections and
 .spv-card--compact:hover, .spv-card--compact:focus-within { z-index: 40; }
 .spv-card--compact:hover .spv-full, .spv-card--compact:focus-within .spv-full { display: block; }
 .spv-card--talk { z-index: 5; }
+.spv-next { position: absolute; left: 0; top: 100%; width: 100%; } /* the lead's next steps hang under its deck, outside the measured box the slots fit */
+.spv-card:has(.lc-next) { z-index: 6; }
+.spv-next:empty { display: none; }
 .spv-card--needs .sk-agent { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 0 0 1.5px var(--st-waiting), 0 0 46px -10px var(--st-waiting); }
 .spv-chip {
   --hue: var(--st-idle);
