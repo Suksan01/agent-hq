@@ -2,7 +2,31 @@
 
 ## Unreleased
 
+### Changed
+- **Prototypes on Claude's Design canvas.** `/agent-hq:feature` builds phase 3's variants on Claude's Design canvas by
+  default: a row of boards per variant, the Recommended row on top, a private link you can share, and nothing in your
+  repo to clean up afterwards. In a live test it showed the variants in about half the time. Building them in the app
+  with HeroUI and a React Flow canvas page stays, as an opt-in for prototypes on your real stack. Phase 3 opens with
+  one question: where to build, how many variants, and whether the lead checks that every board renders before you
+  pick one.
+
 ### Fixed
+- **Team members start in auto mode.** In the desktop app, auto mode refused the mod's own start of a member, so
+  `hq_assign` and `hq_review` could start no one. Now the board task and the file scope are kept, and the tool answers
+  with the exact Agent call for the lead to make itself. While that start waits, neither `hq_assign` nor the live
+  page's **+** can take its name or replace its scope.
+- **Trusting a project team from an app's command menu.** Picking `/hq` from the command menu (the desktop app,
+  Superset) runs it before `trust` can be typed, so the team was never trusted and its member types never appeared.
+  Plain `/hq` now asks whether to trust a waiting team file ("No" first, and not again after a No). Only your own run
+  can trust: a plugin's, scheduled or relayed `/hq trust` is refused.
+- **The feature workflow's HeroUI setup checks a real page.** Setup is done only when the lead loads the prototype
+  page and a HeroUI Button renders; in a live test lint and tsc passed while every page returned 500, because
+  `.npmrc` set `legacy-peer-deps` and HeroUI's peers were never installed. The lead now checks for that and installs
+  the peers, runs the one dev server, installs only the Claude skill at versions at least two weeks old, and looks
+  for the HeroUI tools before asking for a restart.
+- **Smaller feature-workflow fixes from the same test.** The project's own spec and plan folders are used; prototype
+  routes stay out of i18n middleware and app-shell layouts; the canvas page reads a `flows/index.json` manifest; the
+  review role checks the variants before you pick; members close their own plan-progress bars.
 - **Finished agents leave the live page.** A member that completed, failed or was stopped leaves the page 2 minutes
   after it ended and is only counted in the done and failed numbers at the top; a teammate idle for more than 10
   minutes leaves too, and comes back as soon as it works again; a member whose drawer is open stays in the drawer until
