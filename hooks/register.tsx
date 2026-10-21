@@ -19,7 +19,7 @@ import { soundsOn, themeOf } from './themes'
 import { agentRoles, guardToolCall } from './guard'
 import { addTurn } from './usage'
 import { describeCall, endActivity, hasRunningCall, liveActivities, startActivity } from './activity'
-import { addAsk, buildInbox, describeAsk, removeAsk, statusText, trackWaiting } from './inbox'
+import { addAsk, buildInbox, describeAsk, dropAsksOf, removeAsk, statusText, trackWaiting } from './inbox'
 import { announceXp, createLedger, creditActivity, creditTestRun, xpStoreOf, xpSummaries } from './xpstore'
 import { ASSIGN_TOOL, HIRE_TOOL, LEAD_TOOLS_NOTE, REVIEW_TOOL, STATUS_TOOL, TOOL_SPECS, hqAssign, hqHire, hqReview, hqStatus, keepResult, textOfContent } from './tools'
 import type { ToolAnswer, ToolDeps } from './tools'
@@ -418,7 +418,7 @@ async function clearDone($: EngineInterface) {
 /** Writes the page's snapshot when it changed; the server pushes each write to open pages at once. */
 async function writeLive($: EngineInterface) {
   if (!web) return
-  const extras = { lastAction: await read($, lastAction), events: (await read($, feed)).events, inbox: await readInbox($), usage: await read($, usage) }
+  const extras = { lastAction: await read($, lastAction), events: (await read($, feed)).events, inbox: await readInbox($), usage: await read($, usage), waitingSince: await read($, waitingSince) }
   const snapshot = buildSnapshot(await readData($, 0), await $.clock.now(), await read($, liveNotice), extras)
   const { at: _at, ...content } = snapshot
   const key = JSON.stringify(content)
@@ -557,7 +557,7 @@ async function approveTeam($: EngineInterface): Promise<{ text: string }> {
 
 /** Everything waiting on the person right now (see ./inbox). */
 async function readInbox($: EngineInterface) {
-  return buildInbox(await read($, asks), await read($, agents), await read($, waitingSince))
+  return buildInbox(await read($, asks), await read($, agents), await read($, waitingSince), await $.clock.now())
 }
 
 async function syncStatus($: EngineInterface) {
@@ -787,6 +787,14 @@ export const register: Register = (on, options) => {
     await update($, usage, all => ({ ...all, [loop]: addTurn(all[loop], e) }))
       .then(() => requestLive($))
       .catch(error => $.ui.log(`Agent HQ: could not note a turn (${error instanceof Error ? error.message : String(error)})`, { to: 'debug' }))
+    // the loop's turn is over, so none of its calls waits on a dialog now: also an ask whose tool.call never reached
+    // this mod (an Agent call made through $.agent.spawn), which would otherwise wait in the inbox forever
+    if (Object.values(await read($, asks)).some(ask => ask.agent === loop)) {
+      await update($, asks, all => dropAsksOf(all, loop))
+        .then(() => syncStatus($))
+        .then(() => requestLive($))
+        .catch(() => {}) // the status and the page catch up on the next poll
+    }
     return done
   })
 

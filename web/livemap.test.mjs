@@ -61,6 +61,9 @@ test('counts exclude the lead and fold stopped into failed; the HUD names one te
   const a = session('a', 'app', [lead, agent('1'), agent('2', { status: 'waiting' }), agent('3', { status: 'completed' }), agent('4', { status: 'killed' }), agent('5', { status: 'failed' })])
   const b = session('b', 'docs', [lead, agent('6')])
   assert.deepEqual(countsOf([a]), { working: 1, waiting: 1, done: 1, failed: 2 })
+  // members that left the page after their grace are still counted, from the snapshot's `folded`
+  const folded = session('c', 'ops', [lead, agent('7', { status: 'completed' })], { folded: { done: 39, failed: 16 } })
+  assert.deepEqual(countsOf([a, folded]), { working: 1, waiting: 1, done: 41, failed: 18 })
   const one = hudOf([a], sessionNames([a, b]))
   assert.equal(one.title, 'app Team')
   assert.equal(one.folder, 'app')

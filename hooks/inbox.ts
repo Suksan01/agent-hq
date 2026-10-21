@@ -12,6 +12,8 @@ export type Asks = Record<string, Ask>
 
 const WHAT_MAX = 120
 const ASKS_MAX = 50
+/** How long an idle teammate (done with its turn) counts as needing the person; after that it is only resting. */
+export const IDLE_LIMIT_MS = 10 * 60_000
 
 const clip = (text: string) => (text.length > WHAT_MAX ? `${text.slice(0, WHAT_MAX - 1)}…` : text)
 
@@ -28,6 +30,9 @@ export function addAsk(asks: Asks, toolUseId: string, ask: Ask): Asks {
 }
 
 export const removeAsk = (asks: Asks, toolUseId: string): Asks => Object.fromEntries(Object.entries(asks).filter(([id]) => id !== toolUseId))
+
+/** The asks without any of this loop's: once its turn has ended, none of its calls can still wait on a dialog. */
+export const dropAsksOf = (asks: Asks, agent: string): Asks => Object.fromEntries(Object.entries(asks).filter(([, ask]) => ask.agent !== agent))
 
 /** The asks of agents that are still running (an agent that ended can no longer be waiting for a dialog). */
 export const liveAsks = (asks: Asks, agents: Record<string, HqAgent>): Asks =>
@@ -51,13 +56,18 @@ export function trackWaiting(since: Record<string, number>, agents: Record<strin
   )
 }
 
-/** Everything waiting on the person, longest waiting first: open permission asks, then held agents and idle teammates. */
-export function buildInbox(asks: Asks, agents: Record<string, HqAgent>, waitingSince: Record<string, number>): InboxItem[] {
+/**
+ * Everything waiting on the person at `now`, longest waiting first: open permission asks, then held agents and idle
+ * teammates (an idle one only for IDLE_LIMIT_MS: a teammate idle for hours is resting, not waiting on anyone).
+ */
+export function buildInbox(asks: Asks, agents: Record<string, HqAgent>, waitingSince: Record<string, number>, now: number): InboxItem[] {
   const fromAsks = Object.values(liveAsks(asks, agents))
   const askers = new Set(fromAsks.map(a => a.agent))
   const fromAgents = Object.values(agents).flatMap((a): InboxItem[] => {
     const what = HELD[a.status]
-    return a.id !== MAIN && what && !askers.has(a.id) ? [{ agent: a.id, since: waitingSince[a.id] ?? a.startedAt, what }] : []
+    const since = waitingSince[a.id] ?? a.startedAt
+    const isResting = a.status === 'idle' && now - since > IDLE_LIMIT_MS
+    return a.id !== MAIN && what && !askers.has(a.id) && !isResting ? [{ agent: a.id, since, what }] : []
   })
   return [...fromAsks, ...fromAgents].sort((a, b) => a.since - b.since)
 }

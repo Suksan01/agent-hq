@@ -1,7 +1,8 @@
 import { expect, test } from 'claude-code/testing'
 import type { AgentInfo } from 'claude-code'
 
-import { buildSnapshot } from '../hooks/live'
+import { FINISHED_GRACE_MS, buildSnapshot } from '../hooks/live'
+import { IDLE_LIMIT_MS } from '../hooks/inbox'
 import { MAIN, createTask, mergeAgents, updateTask } from '../hooks/model'
 import { parseTeam } from '../hooks/team'
 import type { HqData } from '../hooks/view'
@@ -59,4 +60,33 @@ test('the snapshot carries the acknowledged request id and the activity feed, em
   expect(snap.lastAction).toBe(12)
   expect(snap.events).toEqual(events)
   expect(snap.events).not.toBe(events)
+})
+
+const member = (id: string, status: AgentInfo['status'], parentId?: string): AgentInfo => ({ id, name: id, type: 'general-purpose', description: 'work', status, ...(parentId ? { parentId } : {}) })
+const dataOf = (agents: HqData['agents']): HqData => ({ agents, todos: {}, tasks: {}, now: 0, hideFinished: false, columns: 0, isLight: false, team: null })
+
+test('a member that ended more than the grace ago leaves the page and is only counted; a running helper of it hangs on the lead', () => {
+  const t0 = 1_000_000
+  const later = t0 + FINISHED_GRACE_MS + 1
+  const first = mergeAgents({}, [member('o1', 'completed'), member('f1', 'failed'), member('k1', 'killed'), member('h1', 'running', 'o1')], t0)
+  const data = dataOf(mergeAgents(first, [member('o1', 'completed'), member('f1', 'failed'), member('k1', 'killed'), member('h1', 'running', 'o1'), member('n1', 'completed')], later))
+
+  const within = buildSnapshot(data, t0 + FINISHED_GRACE_MS - 1)
+  expect(within.agents.map(a => a.id).sort()).toEqual(['f1', 'h1', 'k1', MAIN, 'n1', 'o1'].sort())
+  expect(within.folded).toEqual({ done: 0, failed: 0 })
+
+  const snap = buildSnapshot(data, later)
+  expect(snap.agents.map(a => a.id).sort()).toEqual(['h1', MAIN, 'n1'].sort()) // n1 ended just now: still shown
+  expect(snap.agents.find(a => a.id === 'h1')?.parentId).toBe(MAIN)
+  expect(snap.folded).toEqual({ done: 1, failed: 2 }) // a killed member counts as failed, as the page counts it
+})
+
+test('an idle teammate leaves the page once it has been idle past the limit; a held one stays however long', () => {
+  const data = dataOf(mergeAgents({}, [member('i1', 'idle'), member('i2', 'idle'), member('w1', 'waiting')], 0))
+  const waitingSince = { i1: 0, i2: 5000, w1: 0 }
+
+  expect(buildSnapshot(data, IDLE_LIMIT_MS, null, { waitingSince }).agents.map(a => a.id)).toContain('i1')
+  const snap = buildSnapshot(data, IDLE_LIMIT_MS + 1, null, { waitingSince })
+  expect(snap.agents.map(a => a.id).sort()).toEqual(['i2', MAIN, 'w1'].sort())
+  expect(snap.folded).toEqual({ done: 0, failed: 0 })
 })

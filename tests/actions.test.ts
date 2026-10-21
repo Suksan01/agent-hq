@@ -7,6 +7,7 @@ import type { Engine } from 'claude-code/testing'
 
 import { withApproval } from '../hooks/approval'
 import { MAIN } from '../hooks/model'
+import { FINISHED_GRACE_MS } from '../hooks/live'
 import { TEAM_FILE } from '../hooks/team'
 
 const STATE = '/home/me/.claude/agent-hq/live/sess.json'
@@ -696,6 +697,20 @@ test('/hq web run again says so when the hub cannot give a new link, instead of 
   expect(again.text).toContain('could not start its live page')
   expect(again.text).toContain('no page is running')
   expect(s.commands.filter(argv => argv[0] === 'open')).toHaveLength(1) // only the first run opened a page
+  s.finish()
+})
+
+// nothing else happens: only the clock moves, and the poll alone must rewrite the page's state (the idle limit is the same
+// path, 10 minutes of polls later: see tests/live.test.ts)
+test('with only time passing, a finished member leaves the page and is counted; a held one stays', { timeoutMs: 30_000 }, async ($, on) => {
+  const s = await liveSession($, on, { team: true, agents: [agent('d1', 'frontend-dev-1', 'completed'), agent('w1', 'qa-1', 'waiting', 'agent-hq:qa')] })
+  await s.poll()
+  expect(s.snapshot()?.agents.map(a => a.id)).toEqual(expect.arrayContaining(['d1', 'w1']))
+
+  await s.poll(FINISHED_GRACE_MS + POLL_MS)
+
+  expect(s.snapshot()?.agents.map(a => a.id).sort()).toEqual([MAIN, 'w1'])
+  expect((s.snapshot() as unknown as { folded: unknown }).folded).toEqual({ done: 1, failed: 0 })
   s.finish()
 })
 
