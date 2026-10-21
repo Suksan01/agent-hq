@@ -14,6 +14,7 @@ import { lineBuffer, parseChannelLine } from './channel'
 import { EMPTY_FEED, addEvents, statusEvents, stepEvents } from './feed'
 import type { NewEvent } from './feed'
 import { buildSnapshot } from './live'
+import { parseSuggestions, suggestPrompt } from './suggest'
 import { addBubble, bubbleText, liveBubbles, placeTalk, recipientOf, talkLine } from './talk'
 import { configureLock } from './lock'
 import { createReport, reportToast } from './report'
@@ -63,6 +64,7 @@ const results = atom({ plugin: 'agent-hq', key: 'results' } as const, {})
 const activity = atom({ plugin: 'agent-hq', key: 'activity' } as const, {})
 const says = atom({ plugin: 'agent-hq', key: 'says' } as const, {})
 const bubbles = atom({ plugin: 'agent-hq', key: 'bubbles' } as const, [])
+const suggestions = atom({ plugin: 'agent-hq', key: 'suggestions' } as const, null)
 
 /** The team.json in force: the project's, else the home folder's (for every project); null when neither exists. */
 async function findTeamFile($: EngineInterface): Promise<{ path: string; isProject: boolean } | null> {
@@ -494,7 +496,7 @@ async function clearDone($: EngineInterface) {
 /** Writes the page's snapshot when it changed; the server pushes each write to open pages at once. */
 async function writeLive($: EngineInterface) {
   if (!web) return
-  const extras = { lastAction: await read($, lastAction), events: (await read($, feed)).events, inbox: await readInbox($), usage: await read($, usage), waitingSince: await read($, waitingSince) }
+  const extras = { lastAction: await read($, lastAction), events: (await read($, feed)).events, inbox: await readInbox($), usage: await read($, usage), waitingSince: await read($, waitingSince), suggestions: await read($, suggestions) }
   const snapshot = buildSnapshot(await readData($, 0), await $.clock.now(), await read($, liveNotice), extras)
   const { at: _at, ...content } = snapshot
   const key = JSON.stringify(content)
@@ -588,6 +590,61 @@ function startWeb($: EngineInterface): Promise<string> {
     webStarting = null
   })
   return webStarting
+}
+
+// ---------- next-task suggestions on the live page (hooks/suggest.ts) ----------
+const NEXT_OFF = 'nextTasksOff' // $.store key: /hq web next off; unset means on
+let suggestFor: string | null = null // the lead's answered turn the next fork drafts for; null once its next turn started
+let isSuggesting = false // one fork at a time
+
+/**
+ * Forks the session for the lead's last answered turn, detached from the hook that asked, while the page runs and the
+ * setting is on. An answer that went stale meanwhile is dropped: a newer answered turn is forked for next, a started one
+ * gets nothing. Never throws: a failed fork is logged and leaves no suggestion.
+ */
+async function suggestNext($: EngineInterface) {
+  if (isSuggesting) return
+  isSuggesting = true
+  try {
+    while (suggestFor !== null) {
+      const turnId = suggestFor
+      // shortcut: "a page is open" is read as "this session's page server runs" (from /hq web to the session's end); the
+      // hub's page count costs a process run and mints a login code each turn. Ask it if closed tabs should stop the cost
+      if (!web || (await $.store.get(NEXT_OFF)) === true) break
+      const reply = await $.model.fork({ prompt: suggestPrompt(lang) })
+      if (suggestFor !== turnId) continue
+      suggestFor = null
+      if (!reply.isAnswered) {
+        $.ui.log(`Agent HQ: no next-task suggestions (${reply.reason})`, { to: 'debug' })
+        break
+      }
+      const parsed = parseSuggestions(reply.text)
+      if (!parsed) break
+      const at = await $.clock.now()
+      await update($, suggestions, () => ({ ...parsed, at }))
+      await requestLive($)
+    }
+  } catch (error) {
+    $.ui.log(`Agent HQ: could not suggest next tasks (${error instanceof Error ? error.message : String(error)})`, { to: 'debug' })
+  } finally {
+    isSuggesting = false
+  }
+}
+
+/** Takes the suggestions off the page, and drops the answer of a fork still running for them. */
+async function clearSuggestions($: EngineInterface) {
+  suggestFor = null
+  if ((await read($, suggestions)) === null) return
+  await update($, suggestions, () => null)
+  await requestLive($)
+}
+
+/** `/hq web next on|off`: the live page's next-task suggestions, on unless turned off; bare, which is in force. */
+async function nextCommand($: EngineInterface, word: string): Promise<{ text: string }> {
+  if (word !== '' && word !== 'on' && word !== 'off') return { text: t(lang, 'web.nextUsage') }
+  if (word !== '') await $.store.set(NEXT_OFF, word === 'off')
+  if (word === 'off') await clearSuggestions($)
+  return { text: t(lang, (await $.store.get(NEXT_OFF)) === true ? 'web.nextOff' : 'web.nextOn') }
 }
 
 /** A new one-time login link for the running page, and how many pages are open (`server.mjs --login` asks the hub). */
@@ -794,7 +851,7 @@ export const register: Register = (on, options) => {
     await $.command.register({
       name: 'hq',
       description: t(lang, 'hq.description'),
-      argumentHint: '[open|close|web|report|trust|lang]',
+      argumentHint: '[open|close|web [next on|off]|report|trust|lang]',
     })
     // shortcut: a light theme name picks the light tint; "auto" is read as dark (plan-progress also probes macOS appearance).
     const theme = (await $.config.list().catch(() => [])).find(row => row.key === 'theme')
@@ -821,6 +878,7 @@ export const register: Register = (on, options) => {
   on('command.run', { command: 'hq' }, async ($, e) => {
     const [verb, ...words] = e.args.trim().split(/\s+/)
     if (verb?.toLowerCase() === 'lang') return langCommand($, words.join(' '))
+    if (verb?.toLowerCase() === 'web' && words[0]?.toLowerCase() === 'next') return nextCommand($, (words[1] ?? '').toLowerCase())
     if (e.args.trim().toLowerCase() === 'report') return runReport($)
     if (e.args.trim().toLowerCase() === 'trust') return trustCommand($, e.origin)
     if (e.args.trim().toLowerCase() === 'web') {
@@ -1022,6 +1080,11 @@ export const register: Register = (on, options) => {
   // what each agent used: the engine reports tokens and time at the end of every turn (no price, so no cost)
   on('turn.complete', async ($, e, next) => {
     const done = await next(e)
+    // the lead answered: next-task suggestions are drafted beside the turn's end, never in its way
+    if (e.agentId === undefined && e.reason === 'answer') {
+      suggestFor = e.turnId
+      void suggestNext($)
+    }
     const loop = e.agentId ?? MAIN
     await update($, usage, all => ({ ...all, [loop]: addTurn(all[loop], e) }))
       .then(() => requestLive($))
@@ -1050,6 +1113,13 @@ export const register: Register = (on, options) => {
         .catch(() => {}) // the status and the page catch up on the next poll
     }
     return done
+  })
+
+  // the lead's next turn starts: the suggestions drafted after its last one are spent
+  on('turn.start', async ($, e, next) => {
+    const started = await next(e)
+    if (e.agentId === undefined) await clearSuggestions($).catch(error => $.ui.log(`Agent HQ: could not clear the suggestions (${error instanceof Error ? error.message : String(error)})`, { to: 'debug' }))
+    return started
   })
 
   // a call the engine puts to the person (a permission dialog) waits in the inbox until its tool.call ends

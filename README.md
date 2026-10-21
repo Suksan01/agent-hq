@@ -21,9 +21,10 @@ A Claude Code mod for building and watching orchestrated agent teams.
 Open the sidebar with `/hq`. In the sidebar, `h` hides finished items, `c` clears them, and clicking an agent's name
 opens its transcript.
 
-Commands: `/hq` (sidebar), `/hq web` (live page), `/hq report` (session report), `/hq trust` (use a project's team
-file), `/hq lang thai|english` (language). Skills: `/agent-hq:team`, `/agent-hq:feature`, `/agent-hq:standup`,
-`/agent-hq:retro`, `/agent-hq:handoff`, and `agent-hq:self-evaluation`, which every team member carries.
+Commands: `/hq` (sidebar), `/hq web` (live page), `/hq web next on|off` (the page's next-task suggestions),
+`/hq report` (session report), `/hq trust` (use a project's team file), `/hq lang thai|english` (language). Skills:
+`/agent-hq:team`, `/agent-hq:feature`, `/agent-hq:standup`, `/agent-hq:retro`, `/agent-hq:handoff`, and
+`agent-hq:self-evaluation`, which every team member carries.
 
 ### English or Thai
 
@@ -271,6 +272,12 @@ What the page shows:
 - **Actions**:
   - **+** adds an agent of a role you pick, with a task for it.
   - **Message lead** sends a prompt to the main session. It runs once Claude is free.
+  - **Next tasks.** After each of the lead's answered turns the page offers a short recap and up to three tasks you
+    could send it next, in your language; a press drafts one into the Message lead box for you to edit and send (it
+    is never sent by itself). They go when the lead's next turn starts. On by default; `/hq web next off` turns them
+    off, `/hq web next on` back on. **Cost:** one forked model call per lead turn while the page's server runs (from
+    `/hq web` until the session ends, even with the tab closed). The fork reuses the session's own transcript, so it
+    shares the session's prompt cache and pays mostly for its short reply.
   - Click an agent to message it, or to stop it (asks you to confirm).
   - **Hide done**, **Show done** and **Clear done** manage finished agents and tasks.
 - **Finished agents leave by themselves.** A member that completed, failed or was stopped leaves the page 2 minutes
@@ -401,6 +408,9 @@ What it does with that:
   state, the same names, statuses and progress the sidebar shows, to `~/.claude/agent-hq/live/<session id>.json`
   whenever it changes, and the hub keeps `hub.json` (its port, process id and a secret) in the same folder, readable
   by you only. Files of sessions that ended are deleted after 24 hours.
+- While the live page runs and next tasks are on: after each of the lead's answered turns, forks the session once
+  (`$.model.fork`, no tools) for a recap and up to three next tasks, and writes them, masked and cut short, into the
+  page's state.
 - Only when you ask for it from the live page, and only then: submits your text as a prompt to the lead, sends your
   text as a message to an agent, stops an agent with Claude's own TaskStop tool (its permission rules apply), or
   starts an agent of a role with your task. Nothing else runs from the page.
