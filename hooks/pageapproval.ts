@@ -6,6 +6,20 @@
 import { maskSecrets } from './secrets'
 import type { Lang } from './i18n'
 
+// Page approvals ship in 0.8.0; in 0.7.0 nothing is ever held and /hq web approvals turns nothing on. Why: hub.json in
+// ~/.claude/agent-hq/live is readable by any agent's Read tool and the login cookie derives from its secret, so a
+// prompt-injected agent with Read and a local request could log in and approve its own ask. 0.8.0 hardens that first.
+export const APPROVALS_RELEASED = false
+/**
+ * Test-only seam: a test session with exactly this id runs as if released, so the 0.8.0 wiring tests keep running. The
+ * engine mints every real session id as a UUID (`--session-id` takes only a UUID), so no session, agent, option, env
+ * or store can reach it; the test file's own copy of this module is not the one the engine loads, so a flag would not.
+ */
+export const APPROVALS_TEST_SESSION = 'agent-hq-0.8.0-approvals-test'
+
+/** Are page approvals in force for this session: never in 0.7.0, but in the 0.8.0 wiring tests. */
+export const isApprovalsReleased = (sessionId: string) => APPROVALS_RELEASED || sessionId === APPROVALS_TEST_SESSION
+
 export const APPROVAL_MS = 60_000 // how long the page offers the card
 export const LINK_NOTICE_MS = 60_000 // a login link's notice: the longest a toast may stay (the link works two minutes)
 export const HELPER_TIMEOUT_MS = 65_000 // the helper is killed past this: its own wait and a margin
