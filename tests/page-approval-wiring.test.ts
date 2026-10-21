@@ -12,8 +12,9 @@ const PAGES = '/home/me/.claude/agent-hq/live/pages.json'
 const MEMBER: AgentInfo = { id: 'a1', name: 'dev-1', type: 'general-purpose', description: 'x', status: 'running' }
 type Run = { argv: readonly string[]; init?: { stdin?: string; timeoutMs?: number } }
 type Helper = { stdout: string; exitCode?: number } | 'rejects' | 'waits'
-type Verdict = { decision: 'allow' | 'ask' | 'deny'; reason?: string }
-type Box = { verdict: Verdict; pages: string | null; helper: Helper; release: () => void }
+type Verdict = { decision: 'allow' | 'ask' | 'deny'; reason?: string; setting?: string; hook?: string; decider?: 'host' }
+type Box = { verdict: Verdict; pages: string | null; helper: Helper; release: () => void; login: string; opens: boolean; answer: string | null }
+type Origin = { kind: string; name?: string }
 
 type Boot = { approvals?: boolean; web?: boolean; mode?: string | null }
 
@@ -22,8 +23,18 @@ async function boot($: Engine, on: On, options: Boot = {}) {
   const stored: Record<string, unknown> = { languageAsked: true }
   const runs: Run[] = []
   const toasts: string[] = []
+  const toastTimes: (number | undefined)[] = []
   const logs: string[] = []
-  const box: Box = { verdict: { decision: 'ask', reason: 'needs a look' }, pages: JSON.stringify({ count: 1, at: 1 }), helper: { stdout: 'allow\n' }, release: () => {} }
+  const asked: string[] = []
+  const box: Box = {
+    verdict: { decision: 'ask', reason: 'needs a look' },
+    pages: JSON.stringify({ count: 1, at: 1 }),
+    helper: { stdout: 'allow\n' },
+    release: () => {},
+    login: 'AGENT_HQ_PAGES 0\nAGENT_HQ_URL http://127.0.0.1:4321/?c=fresh\n',
+    opens: true,
+    answer: null,
+  }
   on('store.get', (_, e) => ({ value: stored[e.key] }))
   on('store.set', (_, e) => {
     stored[e.key] = e.value
@@ -35,8 +46,11 @@ async function boot($: Engine, on: On, options: Boot = {}) {
   on('fs.exists', () => ({ value: false }))
   on('fs.read', (_, e) => (e.path === PAGES ? (box.pages === null ? { deny: 'ENOENT: no such file' } : { value: box.pages }) : { value: '' }) as never)
   on('fs.write', () => ({ value: undefined }))
+  const ran = (exitCode: number, stdout: string) => ({ value: { exitCode, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } })
   on('process.run', async (_, e) => {
-    if (!e.argv[1]?.endsWith('/web/approve.mjs')) return { value: { exitCode: 0, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+    if (e.argv[0] === 'open' || e.argv[0] === 'xdg-open') return ran(box.opens ? 0 : 1, '')
+    if (e.argv.includes('--login')) return ran(0, box.login)
+    if (!e.argv[1]?.endsWith('/web/approve.mjs')) return ran(0, '')
     runs.push({ argv: e.argv, init: e.init })
     const helper = box.helper
     if (helper === 'rejects') return { deny: 'the child was killed' } as never
@@ -45,7 +59,7 @@ async function boot($: Engine, on: On, options: Boot = {}) {
     return { value: { exitCode: done.exitCode ?? 0, stdout: done.stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
   })
   on('process.spawn', async function* () {
-    yield { stream: 'stdout' as const, text: 'AGENT_HQ_URL http://127.0.0.1:4321\n' }
+    yield { stream: 'stdout' as const, text: 'AGENT_HQ_URL http://127.0.0.1:4321/?c=first\n' }
     await new Promise(() => {})
     return { value: { code: 0, signal: null } }
   })
@@ -53,7 +67,16 @@ async function boot($: Engine, on: On, options: Boot = {}) {
   on('tool.check', () => box.verdict)
   on('ui.toast', (_, e) => {
     toasts.push(e.text)
+    toastTimes.push(e.timeoutMs)
     return { value: undefined } as never
+  })
+  // the engine's own dialog ($.ui.ask) is an AskUserQuestion call: box.answer is what the person picks (null dismisses)
+  on('tool.call', async (_, e) => {
+    if ((e.tool as string) !== 'AskUserQuestion') return { result: {} as never }
+    const questions = (e as unknown as { questions: { question: string }[] }).questions
+    asked.push(questions[0]?.question ?? '')
+    if (box.answer === null) throw new Error('dismissed')
+    return { result: { questions, answers: { [questions[0]?.question ?? '']: box.answer } } } as never
   })
   on('ui.log', (_, e) => {
     logs.push(e.text)
@@ -66,7 +89,7 @@ async function boot($: Engine, on: On, options: Boot = {}) {
   on('classic.PostToolUseFailure', () => ({}))
   on('session.start', (_, e) => e)
   await $.session.start({ cwd: '/work/app', surface: null, isInteractive: false } as never)
-  const command = async (args: string) => ((await $.command.run({ command: 'hq', args, origin: { kind: 'composer' }, presentation: {} } as never)) as { text: string }).text
+  const command = async (args: string, origin: Origin = { kind: 'composer' }) => ((await $.command.run({ command: 'hq', args, origin, presentation: {} } as never)) as { text: string }).text
   if (options.web !== false) await command('web')
   if (options.approvals !== false) await command('web approvals on')
   const prompt = (mode: string, agentId?: string) =>
@@ -77,7 +100,7 @@ async function boot($: Engine, on: On, options: Boot = {}) {
   await clock.settle()
   const check = (input: Record<string, unknown> = {}) =>
     $.tool.check({ tool: 'Bash', input: { command: 'rm -rf build' }, tool_use_id: 'u1', ...input } as never) as Promise<Verdict & Record<string, unknown>>
-  return { box, check, clock, command, logs, prompt, runs, stored, toasts }
+  return { asked, box, check, clock, command, logs, prompt, runs, stored, toasts, toastTimes }
 }
 
 const ASKED = { decision: 'ask', reason: 'needs a look' }
@@ -89,8 +112,29 @@ test("an ask is held while the page asks; the person's Allow allows, with the re
   const [run] = s.runs
   expect(run?.argv).toEqual(['node', expect.stringMatching(/\/web\/approve\.mjs$/), '--state', ROOT_STATE])
   expect(run?.init?.timeoutMs).toBe(HELPER_TIMEOUT_MS)
-  expect(JSON.parse(run?.init?.stdin ?? '')).toEqual({ id: 'u1', agent: expect.any(String), role: null, tool: 'Bash', input: { command: 'rm -rf build' }, cwd: '/work/app', lang: 'en', at: expect.any(Number), timeoutMs: APPROVAL_MS })
+  expect(JSON.parse(run?.init?.stdin ?? '')).toEqual({ id: 'u1', agent: expect.any(String), role: null, tool: 'Bash', input: { command: 'rm -rf build' }, reason: 'needs a look', setting: null, hook: null, cwd: '/work/app', lang: 'en', at: expect.any(Number), timeoutMs: APPROVAL_MS })
   expect(s.toasts).toContain('Agent HQ: waiting for your answer on the live page (up to 60 s). Esc cancels.')
+  expect(s.toastTimes[s.toasts.indexOf('Agent HQ: waiting for your answer on the live page (up to 60 s). Esc cancels.')]).toBe(APPROVAL_MS)
+})
+
+test('the card says why the engine asked: the reason, masked, and the setting or hook behind it', async ($, on) => {
+  const s = await boot($, on)
+  s.box.verdict = { decision: 'ask', reason: 'curl -H "Authorization: Bearer abcdef123456" needs a look', hook: 'PreToolUse', setting: 'permissions.blockReadsOutsideWorkingDirectories' }
+  expect((await s.check()).decision).toBe('allow')
+  const sent = JSON.parse(s.runs[0]?.init?.stdin ?? '')
+  expect(sent.reason).toBe('curl -H "Authorization: Bearer *** needs a look')
+  expect(sent.hook).toBe('PreToolUse')
+  expect(sent.setting).toBe('permissions.blockReadsOutsideWorkingDirectories')
+  s.box.verdict = { decision: 'ask' }
+  expect((await s.check({ tool_use_id: 'u2' })).decision).toBe('allow')
+  expect(JSON.parse(s.runs[1]?.init?.stdin ?? '')).toMatchObject({ reason: null, hook: null, setting: null })
+})
+
+test('an ask a host answers (decider host: an SDK or -p permission callback, a served call) is never held', async ($, on) => {
+  const s = await boot($, on)
+  s.box.verdict = { decision: 'ask', reason: 'needs a look', decider: 'host' }
+  expect(await s.check()).toEqual({ decision: 'ask', reason: 'needs a look', decider: 'host' })
+  expect(s.runs).toEqual([])
 })
 
 test("the person's Deny denies", async ($, on) => {
@@ -150,10 +194,12 @@ test('a query (no tool_use_id), AskUserQuestion, ExitPlanMode, a ceiling, a secr
     { ceiling: 'ask' },
     { input: { command: 'deploy --token=abc123def456' } },
     { input: { command: 'x'.repeat(21 * 1024) } },
+    { input: { command: 'x'.repeat(19 * 1024) }, reasonSize: 2 * 1024 },
   ]
-  for (const change of cases) {
-    const { decision, reason } = await s.check(change) // the engine stamps its ceiling on every verdict
-    expect([change, { decision, reason }]).toEqual([change, ASKED])
+  for (const { reasonSize, ...change } of cases as (Record<string, unknown> & { reasonSize?: number })[]) {
+    s.box.verdict = { decision: 'ask', reason: reasonSize ? 'r'.repeat(reasonSize) : 'needs a look' } // a long reason counts in the cap
+    const { decision } = await s.check(change) // the engine stamps its ceiling on every verdict
+    expect([change, decision]).toEqual([change, 'ask'])
   }
   expect(s.runs).toEqual([])
 })
@@ -199,6 +245,53 @@ test('/hq web approvals on|off in English: stored, default off, a bare one says 
   expect(await s.command('web approvals off')).toBe('Agent HQ: permission asks go to the usual dialog only. Turn page approvals on with /hq web approvals on.')
   expect(s.stored.pageApprovals).toBe(false)
   expect(await s.command('web approvals please')).toBe('Agent HQ: use /hq web approvals on or /hq web approvals off.')
+})
+
+test('only the person turns approvals on: a plugin, a schedule or another session cannot; off and the status are open to all', async ($, on) => {
+  const s = await boot($, on, { approvals: false })
+  for (const origin of [{ kind: 'plugin', name: 'other' }, { kind: 'scheduled-trigger' }, { kind: 'peer' }]) {
+    expect([origin.kind, await s.command('web approvals on', origin)]).toEqual([origin.kind, expect.stringContaining('only you can turn page approvals on')])
+  }
+  expect(s.stored.pageApprovals).toBeUndefined()
+  expect(await s.command('web approvals on', { kind: 'bridge' })).toContain('permission asks go to it first')
+  expect(await s.command('web approvals', { kind: 'plugin', name: 'other' })).toContain('permission asks go to it first')
+  expect(await s.command('web approvals off', { kind: 'plugin', name: 'other' })).toContain('usual dialog only')
+  expect(s.stored.pageApprovals).toBe(false)
+})
+
+test('a run the engine cannot attest turns approvals on only through the dialog, No first; a No or a dismissal keeps them off', async ($, on) => {
+  const s = await boot($, on, { approvals: false })
+  s.box.answer = 'No'
+  expect(await s.command('web approvals on', { kind: 'unclassified' })).toContain('usual dialog only')
+  s.box.answer = null
+  expect(await s.command('web approvals on', { kind: 'unclassified' })).toContain('usual dialog only')
+  expect(s.stored.pageApprovals).toBeUndefined()
+  s.box.answer = 'Yes, turn them on'
+  expect(await s.command('web approvals on', { kind: 'auto-continuation' })).toContain('permission asks go to it first')
+  expect(s.stored.pageApprovals).toBe(true)
+  expect(s.asked.length).toBe(3)
+  expect(s.asked[0]).toContain('Turn on page approvals?')
+})
+
+test('with approvals on, no /hq web reply carries a login link: it shows in a notice only', async ($, on) => {
+  const s = await boot($, on, { web: false })
+  s.box.opens = false
+  const running = await s.command('web') // first run, the browser could not be opened
+  s.box.login = 'AGENT_HQ_PAGES 1\nAGENT_HQ_URL http://127.0.0.1:4321/?c=second\n'
+  const already = await s.command('web') // a page is open
+  s.box.login = 'AGENT_HQ_PAGES 0\nAGENT_HQ_URL http://127.0.0.1:4321/?c=third\n'
+  s.box.opens = true
+  const opened = await s.command('web')
+  for (const reply of [running, already, opened]) expect([reply, reply.includes('?c=')]).toEqual([reply, false])
+  expect(running).toContain('the link is in the notice')
+  expect(already).toContain('the link is in the notice')
+  expect(s.toasts.filter(text => text.includes('?c=')).length).toBe(2)
+})
+
+test('with approvals off, /hq web still says the link in its reply', async ($, on) => {
+  const s = await boot($, on, { web: false, approvals: false })
+  s.box.opens = false
+  expect(await s.command('web')).toContain('?c=')
 })
 
 test('in Thai: the command replies, the toast and the request say Thai', { options: { language: 'thai' } }, async ($, on) => {
