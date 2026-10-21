@@ -15,7 +15,7 @@ import { EMPTY_FEED, addEvents, statusEvents, stepEvents } from './feed'
 import type { NewEvent } from './feed'
 import { buildSnapshot } from './live'
 import { parseSuggestions, suggestPrompt } from './suggest'
-import { ALLOWED, APPROVAL_MS, DENIED, HELPER_TIMEOUT_MS, LINK_NOTICE_MS, answerOf, approvalRequest, canHold, pageCount } from './pageapproval'
+import { ALLOWED, APPROVAL_MS, DENIED, HELPER_TIMEOUT_MS, LINK_NOTICE_MS, answerOf, approvalRequest, canHold, isApprovalsReleased, pageCount } from './pageapproval'
 import { maskSecrets } from './secrets'
 import { addBubble, bubbleText, liveBubbles, placeTalk, recipientOf, talkLine } from './talk'
 import { configureLock } from './lock'
@@ -601,7 +601,11 @@ const NEXT_TASKS: Setting = { key: 'nextTasks', isDefaultOn: true, on: 'web.next
 const PAGE_APPROVALS: Setting = { key: 'pageApprovals', isDefaultOn: false, on: 'web.approvalsOn', off: 'web.approvalsOff', usage: 'web.approvalsUsage' }
 const WEB_SETTINGS: Readonly<Record<string, Setting>> = { next: NEXT_TASKS, approvals: PAGE_APPROVALS } // /hq web <word> [on|off]
 
+/** Page approvals ship in 0.8.0 (hooks/pageapproval.ts): until then, never in force. */
+const areApprovalsReleased = async ($: EngineInterface) => isApprovalsReleased(await $.session.id().catch(() => ''))
+
 async function isSettingOn($: EngineInterface, setting: Setting): Promise<boolean> {
+  if (setting === PAGE_APPROVALS && !(await areApprovalsReleased($))) return false
   const stored = await $.store.get(setting.key)
   return typeof stored === 'boolean' ? stored : setting.isDefaultOn
 }
@@ -685,6 +689,7 @@ async function askOnPage<V extends Verdict>($: EngineInterface, e: Ask, verdict:
   if (verdict.decision !== 'ask' || isApprovalOpen) return verdict
   isApprovalOpen = true // taken before the first await, so a second ask meanwhile goes to the dialog
   try {
+    if (!(await areApprovalsReleased($))) return verdict
     const loop = e.agentId ?? MAIN
     const reason = verdict.reason ? maskSecrets(verdict.reason) : undefined
     const facts = {
@@ -955,7 +960,7 @@ export const register: Register = (on, options) => {
     await $.command.register({
       name: 'hq',
       description: t(lang, 'hq.description'),
-      argumentHint: '[open|close|web [next|approvals on|off]|report|trust|lang]',
+      argumentHint: '[open|close|web [next on|off]|report|trust|lang]',
     })
     // shortcut: a light theme name picks the light tint; "auto" is read as dark (plan-progress also probes macOS appearance).
     const theme = (await $.config.list().catch(() => [])).find(row => row.key === 'theme')
@@ -983,6 +988,7 @@ export const register: Register = (on, options) => {
     const [verb, ...words] = e.args.trim().split(/\s+/)
     if (verb?.toLowerCase() === 'lang') return langCommand($, words.join(' '))
     const setting = verb?.toLowerCase() === 'web' ? WEB_SETTINGS[words[0]?.toLowerCase() ?? ''] : undefined
+    if (setting === PAGE_APPROVALS && !(await areApprovalsReleased($))) return { text: t(lang, 'web.approvalsComing') }
     if (setting) {
       const word = (words[1] ?? '').toLowerCase()
       if (setting === PAGE_APPROVALS && word === 'on' && !PERSON_ORIGINS.has(e.origin.kind)) return approvalsOnFrom($, e.origin)

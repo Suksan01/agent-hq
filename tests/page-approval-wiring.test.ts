@@ -5,9 +5,11 @@ import { expect, mock, test } from 'claude-code/testing'
 import type { AgentInfo, On } from 'claude-code'
 import type { Engine } from 'claude-code/testing'
 
-import { ALLOWED, APPROVAL_MS, DENIED, HELPER_TIMEOUT_MS } from '../hooks/pageapproval'
+import { ALLOWED, APPROVALS_TEST_SESSION, APPROVAL_MS, DENIED, HELPER_TIMEOUT_MS } from '../hooks/pageapproval'
 
-const ROOT_STATE = '/home/me/.claude/agent-hq/live/sess.json'
+// these tests are for 0.8.0, where page approvals ship: a session with the test-only id runs as if released
+
+const ROOT_STATE = `/home/me/.claude/agent-hq/live/${APPROVALS_TEST_SESSION}.json`
 const PAGES = '/home/me/.claude/agent-hq/live/pages.json'
 const MEMBER: AgentInfo = { id: 'a1', name: 'dev-1', type: 'general-purpose', description: 'x', status: 'running' }
 type Run = { argv: readonly string[]; init?: { stdin?: string; timeoutMs?: number } }
@@ -42,7 +44,7 @@ async function boot($: Engine, on: On, options: Boot = {}) {
   })
   on('env.get', () => ({ value: '/home/me' }))
   on('session.cwd', () => ({ value: '/work/app' }))
-  on('session.id', () => ({ value: 'sess' }))
+  on('session.id', () => ({ value: APPROVALS_TEST_SESSION }))
   on('fs.exists', () => ({ value: false }))
   on('fs.read', (_, e) => (e.path === PAGES ? (box.pages === null ? { deny: 'ENOENT: no such file' } : { value: box.pages }) : { value: '' }) as never)
   on('fs.write', () => ({ value: undefined }))
