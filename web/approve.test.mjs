@@ -39,11 +39,14 @@ function call(port, { method = 'GET', path = '/', body, headers = {} } = {}) {
   })
 }
 
-/** A session server (it is the hub) in a temp dir, logged in: { port, cookie, statePath, dir, stop }. */
-async function startHub(t) {
+// approvals are dormant in 0.7.0: a hub serves them only when started with AGENT_HQ_APPROVALS=1 (as these tests do)
+const ON = { AGENT_HQ_APPROVALS: '1' }
+
+/** A session server (it is the hub) in a temp dir, logged in: { port, cookie, statePath, dir, stop }. `env` is added to its environment (approvals on by default). */
+async function startHub(t, env = ON) {
   const dir = mkdtempSync(join(tmpdir(), 'agent-hq-approve-'))
   const statePath = join(dir, 'sess1.json')
-  const child = spawn(process.execPath, [SERVER, '--state', statePath, '--port', '0'], { stdio: ['ignore', 'pipe', 'pipe'] })
+  const child = spawn(process.execPath, [SERVER, '--state', statePath, '--port', '0'], { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, AGENT_HQ_APPROVALS: '', ...env } })
   t.after(() => { child.kill('SIGKILL'); rmSync(dir, { recursive: true, force: true }) })
   let out = ''
   child.stdout.setEncoding('utf8')
@@ -124,6 +127,26 @@ test('the hourly tidy never takes pages.json for the state file of a session nam
     utimesSync(join(dir, name), new Date(0), new Date(0))
   }
   assert.deepEqual(cleanLiveDir(dir, { isRegistered: () => false, olderThanMs: 1000 }), ['old.json'])
+})
+
+test('dormant by default: without AGENT_HQ_APPROVALS=1 the hub serves no approval (404s, the helper says ask, no SSE event)', async t => {
+  for (const off of [{}, { AGENT_HQ_APPROVALS: '0' }, { AGENT_HQ_APPROVALS: 'true' }]) {
+    const hub = await startHub(t, off)
+    const stream = openEvents(hub)
+    t.after(stream.close)
+    await sleep(100)
+    const run = helper(hub, ask())
+    assert.equal(await run.exited, 0)
+    assert.equal(run.out, 'ask\n', `the helper falls back to the dialog (${JSON.stringify(off)})`)
+    const info = JSON.parse(readFileSync(join(hub.dir, 'hub.json'), 'utf8'))
+    const direct = await call(hub.port, { method: 'POST', path: '/hub/approval', body: JSON.stringify({ ...ask(), session: 'sess1' }), headers: { 'content-type': 'application/json', 'x-hq-secret': info.secret } })
+    assert.equal(direct.status, 404, 'POST /hub/approval is not there')
+    assert.equal((await answer(hub, 'toolu_01ABC', { token: '0'.repeat(32), decision: 'allow' })).status, 404, 'POST /approval/<id> is not there')
+    await sleep(200)
+    assert.deepEqual(stream.named, [], 'no approval event reached the page')
+    const path = join(hub.dir, 'pages.json')
+    assert.equal(JSON.parse(readFileSync(path, 'utf8')).count, 1, 'pages.json is still kept')
+  }
 })
 
 // ---- the helper and the hub ---------------------------------------------------------------------------------------------
@@ -307,7 +330,7 @@ const { STRINGS } = await import('./i18n.js')
 async function openPage(t, { lang, ...browserOptions } = {}) {
   const world = newWorld(t)
   const alphaMake = () => ({ ...buildSnapshot({ team: 'Alpha Team' }), ...(lang ? { lang } : {}) })
-  const { alpha } = await twoSessions(world, [alphaMake, 'Beta Team'])
+  const { alpha } = await twoSessions(world, [alphaMake, 'Beta Team'], { env: ON })
   const page = await launchBrowser(world, browserOptions)
   await page.open(alpha.url)
   await until(async () => (await page.eval('location.pathname')) === '/' && (await page.eval(`document.querySelectorAll('.lc-deck').length === 2`)), slow(25_000), 'the page')
