@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.7.0 (2026-10-21)
+
+### Added
+- **Next-step suggestions on the live page.** After each of the lead's turns, while a live page is open, Agent HQ
+  asks for a short recap and up to three things you could ask next, in your language, and shows them on the lead's
+  deck. Pressing one puts its text in the Message lead box (คุยกับหัวหน้า) for you to edit and send; it never sends
+  by itself. "Not now" hides a set. It costs one short forked call per lead turn while a page is open (it shares the
+  session's cache); `/hq web next off` turns it off.
+
+### Changed
+- **Answering permission asks on the live page comes in the next release.** It is built, but ships switched off:
+  `/hq web approvals` says so, and the page server serves no approvals. It waits until the page's login can no
+  longer be derived from a file other programs on your machine can read.
+
 ## 0.6.0 (2026-10-21)
 
 ### Added
