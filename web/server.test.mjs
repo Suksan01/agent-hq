@@ -28,7 +28,17 @@ async function until(check, ms = 5000, what = 'condition') {
 
 const tempDir = t => {
   const dir = mkdtempSync(join(tmpdir(), 'agent-hq-web-'))
-  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  // a hub not yet killed may still write pages.json as its pages close: try again for a while
+  t.after(async () => {
+    for (let tries = 0; ; tries++) {
+      try {
+        return rmSync(dir, { recursive: true, force: true })
+      } catch (error) {
+        if (tries >= 20) throw error
+        await sleep(100)
+      }
+    }
+  })
   return dir
 }
 

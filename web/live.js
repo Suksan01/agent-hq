@@ -11,6 +11,7 @@ import { useLazySpace } from './lazyspace.js'
 import { addRequest, attentionOf, boardSections, drawerOf, feedItems, groupsOf, hudOf, inboxItems, keyOf, pctOf } from './livemap.js'
 import { feedRows } from './feed.js'
 import { TaskBoardTile } from './panels.js'
+import { ApprovalCard } from './approval.js'
 import { post, useLive, useStored } from './livestate.js'
 import { pauseOffscreen } from './motion.js'
 import { langOf, setLang, t } from './i18n.js'
@@ -206,6 +207,7 @@ function App() {
         <${IconButton} icon="plus" label=${t('add.title')} primary onClick=${() => setAdding(true)} />
       <//>
     </div>
+    ${live.approval ? html`<${ApprovalCard} key=${live.approval.id} approval=${live.approval} onAnswer=${live.answer} />` : null}
     <${ToastStack}>${live.toasts.map(t => html`<${Toast} key=${t.id} status=${t.status} onClose=${() => live.dismiss(t.id)}>${t.text}<//>`)}<//>
     ${adding ? html`<${AddAgentDialog} sessions=${list.filter(s => s.alive).map(s => ({ key: keyOf(s), label: names.get(s.session)?.chip ?? s.label }))} initialSession=${typeof adding === 'string' ? adding : keyOf(current)}
       roles=${Object.fromEntries(list.map(s => [keyOf(s), s.snapshot.roles]))} onClose=${() => setAdding(false)}

@@ -51,8 +51,16 @@ export async function post(action, target) {
   return { ok: false, text: t('post.offline') }
 }
 
+/** The person's answer to the open approval: 'ok', 'gone' (answered elsewhere, withdrawn or timed out) or 'failed'. */
+export async function answerApproval(approval, decision) {
+  const res = await fetch(`/approval/${encodeURIComponent(approval.id)}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: approval.token, decision }) }).catch(() => null)
+  if (res?.ok) return 'ok'
+  return res?.status === 404 || res?.status === 409 ? 'gone' : 'failed'
+}
+
 export function useLive() {
   const [sessions, setSessions] = useState(null) // as last pushed; null until the first push
+  const [approval, setApproval] = useState(null) // the permission ask the hub holds for the person, if any (one at a time)
   const [online, setOnline] = useState(false)
   const [loginLost, setLoginLost] = useState(false)
   const [toasts, setToasts] = useState([])
@@ -85,6 +93,11 @@ export function useLive() {
         receivedAt.current = Date.now()
         setSessions(next)
       } catch { /* a half-written push: the next one fixes it */ }
+    },
+    onOpen: () => setApproval(null), // the hub sends the open one again right after
+    named: {
+      approval: event => { try { setApproval(JSON.parse(event.data)) } catch { /* a broken push: the terminal still asks */ } },
+      'approval-withdrawn': event => { try { const { id } = JSON.parse(event.data); setApproval(a => (a?.id === id ? null : a)) } catch { /* ignored */ } },
     },
     onError: reason => {
       setOnline(false)
@@ -145,5 +158,13 @@ export function useLive() {
     nav: (kind, move) => { if (soundOn) { wakeAudio(); playNav(kind, { ctx: audio ?? undefined, muted: !soundOn, ...move }) } },
   }), [soundOn, setSoundOn])
 
-  return { sessions, online, loginLost, clockOf, toasts, toast, dismiss, markers, sound }
+  const answer = useCallback(async decision => {
+    if (!approval) return
+    const result = await answerApproval(approval, decision)
+    if (result === 'failed') return toast(false, t('approval.failed'))
+    setApproval(a => (a?.id === approval.id ? null : a))
+    if (result === 'gone') toast(false, t('approval.gone'))
+  }, [approval, toast])
+
+  return { sessions, online, loginLost, clockOf, toasts, toast, dismiss, markers, sound, approval, answer }
 }
