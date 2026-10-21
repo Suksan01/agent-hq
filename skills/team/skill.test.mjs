@@ -11,12 +11,14 @@ test('UI roles get a rule to look HeroUI components up with its MCP server, and 
   assert.match(skill, /mcp__heroui-react__get_component_docs/) // full names: the guard matches tools exactly, no wildcards
   assert.doesNotMatch(skill, /mcp__heroui-react__\*/)
   assert.match(skill, /claude mcp add heroui-react/)
+  assert.match(skill, /ToolSearch[^.]*restart/) // the MCP tools can load at once; restart only when they did not
 })
 
 test('UI roles list the official HeroUI skill when it is installed', () => {
   assert.match(skill, /`heroui-react`/)
   assert.match(skill, /`heroui-native`/)
-  assert.match(skill, /npx skills add heroui-inc\/heroui/)
+  assert.match(skill, /npx skills add heroui-inc\/heroui --skill heroui-react -a claude-code/) // the Claude skill only
+  assert.match(skill, /opt-in for in-app prototypes/) // the feature skill's default is the Design canvas
 })
 
 test('the Team Assistant can write the spec and plan files, and only those', () => {

@@ -315,11 +315,12 @@ The lead gets a **title**, **rules** (how it plans, assigns, reviews and reports
 
 ### UI roles and HeroUI
 
-A role that builds or designs UI (a frontend, UI or prototype role) works with HeroUI v3, the default for prototypes in
-`/agent-hq:feature`:
+A role that builds or designs UI (a frontend, UI or prototype role) works with HeroUI v3, the
+opt-in for in-app prototypes in `/agent-hq:feature`:
 - **skills**: add the official HeroUI skill when this session lists it, `heroui-react` for web and `heroui-native` for
-  React Native. When it is missing, offer to install it (`npx skills add heroui-inc/heroui`) and only on the person's
-  yes.
+  React Native. When it is missing, offer to install it, the Claude skill only
+  (`npx skills add heroui-inc/heroui --skill heroui-react -a claude-code`, `--skill heroui-native` for React Native),
+  and only on the person's yes.
 - **rules**: add "Look up every HeroUI component with the HeroUI MCP (`list_components`, `get_component_docs`,
   `get_theme_variables`) or the `heroui-react` skill before using it; never write HeroUI code from memory, and never
   the v2 setup."
@@ -327,7 +328,8 @@ A role that builds or designs UI (a frontend, UI or prototype role) works with H
   matches names exactly: `mcp__heroui-react__list_components`, `mcp__heroui-react__get_component_docs`,
   `mcp__heroui-react__get_component_source_code`, `mcp__heroui-react__get_component_source_styles`,
   `mcp__heroui-react__get_theme_variables` and `mcp__heroui-react__get_docs` (for React Native, the `mcp__heroui-native__` tools as `/mcp` lists them). When the session has no HeroUI MCP server, tell the person it is added with
-  `claude mcp add heroui-react -- npx -y @heroui/react-mcp@latest` and a restart.
+  `claude mcp add heroui-react -- npx -y @heroui/react-mcp@latest`; then check with ToolSearch whether its tools loaded,
+  and ask for a restart only if not.
 
 ### Where no installed skill fits
 
