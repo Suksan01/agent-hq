@@ -37,6 +37,22 @@
   "getting started" in the pill, and the words are no longer repeated beside the bar.
 
 ### Fixed
+- **Finished agents leave the live page.** A member that completed, failed or was stopped leaves the page 2 minutes
+  after it ended and is only counted in the done and failed numbers at the top; a teammate idle for more than 10
+  minutes leaves too, and comes back as soon as it works again; a member whose drawer is open stays in the drawer until
+  you close it. Before, every agent a session ever ran stayed as a card for the whole session (57 on one team).
+- **"Needs you" empties.** An idle teammate counts as needing you for its first 10 minutes only; an agent held on an
+  approval and an open permission dialog still count however long they wait. A permission ask now also leaves the
+  inbox when its agent's turn ends: the Agent calls `hq_assign` makes were asked about but never reached the mod as a
+  tool call, so their asks stayed in "needs you" for good.
+- **`/hq web` opens no second tab.** It asks the hub how many pages are open and opens a tab only when none is: one
+  page shows every session, so each `/hq web` (in this or another session) used to add a tab that cost memory. With a
+  page open it says so and gives a fresh link for another browser.
+- **Agents close the browser tabs they open.** The lead's and every member's prompt now say to close each browser tab
+  or window they open to check their work: agents checking pages in your own browser left them open (one team: 42
+  tabs opened, 6 closed).
+- **The browser tests close a Chrome whose start failed.** A headless Chrome that started but could not be connected
+  to was only killed when the test process exited, and never if that process was killed.
 - **The feature workflow can run as written.** From a review of #3: the Team Assistant can now save the spec and plan
   (it was read-only); parallel members share the checkout, since `hq_assign` has no worktree option; QA's failing
   tests have their own files and are committed before the developer starts; the canvas stays until the finish compares
