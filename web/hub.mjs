@@ -2,7 +2,8 @@
 // session's state into one stream, and forwards the page's requests to the session they are for. Runs inside whichever
 // session server won the election (see server.mjs). Session servers talk to it on /hub/* with the registry secret.
 // It also holds the page approvals (approvals.mjs): web/approve.mjs waits on POST /hub/approval, the pages get SSE `approval`
-// and `approval-withdrawn` events and answer on POST /approval/<id>. And it keeps `pages.json` ({ count, at }: the pages open,
+// and `approval-withdrawn` events and answer on POST /approval/<id>. Dormant unless `config.approvals` (AGENT_HQ_APPROVALS=1
+// in the hub's environment): then both routes are 404, so the helper says `ask`, and no approval ever reaches a page. And it keeps `pages.json` ({ count, at }: the pages open,
 // each showing every session) in the live directory beside the state files, rewritten whenever a page connects or leaves and
 // when the hub starts, for the mod to read.
 // No dependencies.
@@ -203,7 +204,7 @@ export function createHub({ liveDir, webDir, secret, config }) {
       // with the open page count: /hq web opens no tab while one shows the page (it shows every session)
       return json(res, 200, { code: mintCode(), pages: clients.size })
     }
-    if (pathname === '/hub/approval' && req.method === 'POST') return holdApproval(req, res)
+    if (pathname === '/hub/approval' && req.method === 'POST' && config.approvals) return holdApproval(req, res)
     if (pathname === '/hub/register' && req.method === 'POST') {
       return readJson(req, res, info => {
         const problem = register(info)
@@ -287,7 +288,7 @@ export function createHub({ liveDir, webDir, secret, config }) {
       res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }).end(envelope())
     } else if (url.pathname === '/action' && req.method === 'POST') {
       takeAction(req, res)
-    } else if (url.pathname.startsWith('/approval/') && req.method === 'POST' && APPROVAL_ID.test(url.pathname.slice('/approval/'.length))) {
+    } else if (config.approvals && url.pathname.startsWith('/approval/') && req.method === 'POST' && APPROVAL_ID.test(url.pathname.slice('/approval/'.length))) {
       answerApproval(req, res, url.pathname.slice('/approval/'.length))
     } else if (url.pathname === '/events') {
       if (clients.size >= config.maxClients) return plain(res, 429, 'too many pages are open')

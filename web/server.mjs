@@ -50,6 +50,8 @@ const config = {
   maxClients: numberFrom('AGENT_HQ_MAX_CLIENTS', 20), // pages open on the hub at once: more are refused with 429
   staleMs: numberFrom('AGENT_HQ_STALE_MS', 24 * 3600_000), // files of sessions that ended are deleted after this long
   cleanupDelayMs: numberFrom('AGENT_HQ_CLEANUP_DELAY_MS', 30_000), // the first tidy waits for live sessions to register
+  // page approvals ship dormant in 0.7.0 (hardened for 0.8.0): only a hub started with AGENT_HQ_APPROVALS=1 serves them
+  approvals: process.env.AGENT_HQ_APPROVALS === '1',
 }
 const HEARTBEAT_MS = numberFrom('AGENT_HQ_HEARTBEAT_MS', 2000) // register with the hub, or take over from a dead one
 const REPRINT_MS = 2000 // unacknowledged actions are printed again this often
