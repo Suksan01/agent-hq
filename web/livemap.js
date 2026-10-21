@@ -4,6 +4,7 @@
 
 import { inboxOf } from './feed.js'
 import { levelOf, timelineOf } from './drawer.js'
+import { t } from './i18n.js'
 
 /** The engine's statuses as the six states of the look. */
 const STATUS_OF = { running: 'working', pending: 'working', waiting: 'waiting', idle: 'idle', completed: 'done', failed: 'failed', killed: 'stopped' }
@@ -48,6 +49,7 @@ export function groupsOf(sessions, names, clockOf = () => 0) {
   return sessions.map(s => {
     const n = names.get(s.session) ?? { team: s.label, folder: s.label, tag: '' }
     const clock = clockOf(s.session)
+    const talk = talkOf(s.snapshot)
     const agents = [...s.snapshot.agents].sort((a, b) => Number(b.isMain) - Number(a.isMain) || a.id.localeCompare(b.id)).map(a => {
       const status = agentStatus(a)
       const needsYou = waiting.has(`${keyOf(s)}|${a.id}`)
@@ -64,6 +66,8 @@ export function groupsOf(sessions, names, clockOf = () => 0) {
         now: a.now || undefined,
         next: a.next || undefined,
         activity: a.activity?.text || undefined, // the cards draw the ▸ themselves
+        says: a.says || undefined,
+        bubble: bubbleOf(talk.get(a.id), s.snapshot.agents, clock),
         elapsed: status === 'working' && a.activity?.since ? Math.max(0, Math.round((clock - a.activity.since) / 1000)) : undefined,
         seed: a.id,
         index: index++,
@@ -76,6 +80,24 @@ export function groupsOf(sessions, names, clockOf = () => 0) {
     const tidy = shown.map(m => (m.parentId && !ids.has(m.parentId) ? { ...m, parentId: leadId } : m))
     return { session: s.session, team: n.flag ?? n.team, folder: n.sub || n.folder, tag: n.tag, alive: s.alive, agents: tidy }
   })
+}
+
+/** The snapshot's talk bubbles by the card they sit on; the mod keeps one per card, and should two come, the newer one is kept. */
+function talkOf(snapshot) {
+  const talk = new Map()
+  for (const b of Array.isArray(snapshot.bubbles) ? snapshot.bubbles : []) {
+    if (typeof b?.text !== 'string' || (talk.get(b.agent)?.at ?? -Infinity) > b.at) continue
+    talk.set(b.agent, b)
+  }
+  return talk
+}
+
+/** One bubble as the card draws it: the other party by name ("Lead" for the lead), its direction and how old it is (for its fade). */
+function bubbleOf(b, agents, clock) {
+  if (!b) return undefined
+  const other = agents.find(a => a.id === b.other)
+  const who = b.other === 'main' || other?.isMain ? t('talk.lead') : other ? other.nickname || other.name : String(b.other)
+  return { key: `${b.at}|${b.other}`, dir: b.dir === 'from' ? 'from' : 'to', who, text: b.text, age: Math.max(0, clock - b.at) }
 }
 
 /** The members' counts by state (the lead is not counted; stopped counts as failed), over the sessions shown, with those that left the page (`folded`). */
@@ -91,7 +113,7 @@ export function hudOf(shown, names) {
   const n = one ? names.get(one.session) : null
   const overall = shown.reduce((p, s) => ({ done: p.done + s.snapshot.overall.done, total: p.total + s.snapshot.overall.total }), { done: 0, total: 0 })
   return {
-    title: one ? n?.flag ?? one.label : `${shown.length} systems`,
+    title: one ? n?.flag ?? one.label : t('hud.systems', { n: shown.length }),
     folder: one ? n?.sub || undefined : shown.map(s => names.get(s.session)?.flag ?? s.label).join(' · '),
     counts: countsOf(shown),
     pct: pctOf(overall),
@@ -101,7 +123,7 @@ export function hudOf(shown, names) {
 
 const elapsedText = ms => {
   const s = Math.max(0, Math.round(ms / 1000))
-  return s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m` : `${Math.floor(s / 3600)}h`
+  return s < 60 ? t('unit.s', { n: s }) : s < 3600 ? t('unit.m', { n: Math.floor(s / 60) }) : t('unit.h', { n: Math.floor(s / 3600) })
 }
 export { elapsedText }
 
@@ -119,11 +141,14 @@ export function feedItems(rows, clockOf, isMulti, nameOf) {
     })
 }
 
+const APPROVAL = 'Needs approval' // what feed.js inboxOf says when the mod names no ask
+
 /** The inbox tile's items: every agent waiting, on any session; `uid` is `session|agent`. */
 export function inboxItems(sessions, names, isMulti, clockOf = () => 0) {
   return sessions.flatMap(s => inboxOf(s.snapshot).flatMap(item => {
     const agent = s.snapshot.agents.find(a => a.id === item.agent)
-    return agent ? [{ who: agent.nickname || agent.name, role: agent.role, ask: `${item.text}${isMulti ? ` · ${names.get(s.session)?.prefix ?? s.label}` : ''}`, command: item.text !== 'Needs approval' ? item.text : undefined, uid: `${keyOf(s)}|${agent.id}`, session: s.session, agent: agent.id, since: item.since, waited: item.since ? Math.max(0, Math.round((clockOf(s.session) - item.since) / 1000)) : undefined }] : []
+    const text = item.text === APPROVAL ? t('inbox.needsApproval') : item.text // the page's own words for a plain permission prompt
+    return agent ? [{ who: agent.nickname || agent.name, role: agent.role, ask: `${text}${isMulti ? ` · ${names.get(s.session)?.prefix ?? s.label}` : ''}`, command: item.text !== APPROVAL ? item.text : undefined, uid: `${keyOf(s)}|${agent.id}`, session: s.session, agent: agent.id, since: item.since, waited: item.since ? Math.max(0, Math.round((clockOf(s.session) - item.since) / 1000)) : undefined }] : []
   }))
 }
 
@@ -156,11 +181,12 @@ export function drawerOf(agent, session, clock, index = 0, team) {
     index,
     lead: Boolean(agent.isMain),
     pct: progressOf(agent),
+    says: agent.says || undefined,
     activity: agent.activity?.text || undefined,
     elapsed: status === 'working' && agent.activity?.since ? Math.max(0, Math.round((clock - agent.activity.since) / 1000)) : undefined,
     now: agent.now || undefined,
     next: agent.next || undefined,
-    stats: [['Tools', agent.tools], minutes >= 60 ? ['Time', Math.floor(minutes / 60), 'h'] : ['Time', minutes, 'm'], ...(agent.lastTool ? [['Last', agent.lastTool]] : [])],
+    stats: [[t('stat.tools'), agent.tools], minutes >= 60 ? [t('stat.time'), Math.floor(minutes / 60), t('unit.h', { n: '' })] : [t('stat.time'), minutes, t('unit.m', { n: '' })], ...(agent.lastTool ? [[t('stat.last'), agent.lastTool]] : [])],
     level: level?.level,
     xp: level?.into,
     xpNext: level?.need,

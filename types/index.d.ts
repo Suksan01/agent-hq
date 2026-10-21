@@ -53,6 +53,12 @@ export type HqAssignment = { role: string; name: string; task: string; paths?: s
 /** What an agent is doing now (hooks/activity.ts): a short safe line for its tool call, from `since`; `endedAt` once the call ended. */
 export type HqActivity = { text: string; since: number; callId: string; endedAt?: number }
 
+/** What an agent said it is doing (hq_doing, see hooks/says.ts), when, and the step in progress it was said for. */
+export type HqSays = { text: string; at: number; step?: string }
+
+/** A talk bubble over a card (hooks/talk.ts): on `agent`'s card, to (`to`) or from (`from`) `other` (`main` for the lead), when. */
+export type HqBubble = { agent: string; other: string; dir: 'to' | 'from'; text: string; at: number }
+
 /** A team: the lead the main session plays, and the roles it hands work to. */
 export type HqTeam = {
   name: string
@@ -98,8 +104,12 @@ declare module 'claude-code' {
       results: Record<string, string>
       /** Each agent's current (or last) tool call as a short line, by agent id (see hooks/activity.ts). */
       activity: Record<string, HqActivity>
+      /** What each agent said it is doing (hq_doing), by agent id (see hooks/says.ts). */
+      says: Record<string, HqSays>
+      /** The talk bubbles showing now, oldest first: one per card, at most four, each for six seconds (see hooks/talk.ts). */
+      bubbles: HqBubble[]
       /** The activity feed on the live page (see hooks/feed.ts). */
-      feed: { next: number; events: { n: number; at: number; agent: string; kind: 'tool' | 'step' | 'status' | 'message' | 'action'; text: string }[] }
+      feed: { next: number; events: { n: number; at: number; agent: string; kind: 'tool' | 'step' | 'status' | 'message' | 'action'; text: string; failed?: boolean }[] }
     }
   }
 }

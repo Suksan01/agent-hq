@@ -68,3 +68,14 @@ test('the inbox is what the mod sends, or else every agent waiting for approval'
   assert.deepEqual(inboxOf({ agents, inbox: [] }), [], 'an empty inbox from the mod is believed')
   assert.deepEqual(inboxOf({}), [])
 })
+
+test('in Thai the "caught up" row is Thai', async () => {
+  const { setLang } = await import('./i18n.js')
+  try {
+    setLang('th')
+    const trimmed = events(300, 500)
+    assert.equal(catchUpRow('s', 'web', arrivals(10, trimmed), trimmed, false).text, '… ตามทัน 490 เหตุการณ์ (289 รายการเก่าเกินจะแสดง)')
+  } finally {
+    setLang('en')
+  }
+})

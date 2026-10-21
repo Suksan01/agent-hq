@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.6.0 (2026-10-21)
+
+### Added
+- **Thai or English.** Agent HQ asks once which language to use (in a terminal session, when the desktop app joins,
+  or on your first plain `/hq`), and `/hq lang thai|english` or `/config` changes it. The sidebar, band, status line,
+  toasts, command replies, dialogs, session report and the live page all speak it, in Thai from a glossary you
+  reviewed. The lead and every member speak it to you and write the files you read (specs, plans, reports, team
+  texts) in it; code, commands, paths and commits stay English, and so do the skills' ids and status words. Thai shows
+  as Thai in the terminal sidebar (it used to turn into "·") and is never cut inside a letter and its marks.
+- **What each agent is doing now, the lead too.** A new `hq_doing` tool lets the lead and every member say what it is
+  doing in one short sentence ("กำลังทำ API เก่าและแก้ปัญหาที่เจอ"). Without one, the line comes from the step in
+  progress, the assignment, or for the lead "Waiting for 3 of 4 members". It is line 2 of each sidebar row, the band's
+  activity line, and a line on every live-page card, the lead's deck included.
+- **Talk bubbles.** When agents message each other or the lead, hand work back, are given work or finish, a short
+  bubble ("← หัวหน้า: แก้ปัญหาของ API เก่า") floats over that agent's card on the live page and takes its third sidebar
+  line for 6 seconds. One per card, at most four at once; your own messages make none, and a spawn's prompt never
+  shows.
+
+### Changed
+- **Sidebar rows.** Line 2 is the agent's sentence; while a call runs, a member's line 3 is its live tool line
+  instead of its task (the lead keeps its crew count there).
+
+### Fixed
+- **The rule guard no longer fails open.** If the guard could not finish (an error, or running out of time), Claude
+  Code skipped it and ran the tool, so a read-only member's edit could go through. A member's call the guard could not
+  judge is now refused, and recording a refusal can never undo it.
+- **Secrets stay masked** in everything Agent HQ shows you: status sentences, bubbles, the activity feed, todo and
+  task text, the live tool line and the session report. Keys and tokens (GitHub, GitLab, AWS, Anthropic, Stripe,
+  Slack, Google, npm), passwords, JWTs and credentials in URLs are shown as `***`; file paths and code names are not.
+  The task an `hq_assign` gives was shown unmasked in the feed before.
+- **`hq_hire` makes a reviewer read-only by its role id too,** not only by an English title, so a Thai title keeps it
+  read-only.
+- A double space after a band track's glyph, and a live-page browser test that failed under load.
+
 ## 0.5.0 (2026-10-21)
 
 ### Changed

@@ -45,6 +45,7 @@ const CSS = String.raw`/* The live diagram (diagram.js): groups, connections and
 /* cards */
 .dg-node { position: absolute; }
 .dg-node--lead { z-index: 3; }
+.dg-node--talk { z-index: 5; } /* its bubble stands over the cards around it */
 .dg-measure { width: max-content; }
 .dg-full { display: none; position: absolute; left: 0; top: 0; z-index: 30; }
 .dg-node--compact:hover, .dg-node--compact:focus-within { z-index: 40; }
@@ -67,6 +68,7 @@ const CSS = String.raw`/* The live diagram (diagram.js): groups, connections and
 .spv-card--compact .spv-full { display: none; position: absolute; left: 0; top: 0; z-index: 30; }
 .spv-card--compact:hover, .spv-card--compact:focus-within { z-index: 40; }
 .spv-card--compact:hover .spv-full, .spv-card--compact:focus-within .spv-full { display: block; }
+.spv-card--talk { z-index: 5; }
 .spv-card--needs .sk-agent { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 0 0 1.5px var(--st-waiting), 0 0 46px -10px var(--st-waiting); }
 .spv-chip {
   --hue: var(--st-idle);

@@ -25,7 +25,7 @@ async function boot($: Engine, on: On) {
   const listed: AgentInfo[] = []
   const board: Record<string, unknown>[] = []
   mock.clock(on)
-  mock.store(on, { approvedTeams: withApproval([], PROJECT_FILE, TEAM) })
+  mock.store(on, { approvedTeams: withApproval([], PROJECT_FILE, TEAM), languageAsked: true })
   on('env.get', () => ({ value: '/home/me' }))
   on('session.cwd', () => ({ value: '/work/app' }))
   on('session.id', () => ({ value: 'sess' }))
@@ -77,12 +77,12 @@ async function boot($: Engine, on: On) {
   return { race, dialog, registered, written, get agentRegistrations() { return agentRegistrations }, spawns, board, call, compose: () => $.prompt.compose({ model: 'm', promptModel: 'm', surfaces: [], tools: [], outputStyle: null, traits: [] } as never) }
 }
 
-test('the three team tools are offered at session start and named in the lead prompt', async ($, on) => {
+test('the team tools and hq_doing are offered at session start and named in the lead prompt', async ($, on) => {
   const s = await boot($, on)
 
-  expect(s.registered.map(t => t.name)).toEqual(['hq_assign', 'hq_status', 'hq_hire', 'hq_review'])
+  expect(s.registered.map(t => t.name)).toEqual(['hq_assign', 'hq_status', 'hq_hire', 'hq_review', 'hq_doing'])
   const lead = (await s.compose()).sections.find(x => x.id === 'agent-hq:team')?.text ?? ''
-  for (const tool of ['mcp__agent-hq__hq_assign', 'mcp__agent-hq__hq_status', 'mcp__agent-hq__hq_review', 'mcp__agent-hq__hq_hire']) expect(lead).toContain(tool)
+  for (const tool of ['mcp__agent-hq__hq_assign', 'mcp__agent-hq__hq_status', 'mcp__agent-hq__hq_review', 'mcp__agent-hq__hq_hire', 'mcp__agent-hq__hq_doing']) expect(lead).toContain(tool)
 })
 
 test('hq_assign through a tool call starts the agent and puts it on the board; hq_status then lists it', async ($, on) => {

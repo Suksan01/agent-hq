@@ -26,7 +26,8 @@ async function boot($: Engine, on: On, options: { file?: string; text?: string; 
   const writes: string[] = []
   mock.clock(on)
   // the plugin's store, kept here so a test can read what the plugin recorded
-  const stored: Record<string, unknown> = { ...(options.approved === undefined ? {} : { approvedTeams: options.approved }), ...(options.migrated ? { homeTeamTrustMigrated: true } : {}) }
+  // the language was chosen already: its question is not what these dialogs are about
+  const stored: Record<string, unknown> = { languageAsked: true, ...(options.approved === undefined ? {} : { approvedTeams: options.approved }), ...(options.migrated ? { homeTeamTrustMigrated: true } : {}) }
   on('store.get', (_, e) => ({ value: stored[e.key] }))
   on('store.set', (_, e) => {
     stored[e.key] = e.value

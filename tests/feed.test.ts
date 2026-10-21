@@ -22,6 +22,23 @@ test('addEvents numbers events from where the feed left off and never changes th
   expect(addEvents(two, 30, [])).toBe(two)
 })
 
+test('addEvents flags every event failed or not, so the page never reads the words to tell', () => {
+  const feed = addEvents(EMPTY_FEED, 10, [
+    { agent: 'a', kind: 'action', text: 'ไม่อนุญาต Edit: x', failed: true },
+    { agent: 'a', kind: 'action', text: 'finished agents hidden' },
+  ])
+  expect(feed.events.map(e => e.failed)).toEqual([true, false])
+})
+
+test('addEvents masks secrets in whatever text an event carries (a task, a step, a reason)', () => {
+  const feed = addEvents(EMPTY_FEED, 10, [
+    { agent: 'a', kind: 'action', text: 'assigned Peter (dev-1): Deploy with --password hunter2now and token=abc12345' },
+    { agent: 'a', kind: 'step', text: 'done: Push with glpat-xYz12AbCdEfGhIjKlMn' },
+    { agent: 'a', kind: 'step', text: 'done: Fix the token refresh logic' },
+  ])
+  expect(feed.events.map(e => e.text)).toEqual(['assigned Peter (dev-1): Deploy with --password *** and token=***', 'done: Push with ***', 'done: Fix the token refresh logic'])
+})
+
 test('addEvents keeps the newest 200 and n keeps rising across the cut', () => {
   let feed = EMPTY_FEED
   for (let i = 0; i < FEED_MAX + 25; i++) feed = addEvents(feed, i, [{ agent: 'a', kind: 'tool', text: `t${i}` }])

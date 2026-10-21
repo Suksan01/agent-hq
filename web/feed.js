@@ -1,6 +1,8 @@
-// The activity feed's logic, with no DOM and no imports so `node --test` can check it. A session's snapshot carries its last
+// The activity feed's logic, with no DOM (only the page's words, i18n.js) so `node --test` can check it. A session's snapshot carries its last
 // 200 events, oldest first, numbered by `n` (which only rises); the page shows them newest first, and says so when it
 // missed some, so no gap is hidden.
+
+import { t } from './i18n.js'
 
 export const GLYPH = { tool: '▸', step: '✓', status: '●', message: '✉', action: '⚑' }
 
@@ -22,9 +24,9 @@ export function arrivals(prevN, events) {
 /** The "caught up" row for a push, when the page reconnected or some events fell out of the list; otherwise nothing. */
 export function catchUpRow(session, label, seen, events, reconnected) {
   if (seen.jumped <= 0 || !(reconnected || seen.lost > 0)) return null
-  const old = seen.lost > 0 ? ` (${seen.lost} too old to show)` : ''
+  const old = seen.lost > 0 ? ` ${t('feed.tooOld', { n: seen.lost })}` : ''
   const at = events.length > 0 ? events[events.length - 1].at : 0
-  return { key: `${session ?? ''}#caught-up-${seen.maxN}`, session, label, n: seen.maxN + 0.5, at, marker: true, text: `… caught up ${seen.jumped} event${seen.jumped === 1 ? '' : 's'}${old}` }
+  return { key: `${session ?? ''}#caught-up-${seen.maxN}`, session, label, n: seen.maxN + 0.5, at, marker: true, text: `${t(seen.jumped === 1 ? 'feed.caughtUpOne' : 'feed.caughtUp', { n: seen.jumped })}${old}` }
 }
 
 /** Events of the sessions shown (and the caught-up rows), newest first, with the agent each is about; at most `limit`. */

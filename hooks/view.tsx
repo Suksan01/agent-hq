@@ -1,14 +1,18 @@
 import type { Elements, RenderElement } from 'claude-code'
 
-import type { HqActivity, HqAgent, HqAssignment, HqStatus, HqTask, HqTaskStatus, HqTeam, HqTodo } from '../types'
+import type { HqActivity, HqAgent, HqAssignment, HqBubble, HqSays, HqStatus, HqTask, HqTaskStatus, HqTeam, HqTodo } from '../types'
 import { roleTitle } from './team'
-import { LEAD_COLOR, TONE_GLYPH, TRACK_PX, cellText, fit, spriteCells, tonesFor, trackCells, trackSvg } from './cells'
+import { LEAD_COLOR, TONE_GLYPH, TRACK_PX, fitText, hasThai, spriteCells, textWidth, tonesFor, trackCells, trackSvg } from './cells'
 import { SMALL_H, SMALL_W, SPRITE_H, SPRITE_W, paletteOf, speciesOf, spriteFrames } from './sprites'
 import type { Tone, TrackSpec } from './cells'
 import { MAIN, agentWork, elapsed, isFinished, isWorking, overallProgress, progressOf, teamTree, workingCount } from './model'
 import { currentActivity } from './activity'
+import { sayingOf } from './says'
+import { talkLine } from './talk'
 import type { AgentWork, Progress } from './model'
 import type { XpSummary } from './xpstore'
+import { t } from './i18n'
+import type { Lang } from './i18n'
 
 type Els = Pick<Elements['terminal'], 'Box' | 'Text' | 'Button'>
 type DrawRaster = (key: string) => RenderElement | null
@@ -35,6 +39,12 @@ export type HqData = {
   assignments?: Record<string, HqAssignment>
   /** The surface draws its own text (desktop, vscode, mobile): no Rasters, a proportional font, rows as tall as what they hold. */
   isAppDrawn?: boolean
+  /** The person's language (the `language` option); English when left out. */
+  lang?: Lang
+  /** What each agent said it is doing (hq_doing), by agent id (hooks/says.ts). */
+  says?: Record<string, HqSays>
+  /** The talk bubbles showing now, one per agent at most (hooks/talk.ts). */
+  bubbles?: HqBubble[]
 }
 
 // the section's own spacing around its title: a space each side and the dot and aside between
@@ -45,32 +55,32 @@ const MIN_FOLDER = 3 // columns a folder name needs to be worth showing
 export const folderOf = (path: string) => path.split(/[\\/]/).filter(Boolean).at(-1) ?? ''
 
 /** "BOOKING APP TEAM · app" in `room` columns: the team name first, the folder giving way (cut, then dropped) before the name is. */
-export function teamHeading(team: HqTeam | null, project: string | undefined, room: number): string {
-  const name = team ? team.name.toUpperCase() : 'TEAM'
-  if (!project) return fit(name, room)
+export function teamHeading(team: HqTeam | null, project: string | undefined, room: number, lang: Lang = 'en'): string {
+  const name = team ? team.name.toUpperCase() : t(lang, 'team.heading')
+  if (!project) return fitText(name, room)
   const full = `${name} · ${project}`
   if (width(full) <= room) return full
   const folderRoom = room - width(name) - 3
-  return folderRoom >= MIN_FOLDER ? `${name} · ${fit(project, folderRoom)}` : fit(name, room)
+  return folderRoom >= MIN_FOLDER ? `${name} · ${fitText(project, folderRoom)}` : fitText(name, room)
 }
 
 /** How a row is named in the tree: main is the team's lead when there is a team; members show their role's title. */
-export function labelOf(agent: HqAgent, team: HqTeam | null): { name: string; role: string } {
+export function labelOf(agent: HqAgent, team: HqTeam | null, lang: Lang = 'en'): { name: string; role: string } {
   if (agent.id !== MAIN) return { name: agent.name, role: roleTitle(team, agent.role) }
-  return team ? { name: team.lead.title, role: 'lead' } : { name: agent.name, role: agent.role }
+  return team ? { name: team.lead.title, role: t(lang, 'role.lead') } : { name: agent.name, role: agent.role }
 }
 
 const MIN_NAME = 6 // the real name is how the person addresses an agent: it stays readable down to this many columns
 const MIN_ROLE = 4
-const width = (s: string) => [...cellText(s)].length
+const width = textWidth
 
 /** Real name, then role, after a nickname, in `room` columns counting the space before each: the role gives way first, then the name. */
 export function nameAndRole(name: string, role: string, room: number): { name: string; role: string } {
   const roleRoom = room - 1 - width(name) - 1
   if (roleRoom >= width(role)) return { name, role }
-  if (roleRoom >= MIN_ROLE) return { name, role: fit(role, roleRoom) }
+  if (roleRoom >= MIN_ROLE) return { name, role: fitText(role, roleRoom) }
   if (room - 1 >= width(name)) return { name, role: '' }
-  return { name: room - 1 >= MIN_NAME ? fit(name, room - 1) : '', role: '' }
+  return { name: room - 1 >= MIN_NAME ? fitText(name, room - 1) : '', role: '' }
 }
 
 /**
@@ -80,10 +90,10 @@ export function nameAndRole(name: string, role: string, room: number): { name: s
 export function titleParts(agent: HqAgent, label: { name: string; role: string }, room: number): { head: string; tail: string } {
   if (agent.nickname === undefined) {
     const left = room - width(label.name) - 1
-    return { head: label.name, tail: left >= MIN_ROLE ? ` ${fit(label.role, left)}` : '' }
+    return { head: label.name, tail: left >= MIN_ROLE ? ` ${fitText(label.role, left)}` : '' }
   }
   const left = room - width(agent.nickname)
-  if (agent.id === MAIN) return { head: agent.nickname, tail: left >= MIN_NAME ? ` · ${fit(label.name, left - 3)}` : '' }
+  if (agent.id === MAIN) return { head: agent.nickname, tail: left >= MIN_NAME ? ` · ${fitText(label.name, left - 3)}` : '' }
   const { name, role } = nameAndRole(label.name, label.role, left)
   return { head: agent.nickname, tail: `${name ? ` ${name}` : ''}${role ? ` ${role}` : ''}` }
 }
@@ -104,8 +114,48 @@ export type HqActions = {
 
 export type BandActions = { onOpenSidebar: () => void; onHide: () => void }
 
-/** A drawing in cells; a track also carries its spec, which a surface without Rasters draws as an Svg (textTrack). */
-export type Raster = { key: string; columns: number; rows: number; cells: string; spec?: TrackSpec }
+/**
+ * A drawing in cells; a track also carries its spec, which a surface without Rasters draws as an Svg (textTrack), and the
+ * words that left its pill (`aside`), drawn in a Text beside it.
+ */
+export type Raster = { key: string; columns: number; rows: number; cells: string; spec?: TrackSpec; aside?: string }
+
+const ASIDE_SHARE = 0.4 // the words beside a track take at most this share of its width
+const MIN_TRACK = 6
+
+/**
+ * Thai never goes in a Raster cell (a mark has no column of its own, and the engine refuses the whole tree): in Thai, or
+ * for Thai words, the pill keeps its count and glyph and the words go beside the track, which gives up their room.
+ */
+function besideTrack(spec: TrackSpec, W: number, lang: Lang): { spec: TrackSpec; W: number; aside?: string } {
+  const isLabelOut = spec.label !== '' && (lang !== 'en' || hasThai(spec.label))
+  const isCountOut = hasThai(spec.count)
+  if (!isLabelOut && !isCountOut) return { spec, W }
+  const words = [isLabelOut ? spec.label : '', isCountOut ? spec.count : ''].filter(Boolean).join(' ')
+  const aside = fitText(words, Math.max(1, Math.min(Math.floor(W * ASIDE_SHARE), W - MIN_TRACK - 1)))
+  const kept = { ...spec, label: isLabelOut ? '' : spec.label, count: isCountOut ? '' : spec.count }
+  return { spec: kept, W: Math.max(MIN_TRACK, W - width(aside) - 1), aside }
+}
+
+/** A track's Raster (its spec kept for an Svg), its words beside it where they left the pill. */
+function trackRaster(key: string, spec: TrackSpec, W: number, lang: Lang, draw: (spec: TrackSpec, W: number) => string): Raster {
+  const placed = besideTrack(spec, W, lang)
+  return { key, columns: placed.W, rows: 1, cells: draw(placed.spec, placed.W), spec: placed.spec, ...(placed.aside ? { aside: placed.aside } : {}) }
+}
+
+/** A drawn track, with the words that left its pill in a Text beside it. */
+export function withAside(els: Els, r: Raster, track: RenderElement): RenderElement {
+  if (!r.aside) return track
+  const { Box, Text } = els
+  return (
+    <Box key={`${r.key}-aside`} flexDirection="row" gap={1}>
+      {track}
+      <Text dimColor wrap="truncate-end">
+        {r.aside}
+      </Text>
+    </Box>
+  )
+}
 
 // ---------- tones, shared by band and sidebar ----------
 
@@ -153,44 +203,52 @@ export const bandTrackWidth = (cols: number, hasClicks: boolean) => Math.max(12,
 export const hasBand = (data: HqData) => teamOf(data).length > 0 || Object.keys(data.tasks).length > 0
 
 /** The Team track's words: how many agents work now (idle and waiting ones do not), else Done or Team. */
-export function teamTrackLabel(team: HqAgent[], p: Progress): string {
+export function teamTrackLabel(team: HqAgent[], p: Progress, lang: Lang = 'en'): string {
   const running = team.filter(a => isWorking(a.status)).length
-  return running > 0 ? `${running} running` : p.done === p.total ? 'Done' : 'Team'
+  return running > 0 ? t(lang, 'band.running', { n: running }) : p.done === p.total ? t(lang, 'band.done') : t(lang, 'band.team')
 }
 
-export function bandRasters(data: HqData, W: number, t: number, isLight: boolean): Raster[] {
+export function bandRasters(data: HqData, W: number, at: number, isLight: boolean): Raster[] {
+  const lang = data.lang ?? 'en'
   const team = teamOf(data)
   const out: Raster[] = []
   const p = teamProgress(data)
+  const draw = (spec: TrackSpec, w: number) => trackCells(spec, w, at, isLight)
   if (p.total > 0) {
-    const spec = { ...p, tone: toneOf(p, team), label: teamTrackLabel(team, p), count: `${p.done}/${p.total}` }
-    out.push({ key: 'track-team', columns: W, rows: 1, cells: trackCells(spec, W, t, isLight), spec })
+    const spec = { ...p, tone: toneOf(p, team), label: teamTrackLabel(team, p, lang), count: `${p.done}/${p.total}` }
+    out.push(trackRaster('track-team', spec, W, lang, draw))
   }
   const tasks = Object.values(data.tasks)
   if (tasks.length > 0) {
     const tp = progressOf(tasks)
     const current = tasks.find(x => x.status === 'in_progress')
-    const label = current ? (current.activeForm ?? current.subject) : tp.done === tp.total ? 'Done' : 'Tasks'
+    const label = current ? (current.activeForm ?? current.subject) : tp.done === tp.total ? t(lang, 'band.done') : t(lang, 'band.tasks')
     const spec: TrackSpec = { ...tp, tone: tp.done === tp.total ? 'done' : 'running', label, count: `${tp.done}/${tp.total}` }
-    out.push({ key: 'track-tasks', columns: W, rows: 1, cells: trackCells(spec, W, t, isLight), spec })
+    out.push(trackRaster('track-tasks', spec, W, lang, draw))
   }
   return out
 }
 
 const BAND_AGENTS = 3 // working agents named on the band's activity line
 
-/** "Mochi-chan: Editing view.tsx · Tanuki: Running npm test": the working agents that acted last, newest first. */
+/**
+ * "Mochi-chan: Fixing the old API · Tanuki: Running npm test": the working agents that acted or spoke last, newest first,
+ * each by its sentence (hooks/says.ts), else its tool line.
+ */
 export function bandActivity(data: HqData): string {
+  const said = (a: HqAgent) => sayingOf(a, data, data.lang ?? 'en')?.text
+  const lastSeen = (a: HqAgent) => Math.max(data.activity?.[a.id]?.since ?? 0, data.says?.[a.id]?.at ?? 0)
   return teamOf(data)
-    .filter(a => isWorking(a.status) && data.activity?.[a.id])
-    .sort((a, b) => (data.activity?.[b.id]?.since ?? 0) - (data.activity?.[a.id]?.since ?? 0))
+    .filter(a => isWorking(a.status) && (data.activity?.[a.id] || said(a)))
+    .sort((a, b) => lastSeen(b) - lastSeen(a))
     .slice(0, BAND_AGENTS)
-    .map(a => `${a.nickname ?? a.name}: ${data.activity?.[a.id]?.text}`)
+    .map(a => `${a.nickname ?? a.name}: ${said(a) ?? data.activity?.[a.id]?.text}`)
     .join(' · ')
 }
 
 export function BandView(els: Els, data: HqData, actions: BandActions, draw: DrawRaster, hasClicks: boolean): RenderElement {
   const { Box, Text, Button } = els
+  const lang = data.lang ?? 'en'
   const team = teamOf(data)
   const p = teamProgress(data)
   const tp = progressOf(Object.values(data.tasks))
@@ -204,23 +262,23 @@ export function BandView(els: Els, data: HqData, actions: BandActions, draw: Dra
       </Box>
       {draw(key)}
       <Text dimColor>{pctText(prog)}</Text>
-      {hasClicks && isFirst ? <Button key="open-sidebar" plain dimColor label="Agents ›" onPress={actions.onOpenSidebar} /> : null}
+      {hasClicks && isFirst ? <Button key="open-sidebar" plain dimColor label={t(lang, 'band.agents')} onPress={actions.onOpenSidebar} /> : null}
       {hasClicks && isFirst ? <Button key="hide-band" plain dimColor label="✕" onPress={actions.onHide} /> : null}
     </Box>
   )
   return (
     <Box flexDirection="column">
       <Text dimColor wrap="truncate">
-        {teamHeading(data.team, data.project, data.columns)}
+        {teamHeading(data.team, data.project, data.columns, lang)}
       </Text>
       {doing && (
         <Text wrap="truncate-end">
           <Text color={TONE_COLOR.running}>▸ </Text>
-          {fit(doing, data.columns - 2)}
+          {fitText(doing, data.columns - 2)}
         </Text>
       )}
-      {p.total > 0 && row('track-team', toneOf(p, team), 'Team', p, true)}
-      {tp.total > 0 && row('track-tasks', tp.done === tp.total ? 'done' : 'running', 'Tasks', tp, p.total === 0)}
+      {p.total > 0 && row('track-team', toneOf(p, team), t(lang, 'band.team'), p, true)}
+      {tp.total > 0 && row('track-tasks', tp.done === tp.total ? 'done' : 'running', t(lang, 'band.tasks'), tp, p.total === 0)}
     </Box>
   )
 }
@@ -230,8 +288,8 @@ export function BandView(els: Els, data: HqData, actions: BandActions, draw: Dra
 type TreeRow = { agent: HqAgent; prefix: string; indent: string; work: AgentWork }
 type MoreRow = { more: number; prefix: string }
 
-/** Only the lead and working agents get the full row with their bot; the rest take one line. */
-const isCompact = (agent: HqAgent) => agent.id !== MAIN && TONE_OF[agent.status] !== 'running'
+/** Only the lead, working agents and an agent whose talk bubble shows (on its line 3) get the full row with their bot; the rest take one line. */
+const isCompact = (agent: HqAgent, data: Pick<HqData, 'bubbles'>) => agent.id !== MAIN && TONE_OF[agent.status] !== 'running' && !data.bubbles?.some(b => b.agent === agent.id)
 const COMPACT_LAST_MIN = 12 // columns kept for a finished agent's last item before the words after the nickname are cut
 const MAX_COMPACT = 4 // one-line siblings shown before the rest fold into "+N more"
 
@@ -242,7 +300,7 @@ function walkTree(data: HqData, maxCompact: number): (TreeRow | MoreRow)[] {
   const walk = (parent: string, indent: string) => {
     const kids = (tree[parent] ?? []).filter(a => !(data.hideFinished && isFinished(a.status)))
     // an idle agent with agents of its own stays, so they do
-    const folded = kids.filter(a => isCompact(a) && !tree[a.id]?.length).slice(maxCompact)
+    const folded = kids.filter(a => isCompact(a, data) && !tree[a.id]?.length).slice(maxCompact)
     const shown = kids.filter(a => !folded.includes(a))
     shown.forEach((kid, i) => {
       const isLast = i === shown.length - 1 && folded.length === 0
@@ -267,8 +325,8 @@ const ROW_LINES = 5 // a full row's lines: name, live line, task, next, track
 export const spriteSize = (agent: HqAgent) =>
   agent.id === MAIN ? { columns: SPRITE_W, rows: SPRITE_H / 2, small: false } : { columns: SMALL_W, rows: SMALL_H / 2, small: true }
 // a row: tree prefix, the sprite, a space, then its lines; the todo track leaves room for its percent
-const textWidth = (cols: number, prefix: string, spriteW: number) => Math.max(14, cols - [...prefix].length - spriteW - 1)
-const todoTrackWidth = (cols: number, prefix: string, spriteW: number) => Math.max(6, textWidth(cols, prefix, spriteW) - PCT_W - 1)
+const rowTextWidth = (cols: number, prefix: string, spriteW: number) => Math.max(14, cols - [...prefix].length - spriteW - 1)
+const todoTrackWidth = (cols: number, prefix: string, spriteW: number) => Math.max(6, rowTextWidth(cols, prefix, spriteW) - PCT_W - 1)
 const BEAT_MS = 220 // one sprite frame
 
 /** The mascot's mood: an agent's own state; main is busy while any of its agents are. */
@@ -289,34 +347,32 @@ export function fallbackOf(agent: HqAgent, tasks: Record<string, HqTask>): BarFa
   return task ? { kind: 'task', status: task.status } : { kind: 'sweep' }
 }
 
-const TASK_BAR: Record<HqTaskStatus, { done: number; word: string }> = {
-  pending: { done: 0, word: 'pending' },
-  in_progress: { done: 0.5, word: 'in progress' },
-  completed: { done: 1, word: 'done' },
-}
+const TASK_BAR_DONE: Record<HqTaskStatus, number> = { pending: 0, in_progress: 0.5, completed: 1 }
 
 /** The track a fallback draws: a task's status as the bar (no count is claimed), or the drifting band labelled with the tools used. */
-function fallbackSpec(f: BarFallback, agent: HqAgent): TrackSpec {
-  if (f.kind === 'sweep') return { done: 0, total: 1, tone: 'running', label: `getting started · ${agent.tools} tool${agent.tools === 1 ? '' : 's'}`, count: '', sweep: true }
-  const bar = TASK_BAR[f.status]
-  return { done: bar.done, total: 1, tone: f.status === 'completed' ? 'done' : 'running', label: '', count: bar.word }
+function fallbackSpec(f: BarFallback, agent: HqAgent, lang: Lang): TrackSpec {
+  if (f.kind === 'sweep') {
+    const label = t(lang, agent.tools === 1 ? 'track.gettingStarted' : 'track.gettingStartedMany', { n: agent.tools })
+    return { done: 0, total: 1, tone: 'running', label, count: '', sweep: true }
+  }
+  return { done: TASK_BAR_DONE[f.status], total: 1, tone: f.status === 'completed' ? 'done' : 'running', label: '', count: t(lang, `taskStatus.${f.status}`) }
 }
 
-export function sidebarRasters(data: HqData, t: number): Raster[] {
+export function sidebarRasters(data: HqData, at: number): Raster[] {
+  const lang = data.lang ?? 'en'
   const base = panelBg(data.isLight)
   return treeRows(data).flatMap(({ agent, prefix, work }) => {
-    if (isCompact(agent)) return [] // one-line rows draw no bot
+    if (isCompact(agent, data)) return [] // one-line rows draw no bot
     const mood = mascotTone(agent, data)
     const species = speciesOf(agent.mascot)
     const size = spriteSize(agent)
     const frames = spriteFrames(species, mood, size.small)
-    const frame = frames[Math.floor(t / BEAT_MS) % frames.length] ?? []
+    const frame = frames[Math.floor(at / BEAT_MS) % frames.length] ?? []
     const mascot: Raster = { key: `mascot-${agent.id}`, columns: size.columns, rows: size.rows, cells: spriteCells(frame, paletteOf(species, mood), base) }
     const fallback = work.todos ? undefined : fallbackOf(agent, data.tasks)
     if (fallback) {
-      const W = textWidth(data.columns, prefix, size.columns)
-      const spec = fallbackSpec(fallback, agent)
-      const bar = { key: `todo-${agent.id}`, columns: W, rows: 1, cells: trackCells(spec, W, t, data.isLight, base), spec }
+      const W = rowTextWidth(data.columns, prefix, size.columns)
+      const bar = trackRaster(`todo-${agent.id}`, fallbackSpec(fallback, agent, lang), W, lang, (spec, w) => trackCells(spec, w, at, data.isLight, base))
       return [mascot, bar]
     }
     if (!work.todos) return [mascot]
@@ -326,20 +382,21 @@ export function sidebarRasters(data: HqData, t: number): Raster[] {
     const count = `${p.done}/${p.total}`
     // the pill is the count alone: the line above already says what is in progress
     const spec = { ...p, tone, label: '', count }
-    const todo = { key: `todo-${agent.id}`, columns: W, rows: 1, cells: trackCells(spec, W, mood === 'running' ? t : 0, data.isLight, base), spec }
+    const todo = { key: `todo-${agent.id}`, columns: W, rows: 1, cells: trackCells(spec, W, mood === 'running' ? at : 0, data.isLight, base), spec }
     return [mascot, todo]
   })
 }
 
-export function nowLine(agent: HqAgent, work: AgentWork, now: number): { tone: Tone; text: string } {
-  if (agent.status === 'waiting') return { tone: 'needs_input', text: '? Needs approval' }
-  if (agent.status === 'failed' || agent.status === 'killed') return { tone: 'error', text: `! ${agent.status === 'killed' ? 'stopped' : 'failed'}` }
+/** What an agent is on, in a line; `lang` is the person's (hq_status, which the model reads, keeps English). */
+export function nowLine(agent: HqAgent, work: AgentWork, now: number, lang: Lang = 'en'): { tone: Tone; text: string } {
+  if (agent.status === 'waiting') return { tone: 'needs_input', text: t(lang, 'now.needsApproval') }
+  if (agent.status === 'failed' || agent.status === 'killed') return { tone: 'error', text: t(lang, agent.status === 'killed' ? 'now.stopped' : 'now.failed') }
   // the row above already shows how long it ran, so the last finished item takes the line when there is one
-  if (agent.status === 'completed') return { tone: 'done', text: work.last ? `✓ ${work.last}` : `✓ done in ${elapsed((agent.endedAt ?? now) - agent.startedAt)}` }
-  if (agent.status === 'idle') return { tone: 'needs_input', text: '◌ idle, waiting for a message' }
+  if (agent.status === 'completed') return { tone: 'done', text: work.last ? `✓ ${work.last}` : t(lang, 'now.doneIn', { time: elapsed((agent.endedAt ?? now) - agent.startedAt, lang) }) }
+  if (agent.status === 'idle') return { tone: 'needs_input', text: t(lang, 'now.idle') }
   const tool = agent.lastTool ? `${agent.lastTool}` : ''
   if (work.now) return { tone: 'running', text: `▸ ${work.now}${tool ? ` · ${tool}` : ''}` }
-  return { tone: 'running', text: tool ? `▸ ${tool}` : '▸ starting…' }
+  return { tone: 'running', text: tool ? `▸ ${tool}` : t(lang, 'now.starting') }
 }
 
 const CURSOR = ['▸', '▹'] // the live line's cursor, blinking as the clock ticks
@@ -347,11 +404,12 @@ const SECOND = 1000
 
 /** The live line: the tool call it is in, its seconds ticking, cut to `room`; between calls, what it works on (nowLine). */
 export function activityLine(agent: HqAgent, work: AgentWork, data: HqData, room: number): { tone: Tone; text: string; isLive: boolean } {
+  const lang = data.lang ?? 'en'
   const live = currentActivity(data.activity, agent.id)
-  if (!live || isFinished(agent.status)) return { ...nowLine(agent, work, data.now), isLive: false }
-  const secs = ` · ${elapsed(data.now - live.since)}`
+  if (!live || isFinished(agent.status)) return { ...nowLine(agent, work, data.now, lang), isLive: false }
+  const secs = ` · ${timeFor(data.now - live.since, lang, room)}`
   const cursor = CURSOR[Math.floor(data.now / SECOND) % CURSOR.length]
-  return { tone: 'running', text: `${cursor} ${fit(live.text, Math.max(1, room - 2 - secs.length))}${secs}`, isLive: true }
+  return { tone: 'running', text: `${cursor} ${fitText(live.text, Math.max(1, room - 2 - width(secs)))}${secs}`, isLive: true }
 }
 
 /** What it is on: its in-progress todo or plan step, else the task the lead assigned it, else the board task it owns. */
@@ -394,7 +452,7 @@ function Section(els: Els, data: HqData, title: string, aside?: string) {
   return (
     <Box marginTop={1}>
       <Text bold>{label}</Text>
-      <Text dimColor>{'─'.repeat(Math.max(0, data.columns - label.length))}</Text>
+      <Text dimColor>{'─'.repeat(Math.max(0, data.columns - width(label)))}</Text>
     </Box>
   )
 }
@@ -417,31 +475,33 @@ function Header({ Box, Text }: Els, team: HqAgent[], isLight: boolean) {
   )
 }
 
-const ranFor = (agent: HqAgent, now: number) => elapsed((agent.endedAt ?? Math.max(now, agent.startedAt)) - agent.startedAt)
-const STATUS_WORD: Record<HqStatus, string> = {
-  pending: 'starting',
-  running: 'working',
-  waiting: 'needs approval',
-  idle: 'idle',
-  completed: 'done',
-  failed: 'failed',
-  killed: 'stopped',
+// a Thai time ("4 นาที 12 วิ") takes at most this share of its row; past it the row shows "4:12"
+const TIME_SHARE = 1 / 3
+
+/** How long, in words that fit a row `room` columns wide: the narrow "4:12" once the words would take too much of it. */
+function timeFor(ms: number, lang: Lang, room: number): string {
+  const full = elapsed(ms, lang)
+  return width(full) > room * TIME_SHARE ? elapsed(ms, lang, true) : full
 }
+
+const ranFor = (agent: HqAgent, data: HqData, room: number) => timeFor((agent.endedAt ?? Math.max(data.now, agent.startedAt)) - agent.startedAt, data.lang ?? 'en', room)
+const statusWord = (status: HqStatus, lang: Lang) => t(lang, `status.${status}`)
 
 /** An agent not at work: one line with its bot's colour as a dot, its status in a word or its last finished item. */
 function CompactNode(els: Els, data: HqData, actions: HqActions, { agent, prefix, work }: TreeRow) {
   const { Box, Text, Button } = els
+  const lang = data.lang ?? 'en'
   const tone = TONE_OF[agent.status]
   const TONE_COLOR = tonesFor(data.isLight)
-  const label = labelOf(agent, data.team)
-  const time = ranFor(agent, data.now)
-  const head = !work.last ? undefined : agent.status === 'completed' ? '✓ ' : agent.status === 'failed' ? 'failed · ' : undefined
-  const status = head ?? STATUS_WORD[agent.status]
+  const label = labelOf(agent, data.team, lang)
+  const time = ranFor(agent, data, data.columns - [...prefix].length)
+  const head = !work.last ? undefined : agent.status === 'completed' ? '✓ ' : agent.status === 'failed' ? t(lang, 'row.failedLast') : undefined
+  const status = head ?? statusWord(agent.status, lang)
   const botColor = speciesOf(agent.mascot).color
   const headW = width(agent.nickname ?? label.name)
   // prefix, dot, nickname, the space before the status and the gap to the time stay; the words after the nickname give way
   // before the status does, and the last item takes what is left
-  const fixed = [...prefix].length + 2 + headW + 1 + status.length + 1 + time.length
+  const fixed = [...prefix].length + 2 + headW + 1 + width(status) + 1 + width(time)
   const lastRoom = work.last && head ? Math.min(width(work.last), COMPACT_LAST_MIN) : 0
   const title = titleParts(agent, label, data.columns - fixed - lastRoom + headW)
   const room = data.columns - fixed - width(title.tail)
@@ -464,7 +524,7 @@ function CompactNode(els: Els, data: HqData, actions: HqActions, { agent, prefix
         <Text color={TONE_COLOR[tone]}>
           {' '}
           {status}
-          {head && work.last ? <Text dimColor>{fit(work.last, Math.max(1, room))}</Text> : null}
+          {head && work.last ? <Text dimColor>{fitText(work.last, Math.max(1, room))}</Text> : null}
         </Text>
       </Box>
       <Text dimColor>{time}</Text>
@@ -479,12 +539,13 @@ function TreeLine(els: Els, data: HqData, actions: HqActions, row: TreeRow | Mor
     return (
       <Button key={`more-${row.prefix}`} plain onPress={actions.onToggleExpand}>
         <Text dimColor>
-          {data.isAppDrawn ? <Text mono>{row.prefix}</Text> : row.prefix}+{row.more} more idle/done ›
+          {data.isAppDrawn ? <Text mono>{row.prefix}</Text> : row.prefix}
+          {t(data.lang ?? 'en', 'tree.more', { n: row.more })}
         </Text>
       </Button>
     )
   }
-  if (isCompact(row.agent)) return CompactNode(els, data, actions, row)
+  if (isCompact(row.agent, data)) return CompactNode(els, data, actions, row)
   return data.isAppDrawn ? AppAgentNode(els, data, actions, row, draw) : AgentNode(els, data, actions, row, draw)
 }
 
@@ -552,26 +613,36 @@ function AppAgentNode(els: Els, data: HqData, actions: HqActions, row: TreeRow, 
 
 /** What a full row says, its text in `room` columns: the name line's parts and time, the live line, the task and next lines. */
 function rowWords(data: HqData, { agent, work }: TreeRow, room: number) {
+  const lang = data.lang ?? 'en'
   const isMain = agent.id === MAIN
   const team = teamOf(data)
-  const time = isMain ? `${agent.tools} tools` : ranFor(agent, data.now)
-  const status = activityLine(agent, work, data, room)
+  const time = isMain ? t(lang, 'row.tools', { n: agent.tools }) : ranFor(agent, data, room)
+  const live = activityLine(agent, work, data, room)
+  // what it says it does takes line 2; its tool and seconds then move to line 3, while that line is free
+  const saying = sayingOf(agent, data, lang)
+  const status = saying ? { tone: 'running' as Tone, text: `▸ ${fitText(saying.text, room - 2)}`, isLive: false } : live
   const mark = isMain ? '✦ ' : '' // the lead's star
-  const title = titleParts(agent, labelOf(agent, data.team), room - time.length - 1 - mark.length)
+  const title = titleParts(agent, labelOf(agent, data.team, lang), room - width(time) - 1 - mark.length)
   const task = currentTask(agent, work, data)
-  // between calls the live line already says what it works on; the task line then shows only an assignment it does not
-  const ownTask = task && (status.isLive || task !== work.now) ? `task: ${task}` : ''
-  // the lead's line also counts its team at work (beside the name it would push the real name out)
-  const crew = isMain && team.length > 0 ? `${workingCount(data.agents)} of ${team.length} working` : ''
-  const taskLine = [crew, ownTask].filter(Boolean).join(' · ')
-  const after = work.next && !isFinished(agent.status) ? `○ next: ${work.next}` : work.last && !isMain ? `✓ last: ${work.last}` : ''
+  // between calls the live line already says what it works on; the task line then shows only an assignment it does not.
+  // A sentence from that same step or assignment says it already
+  const isTaskSaid = saying !== null && saying.source !== 'doing'
+  const ownTask = task && !isTaskSaid && (status.isLive || saying !== null || task !== work.now) ? t(lang, 'row.task', { task }) : ''
+  // the lead's line also counts its team at work (beside the name it would push the real name out), unless its sentence does
+  const crew = isMain && team.length > 0 && saying?.source !== 'lead' ? t(lang, 'row.crew', { working: workingCount(data.agents), total: team.length }) : ''
+  // line 3: a talk bubble while it lasts; else the lead's crew count; else, under a sentence, the call it is in now;
+  // else its task
+  const bubble = data.bubbles?.find(b => b.agent === agent.id)
+  const listed = [crew, ownTask].filter(Boolean).join(' · ')
+  const taskLine = bubble ? `» ${talkLine(bubble, data.agents, lang, room - 2)}` : !crew && saying && live.isLive ? live.text : listed
+  const after = work.next && !isFinished(agent.status) ? t(lang, 'row.next', { what: work.next }) : work.last && !isMain ? t(lang, 'row.last', { what: work.last }) : ''
   return { time, status, mark, title, taskLine, after, botColor: speciesOf(agent.mascot).color }
 }
 
 function AgentNode(els: Els, data: HqData, actions: HqActions, row: TreeRow, draw: DrawRaster) {
   const { Box, Text, Button } = els
   const { agent, prefix, indent, work } = row
-  const { time, status, mark, title, taskLine, after, botColor } = rowWords(data, row, textWidth(data.columns, prefix, spriteSize(agent).columns))
+  const { time, status, mark, title, taskLine, after, botColor } = rowWords(data, row, rowTextWidth(data.columns, prefix, spriteSize(agent).columns))
   const TONE_COLOR = tonesFor(data.isLight)
   // the tree's lines run down beside the row: its branch on the first line, its siblings' line below
   const gutter = prefix ? [prefix, ...Array.from({ length: ROW_LINES - 1 }, () => indent || ' ')] : []
@@ -624,12 +695,13 @@ function AgentNode(els: Els, data: HqData, actions: HqActions, row: TreeRow, dra
 }
 
 function TaskList({ Box, Text, Button }: Els, data: HqData, actions: HqActions) {
+  const lang = data.lang ?? 'en'
   const ORDER: HqTaskStatus[] = ['in_progress', 'pending', 'completed']
   const TONE_COLOR = tonesFor(data.isLight)
   const all = Object.values(data.tasks)
   const isOpen = (id: string) => data.tasks[id] !== undefined && data.tasks[id]?.status !== 'completed'
   const shown = all
-    .filter(t => t.status !== 'completed' || !data.hideFinished)
+    .filter(task => task.status !== 'completed' || !data.hideFinished)
     .sort((a, b) => ORDER.indexOf(a.status) - ORDER.indexOf(b.status) || Number(a.id) - Number(b.id))
   const hiddenDone = all.length - shown.length
   return (
@@ -658,24 +730,25 @@ function TaskList({ Box, Text, Button }: Els, data: HqData, actions: HqActions) 
               <Text wrap="truncate-end" dimColor>
                 {'   '}
                 {task.owner ? `@${task.owner}` : ''}
-                {blockers.length > 0 ? `${task.owner ? ' · ' : ''}⛓ waits on ${blockers.map(b => `#${b}`).join(' ')}` : ''}
+                {blockers.length > 0 ? `${task.owner ? ' · ' : ''}${t(lang, 'tasks.waitsOn', { list: blockers.map(b => `#${b}`).join(' ') })}` : ''}
               </Text>
             )}
           </Box>
         )
       })}
-      {hiddenDone > 0 && <Text dimColor>✓ {hiddenDone} completed (hidden)</Text>}
+      {hiddenDone > 0 && <Text dimColor>{t(lang, 'tasks.hiddenDone', { n: hiddenDone })}</Text>}
     </Box>
   )
 }
 
 export function SidebarView(els: Els, data: HqData, actions: HqActions, draw: DrawRaster): RenderElement {
   const { Box, Text, Button } = els
+  const lang = data.lang ?? 'en'
   const team = teamOf(data)
   const rows = walkTree(data, data.isTreeExpanded ? Infinity : MAX_COMPACT)
   const taskP = progressOf(Object.values(data.tasks))
   const hiddenAgents = team.filter(a => data.hideFinished && isFinished(a.status)).length
-  const agentCount = `${team.length} agent${team.length === 1 ? '' : 's'}`
+  const agentCount = t(lang, team.length === 1 ? 'sidebar.agent' : 'sidebar.agents', { n: team.length })
   // data.columns is the width inside the padding, as the caller measured it for the Rasters
   return (
     <Box flexDirection="column" flexGrow={1} paddingX={1} backgroundColor={panelBg(data.isLight)}>
@@ -683,33 +756,33 @@ export function SidebarView(els: Els, data: HqData, actions: HqActions, draw: Dr
       {/* controls up top: with a long team a footer falls below the dock's bottom edge */}
       <Box gap={1}>
         <Button key="toggle-hide" hotkey="h" onPress={actions.onToggleHide}>
-          {data.hideFinished ? 'Show done' : 'Hide done'}
+          {t(lang, data.hideFinished ? 'sidebar.showDone' : 'sidebar.hideDone')}
         </Button>
         <Button key="clear" hotkey="c" onPress={actions.onClear}>
-          Clear done
+          {t(lang, 'sidebar.clearDone')}
         </Button>
         <Button key="close-sidebar" hotkey="q" onPress={actions.onClose}>
-          ✕ Close
+          {t(lang, 'sidebar.close')}
         </Button>
         {data.isTreeExpanded ? (
           <Button key="fold-agents" onPress={actions.onToggleExpand}>
-            Fold idle
+            {t(lang, 'sidebar.foldIdle')}
           </Button>
         ) : null}
       </Box>
-      {Section(els, data, teamHeading(data.team, data.project, data.columns - agentCount.length - HEADING_PADDING), agentCount)}
+      {Section(els, data, teamHeading(data.team, data.project, data.columns - width(agentCount) - HEADING_PADDING, lang), agentCount)}
       {!data.team && (
         <Box gap={1}>
-          <Text dimColor>No team yet.</Text>
+          <Text dimColor>{t(lang, 'sidebar.noTeam')}</Text>
           <Button key="build-team" variant="primary" onPress={actions.onBuildTeam}>
-            Build a team
+            {t(lang, 'sidebar.buildTeam')}
           </Button>
         </Box>
       )}
       {rows.map(row => TreeLine(els, data, actions, row, draw))}
-      {team.length === 0 && <Text dimColor>No sub-agents yet. They appear here once one is spawned.</Text>}
-      {hiddenAgents > 0 && <Text dimColor>{hiddenAgents} finished agent(s) hidden</Text>}
-      {taskP.total > 0 && Section(els, data, 'TASK BOARD', `${taskP.done}/${taskP.total}`)}
+      {team.length === 0 && <Text dimColor>{t(lang, 'sidebar.noAgents')}</Text>}
+      {hiddenAgents > 0 && <Text dimColor>{t(lang, 'sidebar.hiddenAgents', { n: hiddenAgents })}</Text>}
+      {taskP.total > 0 && Section(els, data, t(lang, 'sidebar.taskBoard'), `${taskP.done}/${taskP.total}`)}
       {taskP.total > 0 && TaskList(els, data, actions)}
     </Box>
   )
@@ -729,8 +802,8 @@ export function textTrack(els: Els, rasters: Raster[], data: HqData): DrawRaster
     const { spec } = r
     // a working agent with no todos says what stands in for them: a task's status, or "getting started"
     const isFallback = key.startsWith('todo-') && !data.todos[key.slice('todo-'.length)]?.length
-    const alt = spec.sweep ? spec.label : isFallback ? spec.count : `${spec.done} of ${spec.total} done`
+    const alt = spec.sweep ? spec.label || r.aside : isFallback ? spec.count || r.aside : t(data.lang ?? 'en', 'track.alt', { done: spec.done, total: spec.total })
     const W = r.columns * COLUMN_PX
-    return <Svg key={key} source={trackSvg(spec, W, data.isLight)} alt={alt} width={W} height={TRACK_PX} />
+    return withAside(els, r, <Svg key={key} source={trackSvg(spec, W, data.isLight)} alt={alt ?? ''} width={W} height={TRACK_PX} />)
   }
 }

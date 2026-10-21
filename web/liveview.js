@@ -13,13 +13,13 @@
 
 import React from './vendor/libs.js'
 import { html } from './spacekit.js'
+import { t } from './i18n.js'
 import { Diagram } from './diagram.js'
 import { webglAvailable } from './webgl.js'
 import { playNav } from './space-sounds.js'
 
 const { useCallback, useMemo, useState } = React
 export const VIEW_KEY = 'agent-hq.view'
-export const LOST_NOTICE = 'Space view stopped: the browser turned WebGL off'
 
 const read = () => { try { return localStorage.getItem(VIEW_KEY) === 'space' ? 'space' : 'diagram' } catch { return 'diagram' } }
 const write = mode => { try { localStorage.setItem(VIEW_KEY, mode) } catch { /* the choice lasts until the page closes */ } }
@@ -37,13 +37,13 @@ export function useViewMode() {
 /** The Diagram / Space switch, in the kit's segmented toggle classes. Not shown when WebGL is off. */
 export function ViewToggle({ mode, onChange, canSpace = webglAvailable() }) {
   if (!canSpace) return null
-  return html`<div className="sk-seg" role="group" aria-label="View">
-    ${[['diagram', 'Diagram'], ['space', 'Space']].map(([id, label]) => html`<button key=${id} type="button" className="sk-seg__item" aria-pressed=${mode === id} onClick=${() => { if (id !== mode) playNav('view'); onChange(id) }}>${label}</button>`)}
+  return html`<div className="sk-seg" role="group" aria-label=${t('view.label')}>
+    ${[['diagram', t('view.diagram')], ['space', t('view.space')]].map(([id, label]) => html`<button key=${id} type="button" className="sk-seg__item" aria-pressed=${mode === id} onClick=${() => { if (id !== mode) playNav('view'); onChange(id) }}>${label}</button>`)}
   </div>`
 }
 
 export function LiveView({ mode = 'diagram', Space = null, onFallback, onNotice, ...view }) {
-  const lost = useCallback(() => { onFallback?.(); onNotice?.(LOST_NOTICE) }, [onFallback, onNotice])
+  const lost = useCallback(() => { onFallback?.(); onNotice?.(t('view.lost')) }, [onFallback, onNotice])
   const failed = useCallback(() => { onFallback?.() }, [onFallback])
   // until the Space component has loaded (or where there is none) the diagram stays on screen
   return mode === 'space' && Space

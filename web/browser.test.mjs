@@ -17,7 +17,9 @@ import { buildSnapshot, launchBrowser, newWorld, skip, sleep, slow, twoSessions,
 
 test('a click the hub cannot deliver at first is retried with the same key and the action runs exactly once', { skip, timeout: slow(60_000) }, async t => {
   const world = newWorld(t)
-  const { beta, betaMod, alpha } = await twoSessions(world)
+  // the hub keeps the frozen session "alive" well past the freeze, as it does by default (6 s against the 3 s forward timeout): with
+  // the kit's quick 1.5 s, a retry sent before the test sees the 503 and wakes the session got a final 404 "stopped" (3 runs in 10)
+  const { beta, betaMod, alpha } = await twoSessions(world, undefined, { env: { AGENT_HQ_DEAD_MS: '20000' } })
   const page = await launchBrowser(world)
   await page.open(alpha.url) // the one-time code logs the browser in, then the page loads
   await until(async () => /Alpha Team/.test(await page.text()) && /Beta Team/.test(await page.text()), 15_000, 'the page showing both sessions')
@@ -43,7 +45,9 @@ test('a click the hub cannot deliver at first is retried with the same key and t
   })
   const firstRefusedAt = performance.now() - clickedAt
   beta.child.kill('SIGCONT') // the session is back; the page's retry (after its backoff) lands on it
-  await until(() => posts().some(p => p.status === 202), 15_000, 'a retry to be accepted with 202')
+  await until(() => posts().some(p => p.status === 202), 15_000, 'a retry to be accepted with 202').catch(error => {
+    throw new Error(`${error.message} (POSTs: ${JSON.stringify(posts().map(p => ({ status: p.status, sentMs: Math.round(p.at - clickedAt), answeredMs: p.answeredAt && Math.round(p.answeredAt - clickedAt) })))})`)
+  })
   await until(() => [...toasts].some(x => /sent/i.test(x)), 8000, `a toast saying it was sent (saw: ${[...toasts].join(' | ')})`)
   await until(() => betaMod.handled.length >= 1, 8000, 'the mod to get the action')
   await sleep(slow(2500)) // past a reprint: nothing may run twice

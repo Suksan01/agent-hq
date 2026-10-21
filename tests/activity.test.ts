@@ -15,6 +15,16 @@ const BAND_PROPS = { hasSurvey: false, isWorking: true, maxRows: 10, bodyColumns
 const agent = (id: string, status: AgentInfo['status'] = 'running'): AgentInfo => ({ id, name: id, type: 'general-purpose', description: `do ${id}`, status })
 type Call = (input: Record<string, unknown>) => Promise<unknown>
 
+test('a call line masks what a pattern or a start names: no secret on the live line or the page', () => {
+  expect(describeCall('Grep', { pattern: 'AKIAIOSFODNN7EXAMPLE' })).toBe('Searching for ***')
+  expect(describeCall('Glob', { pattern: 'glpat-xYz12AbCdEfGh' })).toBe('Searching for ***')
+  expect(describeCall('Agent', { description: 'token=abc12345' })).toBe('Starting token=***')
+  expect(describeCall('Grep', { pattern: 'bandActivity' })).toBe('Searching for bandActivity')
+  // a key longer than the line's room: masked whole before it is cut, so none of it shows
+  expect(describeCall('Grep', { pattern: 'ghp_abcdefghijklmnopqrstuvwxyz0123456789' })).toBe('Searching for ***')
+  expect(describeCall('Glob', { pattern: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY' })).toBe('Searching for ***')
+})
+
 test('each tool reads as a short line; files by their base name only', () => {
   expect(describeCall('Edit', { file_path: '/Users/me/app/hooks/view.tsx' })).toBe('Editing view.tsx')
   expect(describeCall('Write', { file_path: 'src/x.ts' })).toBe('Writing x.ts')
@@ -85,7 +95,7 @@ async function seed($: Engine, on: On, listed: AgentInfo[]) {
     if (box.ui && box.probe) await box.probe(String(e.tool), box.ui)
     return { result: {} as never }
   })
-  await $.agent.spawn({ prompt: 'go', description: 'seed' } as never)
+  await $.agent.spawn({ prompt: 'go' } as never) // no description: a start's talk bubble would take line 3 for six seconds
   return box
 }
 
@@ -99,7 +109,7 @@ test('a tool call shows on the sidebar while it runs, with no poll in between, t
     during = {
       live: (await ui.find({ text: /Reading view\.tsx · \d+s$/ }))?.text,
       idle: (await ui.find({ key: 'agent-a2' }))?.text,
-      lead: (await ui.find({ text: /1 of 2 working/ }))?.text,
+      lead: (await ui.find({ text: /Waiting for 1 of 2 members/ }))?.text, // the lead's sentence says what its count did
     }
   }
   await ($.tool.call as unknown as Call)({ tool: 'Read', file_path: '/repo/hooks/view.tsx', agentId: 'a1', tool_use_id: 'u1' })
@@ -111,23 +121,28 @@ test('a tool call shows on the sidebar while it runs, with no poll in between, t
   await ui.unmount()
 })
 
-test('the lead row shows its own call live, and a working agent its task under the live line', async ($, on) => {
+test('the lead row shows its own call live, and a working agent its step above its live line', async ($, on) => {
   const box = await seed($, on, [agent('a1')])
   const ui = await $.ui.mount({ plugin: 'agent-hq', surface: 'terminal', component: 'Pane', requestId: 'agent-hq', props: PANE_PROPS as never })
   const call = $.tool.call as unknown as Call
   let lead: string | undefined
-  let task: string | undefined
+  let step: string | undefined
+  let live: string | undefined
   box.ui = ui
   box.probe = async tool => {
     if (tool === 'Bash') lead = (await ui.find({ text: /^[▸▹] Running npm test · \d+s$/ }))?.text
-    if (tool === 'Grep') task = (await ui.find({ text: /^task: Wiring the band$/ }))?.text
+    if (tool === 'Grep') {
+      step = (await ui.find({ text: /^▸ Wiring the band$/ }))?.text
+      live = (await ui.find({ text: /^[▸▹] Searching for band.* · \d+s$/ }))?.text
+    }
   }
   await call({ tool: 'Bash', command: 'npm test -- --token=abc', tool_use_id: 'm1' })
   await call({ tool: 'TodoWrite', todos: [{ content: 'Wire the band', status: 'in_progress', activeForm: 'Wiring the band' }], agentId: 'a1' })
   await call({ tool: 'Grep', pattern: 'bandActivity', agentId: 'a1', tool_use_id: 'g1' })
 
   expect(lead).toMatch(/^[▸▹] Running npm test · 0s$/)
-  expect(task).toBe('task: Wiring the band')
+  expect(step).toBe('▸ Wiring the band') // the step in progress is its sentence (line 2)
+  expect(live).toMatch(/^[▸▹] Searching for band.* · 0s$/) // the tool moved to the line below (cut to the dock's width)
   await ui.unmount()
 })
 

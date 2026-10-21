@@ -155,12 +155,12 @@ export function newWorld(t) {
   return world
 }
 
-/** `alpha` starts first and becomes the hub; `beta` registers with it. Each has its own mod; `makes` are `[teamNameOrMakeFn, ...]`. */
-export async function twoSessions(world, [alphaMake = 'Alpha Team', betaMake = 'Beta Team'] = []) {
+/** `alpha` starts first and becomes the hub; `beta` registers with it. Each has its own mod; `makes` are `[teamNameOrMakeFn, ...]`; `env` is added to both servers'. */
+export async function twoSessions(world, [alphaMake = 'Alpha Team', betaMake = 'Beta Team'] = [], { env } = {}) {
   const alphaMod = new Mod('alpha', world.dir, alphaMake)
   const betaMod = new Mod('beta', world.dir, betaMake)
-  const alpha = await startSession(world, 'alpha', alphaMod)
-  const beta = await startSession(world, 'beta', betaMod)
+  const alpha = await startSession(world, 'alpha', alphaMod, { env })
+  const beta = await startSession(world, 'beta', betaMod, { env })
   return { alpha, beta, alphaMod, betaMod }
 }
 

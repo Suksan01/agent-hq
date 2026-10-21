@@ -3,6 +3,7 @@
 // props. The ordering and totals are pure and exported for `node --test`. No timers, no filters.
 
 import { DotNumber, DotProgress, GlassTile, IconButton, html } from './spacekit.js'
+import { t } from './i18n.js'
 
 const TASK_ORDER = { in_progress: 0, pending: 1, completed: 2 }
 const TASK_STATUS = { in_progress: 'working', pending: 'idle', completed: 'done' }
@@ -22,7 +23,7 @@ function TaskRow({ task }) {
       <span className="sk-label">#${task.id}</span>
       <span style=${{ textDecoration: isDone ? 'line-through' : 'none', color: isDone ? 'var(--sk-text-3)' : 'var(--sk-text)' }}>${task.subject}</span>
       ${task.owner ? html`<span className="sk-label" style=${{ color: 'var(--st-lead)' }}>@${task.owner}</span>` : null}
-      ${task.blockedBy?.length ? html`<span className="sk-label" style=${{ color: 'var(--st-waiting)' }}>waits on ${task.blockedBy.map(id => `#${id}`).join(', ')}</span>` : null}
+      ${task.blockedBy?.length ? html`<span className="sk-label" style=${{ color: 'var(--st-waiting)' }}>${t('board.waitsOn', { ids: task.blockedBy.map(id => `#${id}`).join(', ') })}</span>` : null}
     </span>
   </div>`
 }
@@ -35,12 +36,12 @@ export function TaskBoardTile({ sections = [], onClose }) {
   const totals = boardTotals(sections)
   const isMulti = sections.length > 1
   const hasTasks = sections.some(s => s.tasks.length > 0)
-  return html`<${GlassTile} status="working" soft className="sk-feed" role="region" aria-label="Task board" style=${{ width: '100%', maxWidth: 420, boxSizing: 'border-box' }}>
+  return html`<${GlassTile} status="working" soft className="sk-feed" role="region" aria-label=${t('board.title')} style=${{ width: '100%', maxWidth: 420, boxSizing: 'border-box' }}>
     <div className="sk-feed__head">
-      <span className="sk-label">Task board <${DotNumber} value=${`${totals.done}/${totals.total}`} size="xs" /></span>
-      ${onClose ? html`<${IconButton} icon="close" label="Close the task board" small onClick=${onClose} />` : null}
+      <span className="sk-label">${t('board.title')} <${DotNumber} value=${`${totals.done}/${totals.total}`} size="xs" /></span>
+      ${onClose ? html`<${IconButton} icon="close" label=${t('board.close')} small onClick=${onClose} />` : null}
     </div>
-    ${!hasTasks ? html`<div className="sk-body-text sk-dim" style=${{ padding: '4px 10px 8px' }}>No board tasks yet.</div>` : sections.filter(s => s.tasks.length > 0).map(s => html`<section key=${s.key} aria-label=${s.label} style=${{ display: 'grid', gap: 4, padding: '6px 0' }}>
+    ${!hasTasks ? html`<div className="sk-body-text sk-dim" style=${{ padding: '4px 10px 8px' }}>${t('board.empty')}</div>` : sections.filter(s => s.tasks.length > 0).map(s => html`<section key=${s.key} aria-label=${s.label} style=${{ display: 'grid', gap: 4, padding: '6px 0' }}>
       ${isMulti ? html`<div className="sk-name" style=${{ fontSize: 15, padding: '0 10px' }}>${s.label}</div>` : null}
       <div style=${{ padding: '0 10px 4px' }}><${DotProgress} value=${s.progress.total ? (s.progress.done / s.progress.total) * 100 : 0} status="done" /></div>
       ${orderTasks(s.tasks).map(task => html`<${TaskRow} key=${task.id} task=${task} />`)}

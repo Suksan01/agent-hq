@@ -1,16 +1,20 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, PromptOrigin, Register } from 'claude-code'
 
-import { MAIN, barIdsIn, clearFinished, countTool, createTask, mergeAgents, mergeTodos, overallProgress, planSteps, updateTask, who, workingCount } from './model'
+import { DOING_TOOL, MAIN, barIdsIn, clearFinished, countTool, createTask, mergeAgents, mergeTodos, overallProgress, planSteps, updateTask, who, workingCount } from './model'
+import { cleanSaying, currentStep, maskedWork, pruneSays } from './says'
 import type { HqTeam, HqTodo } from '../types'
-import { MEMORY_SCOPE, NO_TEAM_PROMPT, SELF_EVAL_SKILL, TEAM_FILE, leadModelWarning, leadPrompt, parseTeam, rolePrompt } from './team'
-import { runFreshActions } from './actions'
+import { MEMORY_SCOPE, NO_TEAM_PROMPT, SELF_EVAL_SKILL, TEAM_FILE, languageSection, leadModelWarning, leadPrompt, parseTeam, rolePrompt } from './team'
+import { LANGUAGE_CHOICES, LANGUAGE_HEADER, LANGUAGE_OPTION, LANGUAGE_QUESTION, langOf, languageOfAnswer, t } from './i18n'
+import type { Lang } from './i18n'
+import { PERSON_FRAME, personStarts, runFreshActions } from './actions'
 import type { ActionDeps, PageAction } from './actions'
 import { hasOldRecord, isApproved, withApproval } from './approval'
 import { lineBuffer, parseChannelLine } from './channel'
 import { EMPTY_FEED, addEvents, statusEvents, stepEvents } from './feed'
 import type { NewEvent } from './feed'
 import { buildSnapshot } from './live'
+import { addBubble, bubbleText, liveBubbles, placeTalk, recipientOf, talkLine } from './talk'
 import { configureLock } from './lock'
 import { createReport, reportToast } from './report'
 import { soundsForChanges } from './sounds'
@@ -23,7 +27,7 @@ import { addAsk, buildInbox, describeAsk, dropAsksOf, removeAsk, statusText, tra
 import { announceXp, createLedger, creditActivity, creditTestRun, xpStoreOf, xpSummaries } from './xpstore'
 import { ASSIGN_TOOL, HIRE_TOOL, LEAD_TOOLS_NOTE, REVIEW_TOOL, STATUS_TOOL, TOOL_SPECS, hqAssign, hqHire, hqReview, hqStatus, keepResult, textOfContent } from './tools'
 import type { ToolAnswer, ToolDeps } from './tools'
-import { BandView, SidebarView, bandRasters, bandTrackWidth, folderOf, hasBand, sidebarRasters, textTrack } from './view'
+import { BandView, SidebarView, bandRasters, bandTrackWidth, folderOf, hasBand, sidebarRasters, textTrack, withAside } from './view'
 import type { BandActions, HqActions, HqData, Raster } from './view'
 
 const PANE = 'agent-hq'
@@ -57,6 +61,8 @@ const waitingSince = atom({ plugin: 'agent-hq', key: 'waitingSince' } as const, 
 const assignments = atom({ plugin: 'agent-hq', key: 'assignments' } as const, {})
 const results = atom({ plugin: 'agent-hq', key: 'results' } as const, {})
 const activity = atom({ plugin: 'agent-hq', key: 'activity' } as const, {})
+const says = atom({ plugin: 'agent-hq', key: 'says' } as const, {})
+const bubbles = atom({ plugin: 'agent-hq', key: 'bubbles' } as const, [])
 
 /** The team.json in force: the project's, else the home folder's (for every project); null when neither exists. */
 async function findTeamFile($: EngineInterface): Promise<{ path: string; isProject: boolean } | null> {
@@ -105,7 +111,7 @@ async function loadTeam($: EngineInterface, options: { approve?: boolean; expect
   const parsed = parseTeam(source)
   if (typeof parsed === 'string') {
     await update($, teamSource, () => ({ path, error: parsed }))
-    toast(`Agent HQ: team file ignored, ${parsed} (${path})`)
+    toast(t(lang, 'team.ignored', { reason: parsed, path }))
     return await read($, team)
   }
   const approved = await $.store.get(APPROVED_TEAMS)
@@ -114,13 +120,13 @@ async function loadTeam($: EngineInterface, options: { approve?: boolean; expect
   if (options.approve === true && (options.expect === undefined || options.expect === source)) await $.store.set(APPROVED_TEAMS, withApproval(approved, path, source))
   else if (!isApproved(approved, path, source)) {
     // the last trusted team stays in force (its guard and lead section) until the person trusts this text
-    await update($, teamSource, () => ({ path, error: 'not trusted yet, run /hq trust to use it', needsApproval: true }))
+    await update($, teamSource, () => ({ path, error: t(lang, 'team.notTrustedYet'), needsApproval: true }))
     toast(
       hasOldRecord(approved, path)
-        ? `Agent HQ: trust records from an older version were reset for ${path} — run /hq trust to use it`
+        ? t(lang, 'team.resetTrust', { path })
         : file.isProject
-          ? `Agent HQ: project team ${parsed.name} found at ${path} — run /hq trust to use it`
-          : 'Agent HQ: your team file changed outside this session — run /hq trust to use it',
+          ? t(lang, 'team.projectFound', { name: parsed.name, path })
+          : t(lang, 'team.changedOutside'),
     )
     return await read($, team)
   }
@@ -132,7 +138,7 @@ async function loadTeam($: EngineInterface, options: { approve?: boolean; expect
     await $.agent.register({
       name: role.id,
       description: `${role.title} on the ${parsed.name} team. ${role.mission}`.slice(0, 1000),
-      prompt: rolePrompt(parsed, role, hasMemory),
+      prompt: rolePrompt(parsed, role, hasMemory, lang),
       ...(role.tools ? { tools: role.tools } : {}),
       ...(role.model ? { model: role.model } : {}),
       ...(role.effort ? { effort: role.effort } : {}),
@@ -142,7 +148,7 @@ async function loadTeam($: EngineInterface, options: { approve?: boolean; expect
   }
   await update($, team, () => parsed)
   await update($, teamSource, () => ({ path }))
-  if (file.isProject && !options.approve) toast(`Agent HQ: using project team ${parsed.name} from ${path}`)
+  if (file.isProject && !options.approve) toast(t(lang, 'team.usingProject', { name: parsed.name, path }))
   await warnLeadModel($, parsed).catch(() => {}) // advice only: a session whose model cannot be read is not warned
   return parsed
 }
@@ -151,7 +157,7 @@ let saidLeadModel: string | undefined // the last lead-model warning shown, so o
 
 /** Toasts when the session runs on another model than the team's lead asks for, once per change. */
 async function warnLeadModel($: EngineInterface, current: HqTeam | null): Promise<void> {
-  const warning = leadModelWarning(current?.lead.model, await $.session.model())
+  const warning = leadModelWarning(current?.lead.model, await $.session.model(), lang)
   if (warning && warning !== saidLeadModel) $.ui.toast(warning)
   saidLeadModel = warning
 }
@@ -213,6 +219,7 @@ async function readTeamTodos($: EngineInterface): Promise<Record<string, HqTodo[
 let isLight = false
 let isMuted = false // the `sounds` option, read when the module registers
 let nameTheme = themeOf(undefined) // the `nicknameTheme` option, read when the module registers
+let lang: Lang = 'en' // the `language` option, read when the module registers; /hq lang sets it at once, before the reload
 const xpLedger = createLedger() // what each agent has earned this session, on top of what the store held
 type Site = { requestId: string; data: HqData; draw: (t: number) => Raster[]; refused: number }
 const sites = new Map<'band' | 'sidebar', Site>()
@@ -251,32 +258,82 @@ function seat($: EngineInterface, name: 'band' | 'sidebar', site: Omit<Site, 're
 // ---------- state ----------
 
 async function syncAgents($: EngineInterface) {
-  const [listed, t, session] = await Promise.all([$.agent.list(), $.clock.now(), $.session.id().catch(() => '')]) // no id just means no lead seed
+  const [listed, at, session] = await Promise.all([$.agent.list(), $.clock.now(), $.session.id().catch(() => '')]) // no id just means no lead seed
   const before = await read($, agents)
-  const after = mergeAgents(before, listed, t, nameTheme, session)
+  const after = mergeAgents(before, listed, at, nameTheme, session)
   let heard: Sound | null = null
   if (JSON.stringify(after) !== JSON.stringify(before)) {
     await update($, agents, () => after)
-    await recordEvents($, statusEvents(before, after))
+    await recordEvents($, statusEvents(before, after, lang))
     heard = soundsForChanges(before, after, { muted: isMuted })
   }
   // XP from what changed, then the one clip of this poll: a status change's, or a level up's when that is louder
-  const earned = await creditActivity(xpStoreOf($), xpLedger, { agents: after, todos: await readTeamTodos($), tasks: await read($, tasks) }, t).catch(() => [])
-  await announceXp($, earned, heard, isMuted)
-  const waits = trackWaiting(await read($, waitingSince), after, t)
+  const earned = await creditActivity(xpStoreOf($), xpLedger, { agents: after, todos: await readTeamTodos($), tasks: await read($, tasks) }, at).catch(() => [])
+  await announceXp($, earned, heard, isMuted, lang)
+  const waits = trackWaiting(await read($, waitingSince), after, at)
   if (JSON.stringify(waits) !== JSON.stringify(await read($, waitingSince))) await update($, waitingSince, () => waits)
+  await pruneSaid($)
+  await expireBubbles($, at)
   // ticks the clock only while someone works or a call runs (the lead's too), so elapsed times and live lines move and
   // an idle view stays still
-  if (hasRunningCall(await read($, activity), after) || workingCount(after) > 0) await update($, now, () => t)
+  if (hasRunningCall(await read($, activity), after) || workingCount(after) > 0) await update($, now, () => at)
   await syncStatus($)
   await requestLive($)
+}
+
+/** Drops the sentences no longer in force: an agent finished, or its step moved on (hooks/says.ts); writes only when one went. */
+async function pruneSaid($: EngineInterface) {
+  const before = await read($, says)
+  const after = pruneSays(before, await read($, agents), await readTeamTodos($))
+  if (after !== before) await update($, says, () => after)
+}
+
+/** Ends the talk bubbles past their time (hooks/talk.ts); writes only when one went. */
+async function expireBubbles($: EngineInterface, at: number) {
+  const before = await read($, bubbles)
+  const after = liveBubbles(before, at)
+  if (after !== before) await update($, bubbles, () => [...after])
+}
+
+/**
+ * Something said between two parties, as a talk bubble on the member's card (hooks/talk.ts) and a feed `message`.
+ * Nothing when it says nothing, or the card is not an agent listed here (another session, the engine's own forks).
+ */
+async function talk($: EngineInterface, from: string, to: string, raw: unknown) {
+  const text = bubbleText(raw)
+  const placed = placeTalk(from, to)
+  const rows = await read($, agents)
+  if (!text || !placed || !rows[placed.agent]) return
+  const bubble = { ...placed, text, at: await $.clock.now() }
+  await update($, bubbles, all => addBubble(all, bubble))
+  await recordEvents($, [{ agent: bubble.agent, kind: 'message', text: talkLine(bubble, rows, lang) }])
+  await requestLive($)
+}
+
+/**
+ * hq_doing, for the lead and every member alike: what the caller says it is doing, kept for the step it has in progress
+ * (one line, secrets masked, cut short; empty clears it). The answer is the model's, so it stays English.
+ */
+async function answerDoing($: EngineInterface, e: { agentId?: string }) {
+  const given = (e as { text?: unknown }).text
+  if (given !== undefined && typeof given !== 'string') return { result: 'hq_doing: "text" must be a string.', isError: true as const }
+  const loop = e.agentId ?? MAIN
+  const text = cleanSaying(given)
+  const step = currentStep((await readTeamTodos($))[loop])?.content
+  const at = await $.clock.now()
+  await update($, says, all => {
+    const { [loop]: _old, ...rest } = all
+    return text ? { ...rest, [loop]: { text, at, ...(step === undefined ? {} : { step }) } } : rest
+  })
+  await requestLive($)
+  return { result: text ? `Shown beside your name: "${text}"` : 'Cleared.' }
 }
 
 /** A test command's result as XP for the agent that ran it; never fails the tool call it follows. */
 async function creditBash($: EngineInterface, loop: string, command: string, failed: boolean) {
   try {
     const nickname = (await read($, agents))[loop]?.nickname
-    await announceXp($, await creditTestRun(xpStoreOf($), xpLedger, nickname, command, failed, await $.clock.now()), null, isMuted)
+    await announceXp($, await creditTestRun(xpStoreOf($), xpLedger, nickname, command, failed, await $.clock.now()), null, isMuted, lang)
   } catch {
     // XP is a bonus
   }
@@ -317,6 +374,7 @@ async function runPageActions($: EngineInterface) {
       readData: () => readData($, 0),
       syncAgents: () => syncAgents($),
       clearDone: () => clearDone($),
+      lang,
     }
     while (inbox.length > 0) {
       const batch = [...inbox].sort((a, b) => Number(a.id) - Number(b.id)) // in id order, whatever order they came in
@@ -336,7 +394,7 @@ async function handleIncoming($: EngineInterface) {
 
 /** What the lead's tools (./tools) reach back into. */
 const toolDeps = ($: EngineInterface): ToolDeps => ({
-  readData: () => readData($, 0),
+  readData: () => readData($, 0, false),
   syncAgents: () => syncAgents($),
   now: () => $.clock.now(),
   assignmentOf: async name => (await read($, assignments))[name],
@@ -351,11 +409,13 @@ const toolDeps = ($: EngineInterface): ToolDeps => ({
   },
   confirm: async question => {
     try {
-      return (await $.ui.ask(question, { options: ['Yes, rewrite it', 'No'], header: 'Team file' })) === 'Yes, rewrite it' ? 'yes' : 'no'
+      const yes = t(lang, 'hire.yes') // the answer comes back as the label shown, so it is compared in the same words
+      return (await $.ui.ask(question, { options: [yes, t(lang, 'dialog.no')], header: t(lang, 'dialog.teamFile') })) === yes ? 'yes' : 'no'
     } catch {
       return 'unavailable' // dismissed, or a run with no one to ask (-p)
     }
   },
+  lang,
   // the lead's own rewrite of the file it works from, written only after the person said yes: trusted, and the team is loaded again at once
   writeTeam: async (path, text) => {
     await $.fs.write(path, text)
@@ -382,9 +442,16 @@ async function blockedByGuard($: EngineInterface, e: { agentId?: string; tool: u
   let found = agentRoles(await read($, agents), e.agentId)
   if (found.unknown) {
     // a poll may not have listed a brand-new agent yet: sync once. Still unknown, it is judged as a non-member (no role
-    // guard), though no subagent may change a team file
-    await syncAgents($)
+    // guard), though no subagent may change a team file. A sync that failed tells nothing: a new member of a guarded
+    // role cannot be told from a stranger, so the call is refused (the next poll lists it, and a retry is judged)
+    const isSynced = await syncAgents($)
+      .then(() => true)
+      .catch(error => {
+        $.ui.log(`Agent HQ: could not list the agents (${error instanceof Error ? error.message : String(error)})`, { to: 'debug' })
+        return false
+      })
     found = agentRoles(await read($, agents), e.agentId)
+    if (found.unknown && !isSynced) return GUARD_UNSURE
     if (found.unknown) $.ui.log(`Agent HQ: unlisted agent ${e.agentId} judged as non-member`, { to: 'debug' })
   }
   const row = (await read($, agents))[e.agentId]
@@ -401,10 +468,19 @@ async function blockedByGuard($: EngineInterface, e: { agentId?: string; tool: u
   })
   if (!verdict) return null
   const reason = verdict.deny.replace(/^Agent HQ: /, '')
-  $.ui.toast(`Agent HQ blocked ${row ? who(row) : e.agentId}: ${reason}`)
-  await recordEvents($, [{ agent: e.agentId, kind: 'action', text: `blocked ${String(e.tool)}: ${reason}` }])
+  const agentId = e.agentId
+  // telling the person is best-effort: it never costs a decided deny. The reason is the guard's, which the model reads
+  // too: it stays English inside the person's words
+  await (async () => {
+    $.ui.toast(t(lang, 'guard.blocked', { who: row ? who(row) : agentId, reason }))
+    await recordEvents($, [{ agent: agentId, kind: 'action', text: t(lang, 'feed.blocked', { tool: String(e.tool), reason }), failed: true }])
+  })().catch(() => {})
   return verdict.deny
 }
+
+// what a member's call gets when its guard cannot decide (the model reads it)
+const GUARD_UNSURE = 'Agent HQ: the rule guard could not tell which role this agent has; nothing was done, try again'
+const GUARD_FAILED = 'Agent HQ: the rule guard could not run; nothing was done'
 
 /** Drops finished agents (never main) and completed tasks: the sidebar's `c` and the page's Clear. */
 async function clearDone($: EngineInterface) {
@@ -542,9 +618,9 @@ async function runReport($: EngineInterface): Promise<{ text: string }> {
     const made = await createReport($, data, cwd, await $.clock.now())
     const text = reportToast(data, made.path, cwd)
     $.ui.toast(text)
-    return { text: `${text}${made.hasSummary ? '' : '. (No summary: no model answered.)'}` }
+    return { text: `${text}${made.hasSummary ? '' : t(lang, 'report.noSummary')}` }
   } catch (error) {
-    return { text: `Agent HQ could not write the report (${error instanceof Error ? error.message : String(error)})` }
+    return { text: t(lang, 'report.failed', { reason: error instanceof Error ? error.message : String(error) }) }
   }
 }
 
@@ -554,13 +630,13 @@ async function runReport($: EngineInterface): Promise<{ text: string }> {
  */
 async function approveTeam($: EngineInterface, expect?: string): Promise<{ text: string }> {
   const source = await read($, teamSource)
-  if (!source?.needsApproval) return { text: 'Agent HQ: no project team file is waiting to be trusted.' }
+  if (!source?.needsApproval) return { text: t(lang, 'trust.nothingWaiting') }
   const loaded = await loadTeam($, { approve: true, expect })
   await syncAgents($)
   const now = await read($, teamSource)
   // still waiting, or unreadable: what `loaded` holds then is the last trusted team, not this file
-  if (!loaded || now?.needsApproval || now?.error) return { text: `Agent HQ: could not use ${source.path} (${now?.error ?? 'error'}).` }
-  return { text: `Agent HQ: trusted. Team "${loaded.name}" is loaded, ${loaded.roles.length} roles.` }
+  if (!loaded || now?.needsApproval || now?.error) return { text: t(lang, 'trust.couldNotUse', { path: source.path, error: now?.error ?? t(lang, 'trust.error') }) }
+  return { text: t(lang, 'trust.done', { name: loaded.name, n: loaded.roles.length }) }
 }
 
 // runs the engine attests as the person's own: they may trust a team file at once
@@ -569,9 +645,7 @@ const PERSON_ORIGINS: ReadonlySet<PromptOrigin['kind']> = new Set(['composer', '
 // Every other run (a plugin's `$.command.run`, a scheduled prompt a model can set up, a message another session or agent
 // wrote) may not trust at all
 const ASKING_ORIGINS: ReadonlySet<PromptOrigin['kind']> = new Set(['unclassified', 'auto-continuation'])
-const notYours = (origin: PromptOrigin) => ({ text: `Agent HQ: only you can trust a team file; type /hq trust yourself (this run came from ${origin.kind === 'plugin' ? 'a plugin' : origin.kind}).` })
-const TRUST_YES = 'Yes, trust it'
-const TRUST_NO = 'No'
+const notYours = (origin: PromptOrigin) => ({ text: t(lang, 'trust.notYours', { origin: origin.kind === 'plugin' ? t(lang, 'trust.aPlugin') : origin.kind }) })
 /** The team file text the person answered No to in this session, by path: plain `/hq` does not ask about it again. */
 const declinedTrust = new Map<string, string>()
 
@@ -589,36 +663,42 @@ async function askTrust($: EngineInterface, isExplicit: boolean): Promise<{ text
   const parsed = text === null ? 'unreadable' : parseTeam(text)
   if (text === null || typeof parsed === 'string') return null
   if (!isExplicit && declinedTrust.get(source.path) === text) return null
-  const roles = `${parsed.roles.length === 1 ? '1 role' : `${parsed.roles.length} roles`}: ${parsed.roles.map(r => r.id).join(', ')}`
-  const question = `Trust the team ${JSON.stringify(parsed.name)} from ${source.path}? It decides which agents run and what they are told (${roles}).`
-  // "No" first: a stray Enter must not trust
-  const answer = await $.ui.ask(question, { options: [TRUST_NO, TRUST_YES], header: 'Team file' }).catch(() => null)
-  if (answer === TRUST_NO) declinedTrust.set(source.path, text)
-  return answer === TRUST_YES ? approveTeam($, text) : null
+  const count = parsed.roles.length === 1 ? t(lang, 'trust.oneRole') : t(lang, 'trust.roles', { n: parsed.roles.length })
+  const roles = `${count}: ${parsed.roles.map(r => r.id).join(', ')}`
+  const question = t(lang, 'trust.question', { name: JSON.stringify(parsed.name), path: source.path, roles })
+  // "No" first: a stray Enter must not trust. The answer is the label shown, so it is compared in the same words
+  const [no, yes] = [t(lang, 'dialog.no'), t(lang, 'trust.yes')]
+  const answer = await $.ui.ask(question, { options: [no, yes], header: t(lang, 'dialog.teamFile') }).catch(() => null)
+  if (answer === no) declinedTrust.set(source.path, text)
+  return answer === yes ? approveTeam($, text) : null
 }
 
 /** `/hq trust`: at once from the person's own run, through the dialog from a run the engine cannot attest, never otherwise. */
 async function trustCommand($: EngineInterface, origin: PromptOrigin): Promise<{ text: string }> {
   if (PERSON_ORIGINS.has(origin.kind)) return approveTeam($)
   if (!ASKING_ORIGINS.has(origin.kind)) return notYours(origin)
-  return (await askTrust($, true)) ?? { text: (await read($, teamSource))?.needsApproval ? 'Agent HQ: the team file was not trusted.' : 'Agent HQ: no project team file is waiting to be trusted.' }
+  return (await askTrust($, true)) ?? { text: t(lang, (await read($, teamSource))?.needsApproval ? 'trust.notTrusted' : 'trust.nothingWaiting') }
 }
 
 /** Everything waiting on the person right now (see ./inbox). */
 async function readInbox($: EngineInterface) {
-  return buildInbox(await read($, asks), await read($, agents), await read($, waitingSince), await $.clock.now())
+  return buildInbox(await read($, asks), await read($, agents), await read($, waitingSince), await $.clock.now(), lang)
 }
 
 async function syncStatus($: EngineInterface) {
   const p = overallProgress(await read($, tasks), await readTeamTodos($))
-  $.ui.status(statusText(workingCount(await read($, agents)), (await readInbox($)).length, p))
+  $.ui.status(statusText(workingCount(await read($, agents)), (await readInbox($)).length, p, lang))
 }
 
-async function readData($: EngineInterface, columns: number): Promise<HqData> {
+async function readData($: EngineInterface, columns: number, isForPerson = true): Promise<HqData> {
+  // every surface the person sees reads the work through here: a secret a model wrote in it is masked once, for all of
+  // them. The lead's own tools (hq_status) read it as the lead and its members wrote it
+  const written = { todos: await readTeamTodos($), tasks: await read($, tasks), assignments: await read($, assignments), says: await read($, says) }
+  const work = isForPerson ? maskedWork(written) : written
   return {
     agents: await read($, agents),
-    todos: await readTeamTodos($),
-    tasks: await read($, tasks),
+    todos: work.todos,
+    tasks: work.tasks,
     now: await read($, now),
     hideFinished: await read($, hideFinished),
     isTreeExpanded: await read($, isTreeExpanded),
@@ -628,7 +708,10 @@ async function readData($: EngineInterface, columns: number): Promise<HqData> {
     xp: await xpSummaries(xpStoreOf($), xpLedger, await read($, agents)),
     project: folderOf(await $.session.cwd().catch(() => '')),
     activity: liveActivities(await read($, activity), await read($, agents)),
-    assignments: await read($, assignments),
+    says: work.says,
+    assignments: work.assignments,
+    bubbles: await read($, bubbles),
+    lang,
   }
 }
 
@@ -636,24 +719,82 @@ async function readData($: EngineInterface, columns: number): Promise<HqData> {
 const openSidebar = ($: EngineInterface) => $.ui.open({ id: PANE, title: TITLE, columns: SIDEBAR_COLUMNS, closeOnEscape: true })
 // a surface that cannot list panes reads as closed, so `/hq` opens
 const isSidebarOpen = async ($: EngineInterface) => (await $.ui.panes().catch(() => [])).some(pane => pane.id === PANE)
-const CLOSED_TEXT = 'Agent HQ sidebar closed — /hq to open it again'
-
 /** `/hq close` and the toggle: closes the pane (its ui.close hook then keeps it from opening again by itself). */
 async function closeSidebar($: EngineInterface): Promise<{ text: string }> {
   if (await isSidebarOpen($)) await $.ui.close({ id: PANE })
-  $.ui.toast(CLOSED_TEXT)
-  return { text: CLOSED_TEXT }
+  const closed = t(lang, 'hq.closed')
+  $.ui.toast(closed)
+  return { text: closed }
+}
+
+const LANGUAGE_ASKED = 'languageAsked' // $.store key: the first-run language question was asked (or nobody could be)
+
+/** Sets the `language` option, which reloads the plugin with it; this module speaks it from now on too. The refusal, or null. */
+async function setLanguage($: EngineInterface, next: Lang): Promise<string | null> {
+  await $.store.set(LANGUAGE_ASKED, true) // a language chosen (here or by /hq lang) is the answer: never asked after it
+  const set = await $.config.set({ key: `${$.plugin.name}.language`, value: LANGUAGE_OPTION[next] }).catch((error: unknown) => ({ deny: error instanceof Error ? error.message : String(error) }))
+  if (set.deny !== undefined) return set.deny
+  lang = next
+  return null
+}
+
+let languageAsk: Promise<Lang | null> | null = null // the question being asked: a client joining and /hq at once ask it once
+
+/** Thai, as the person chose it: the setting reloads the plugin; a refusal is said in a toast. */
+async function chooseThai($: EngineInterface) {
+  const denied = await setLanguage($, 'th')
+  if (denied !== null) $.ui.toast(t('th', 'lang.failed', { reason: denied }))
+}
+
+/**
+ * Once: which language Agent HQ speaks, asked in both where a person can answer: at a REPL start, when a client joins
+ * later (the desktop app starts with nobody to ask), or on the first plain /hq. Dismissed means English; either way it is
+ * not asked again. The caller makes sure someone can answer: nothing is marked where nobody could be asked. Resolves
+ * to Thai when Thai was chosen now. The setting reloads the plugin, so it is made just after, never inside a hook
+ * still running (a /hq that joined the question).
+ */
+function askLanguageOnce($: EngineInterface): Promise<Lang | null> {
+  languageAsk ??= (async (): Promise<Lang | null> => {
+    if (await $.store.get(LANGUAGE_ASKED)) return null
+    if (lang !== 'en') {
+      await $.store.set(LANGUAGE_ASKED, true) // chosen in /config
+      return null
+    }
+    const answer = await $.ui.ask(LANGUAGE_QUESTION, { options: [...LANGUAGE_CHOICES], header: LANGUAGE_HEADER }).catch(() => null)
+    await $.store.set(LANGUAGE_ASKED, true) // before the setting, which reloads the plugin
+    if (languageOfAnswer(answer) !== 'th') return null
+    $.clock.after(0, () => void chooseThai($).catch(logLanguageAsk($)))
+    return 'th'
+  })().finally(() => {
+    languageAsk = null
+  })
+  return languageAsk
+}
+
+const logLanguageAsk = ($: EngineInterface) => (error: unknown) =>
+  $.ui.log(`Agent HQ: could not ask for the language (${error instanceof Error ? error.message : String(error)})`, { to: 'debug' })
+
+const LANGUAGE_WORD = /^(thai|th|ไทย|ภาษาไทย|english|en)$/i
+
+/** `/hq lang [thai|english]`: says the language in force, or sets it and answers in the new one. */
+async function langCommand($: EngineInterface, word: string): Promise<{ text: string }> {
+  if (word === '') return { text: t(lang, 'lang.current') }
+  if (!LANGUAGE_WORD.test(word)) return { text: t(lang, 'lang.unknown') }
+  const next = languageOfAnswer(word)
+  const denied = await setLanguage($, next)
+  return { text: denied === null ? t(next, 'lang.changed') : t(lang, 'lang.failed', { reason: denied }) }
 }
 
 export const register: Register = (on, options) => {
   isMuted = !soundsOn(options.sounds)
   nameTheme = themeOf(options.nicknameTheme)
+  lang = langOf(options.language)
   on('session.start', async ($, e, next) => {
     configureLock((ms, fn) => $.clock.after(ms, fn)) // times the roster lock (hooks/lock.ts)
     await $.command.register({
       name: 'hq',
-      description: 'Open or close the Agent HQ sidebar (or `/hq web` for the live browser overview): agent tree, progress, task board',
-      argumentHint: '[open|close|web|report|trust]',
+      description: t(lang, 'hq.description'),
+      argumentHint: '[open|close|web|report|trust|lang]',
     })
     // shortcut: a light theme name picks the light tint; "auto" is read as dark (plan-progress also probes macOS appearance).
     const theme = (await $.config.list().catch(() => [])).find(row => row.key === 'theme')
@@ -666,15 +807,20 @@ export const register: Register = (on, options) => {
     })
     // awaited, so the team's agent types are listed from the first turn; a bad file is reported, never fatal
     await migrateHomeTrust($).catch(() => {}) // a store that cannot be read just means the home file asks for trust
-    await loadTeam($).catch(error => $.ui.toast(`Agent HQ: could not load the team (${error instanceof Error ? error.message : 'error'})`))
+    await loadTeam($).catch(error => $.ui.toast(t(lang, 'team.couldNotLoad', { reason: error instanceof Error ? error.message : t(lang, 'trust.error') })))
     for (const spec of TOOL_SPECS) await $.tool.register(spec).catch(error => $.ui.log(`Agent HQ: could not offer ${spec.name} (${error instanceof Error ? error.message : 'error'})`, { to: 'debug' }))
     // a hot reload ends the module and the page server with it: bring the page back (same hub port and secret, so an open tab reconnects)
     if (await read($, isWebWanted)) void startWeb($).catch(error => $.ui.log(`Agent HQ: could not restart the live page (${error instanceof Error ? error.message : String(error)})`, { to: 'debug' }))
+    // not awaited: the first start is awaited before the first prompt, and a dialog must not hold it. Only the REPL has
+    // someone to ask at the start; the desktop app, the SDK and -p start with nobody (a client joining later asks)
+    if (e.isInteractive) void askLanguageOnce($).catch(logLanguageAsk($))
 
     return next(e)
   })
 
   on('command.run', { command: 'hq' }, async ($, e) => {
+    const [verb, ...words] = e.args.trim().split(/\s+/)
+    if (verb?.toLowerCase() === 'lang') return langCommand($, words.join(' '))
     if (e.args.trim().toLowerCase() === 'report') return runReport($)
     if (e.args.trim().toLowerCase() === 'trust') return trustCommand($, e.origin)
     if (e.args.trim().toLowerCase() === 'web') {
@@ -691,16 +837,21 @@ export const register: Register = (on, options) => {
           if (isFirstRun) return { url: startUrl, pages: 0 } // the link the new server printed is unused yet
           throw error
         })
-        if (pages > 0) return { text: `Agent HQ live page is already open in your browser (${pages === 1 ? 'one tab' : `${pages} tabs`}); it shows this session too. To open it in another browser: ${url}` }
+        if (pages > 0) return { text: t(lang, 'web.alreadyOpen', { tabs: pages === 1 ? t(lang, 'web.oneTab') : t(lang, 'web.tabs', { n: pages }), url }) }
         const opened = await openInBrowser($, url)
-        return { text: opened ? `Agent HQ live page opened: ${url}` : `Agent HQ live page is running; open it at ${url}` }
+        return { text: t(lang, opened ? 'web.opened' : 'web.running', { url }) }
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error)
-        return { text: `Agent HQ could not start its live page (${reason}). It needs Node.js on your PATH.` }
+        return { text: t(lang, 'web.failed', { reason }) }
       }
     }
     const arg = e.args.trim().toLowerCase()
     const canAsk = PERSON_ORIGINS.has(e.origin.kind) || ASKING_ORIGINS.has(e.origin.kind)
+    // the language first, where no client was asked yet (its join was missed) and someone can answer: before the trust
+    // dialog. Thai reloads the plugin, so this run ends here and the setting follows once it returned
+    if (arg === '' && canAsk && (await $.session.surfaces().catch(() => [])).length > 0) {
+      if ((await askLanguageOnce($).catch(logLanguageAsk($))) === 'th') return { text: t('th', 'lang.changedReopen') }
+    }
     const trusted = (arg === '' || arg === 'open') && canAsk ? await askTrust($, false) : null
     if (trusted) {
       await update($, isBandHidden, () => false)
@@ -714,23 +865,33 @@ export const register: Register = (on, options) => {
     await openSidebar($)
     await syncAgents($)
     const source = await read($, teamSource)
-    if (source?.error) return { text: `Agent HQ sidebar opened. The team file at ${source.path} was ignored: ${source.error}` }
+    if (source?.error) return { text: t(lang, 'hq.openedIgnored', { path: source.path, error: source.error }) }
 
-    return { text: loaded ? `Agent HQ sidebar opened. Team "${loaded.name}" is loaded.` : 'Agent HQ sidebar opened. No team yet: run /agent-hq:team to create one.' }
+    return { text: loaded ? t(lang, 'hq.openedTeam', { name: loaded.name }) : t(lang, 'hq.openedNoTeam') }
   })
 
-  // the main session plays the team's lead: its role, rules and roster ride in the system prompt while a team exists
+  // the main session plays the team's lead: its role, rules and roster ride in the system prompt while a team exists; the
+  // person's language rides there too, team or not
   on('prompt.compose', async ($, e, next) => {
     const composed = await next(e)
     const current = await read($, team)
     if (e.traits.includes('teammate') || e.traits.includes('bare')) return composed
+    const language = languageSection(lang)
+    const spoken = language ? [{ id: 'agent-hq:language', text: language, scope: 'session' as const }] : []
     if (!current) {
       // no file at all: offer to make one; a file that is untrusted or ignored has its own toast pointing at the fix
-      if ((await read($, teamSource)) !== null) return composed
-      return { sections: [...composed.sections, { id: 'agent-hq:no-team', text: NO_TEAM_PROMPT, scope: 'session' as const }] }
+      if ((await read($, teamSource)) !== null) return spoken.length > 0 ? { sections: [...composed.sections, ...spoken] } : composed
+      return { sections: [...composed.sections, { id: 'agent-hq:no-team', text: NO_TEAM_PROMPT, scope: 'session' as const }, ...spoken] }
     }
 
-    return { sections: [...composed.sections, { id: 'agent-hq:team', text: `${leadPrompt(current)}\n\n${LEAD_TOOLS_NOTE}`, scope: 'session' as const }] }
+    return { sections: [...composed.sections, { id: 'agent-hq:team', text: `${leadPrompt(current)}\n\n${LEAD_TOOLS_NOTE}`, scope: 'session' as const }, ...spoken] }
+  })
+
+  // a client that joins later (the desktop app, whose session started with nobody to ask) is asked the language then
+  on('session.attach', async ($, e, next) => {
+    const joined = await next(e)
+    void askLanguageOnce($).catch(logLanguageAsk($)) // beside the join, never in its way
+    return joined
   })
 
   // a /model switch raises no event a mod sees: check the lead's model as each prompt goes in
@@ -754,6 +915,10 @@ export const register: Register = (on, options) => {
     // bookkeeping after the agent started: whatever goes wrong here must not turn a started agent into an Agent-tool error
     await (async () => {
       await syncAgents($)
+      // what it was given to do, from whoever started it: an hq_assign task's first line, else the Agent call's
+      // description; never the prompt, nor the person's own words (a start from the live page)
+      const started = (spawned as { agentId?: string }).agentId
+      if (started && !e.resume && !(e.name !== undefined && personStarts.has(e.name))) await talk($, e.parentAgentId ?? MAIN, started, (e.name ? (await read($, assignments))[e.name]?.task : undefined) ?? e.description)
       await update($, isBandHidden, () => false)
       if (!(await read($, wasAutoOpened))) {
         await update($, wasAutoOpened, () => true)
@@ -770,17 +935,19 @@ export const register: Register = (on, options) => {
     if (String(e.tool) === STATUS_TOOL) return answerLeadTool($, e, deps => hqStatus(deps))
     if (String(e.tool) === REVIEW_TOOL) return answerLeadTool($, e, deps => hqReview($, e, deps))
     if (String(e.tool) === HIRE_TOOL) return answerLeadTool($, e, deps => hqHire(e, deps))
+    // anyone's, lead or member: a coordination tool the guard never refuses
+    if (String(e.tool) === DOING_TOOL) return answerDoing($, e).catch(error => ({ result: `hq_doing failed (${error instanceof Error ? error.message : String(error)})`, isError: true as const }))
 
     const blocked = await blockedByGuard($, e)
     if (blocked) return { deny: blocked }
 
     const loop = e.agentId ?? MAIN
-    const t = await $.clock.now()
-    await update($, agents, rows => countTool(rows, loop, String(e.tool), t))
-    await recordEvents($, [{ agent: loop, kind: 'tool', text: `used ${String(e.tool)}` }])
+    const at = await $.clock.now()
+    await update($, agents, rows => countTool(rows, loop, String(e.tool), at))
+    await recordEvents($, [{ agent: loop, kind: 'tool', text: t(lang, 'feed.used', { tool: String(e.tool) }) }])
     // what it does right now: the sidebar and band redraw on the write; the page gets it without waiting for the poll
-    const callId = e.tool_use_id || `${loop}:${t}`
-    const doing = { text: describeCall(String(e.tool), e as unknown as Record<string, unknown>), since: t, callId }
+    const callId = e.tool_use_id || `${loop}:${at}`
+    const doing = { text: describeCall(String(e.tool), e as unknown as Record<string, unknown>, lang), since: at, callId }
     await update($, activity, all => startActivity(all, loop, doing))
       .then(() => requestLive($))
       .catch(() => {}) // the live line is a nicety: never fail the call over it
@@ -793,7 +960,7 @@ export const register: Register = (on, options) => {
     try {
       ran = await next(e)
     } finally {
-      const ended = await $.clock.now().catch(() => t)
+      const ended = await $.clock.now().catch(() => at)
       await update($, activity, all => endActivity(all, loop, callId, ended))
         .then(() => requestLive($))
         .catch(() => {})
@@ -814,7 +981,8 @@ export const register: Register = (on, options) => {
       if (e.tool === 'TodoWrite') {
         const before = (await read($, todos))[loop]
         await update($, todos, all => ({ ...all, [loop]: e.todos.map(todo => ({ ...todo })) }))
-        await recordEvents($, stepEvents(loop, before, e.todos))
+        await recordEvents($, stepEvents(loop, before, e.todos, lang))
+        await pruneSaid($) // a new step in progress retires the sentence said for the last one
       } else if (e.tool === 'TaskCreate' && ran.result) {
         const id = (ran.result as { task?: { id?: string } }).task?.id
         if (id) await update($, tasks, all => createTask(all, id, e.subject, e.activeForm))
@@ -828,21 +996,28 @@ export const register: Register = (on, options) => {
             addBlockedBy: e.addBlockedBy,
           }),
         )
-        if (e.status === 'completed') await recordEvents($, [{ agent: loop, kind: 'step', text: `done: ${(await read($, tasks))[e.taskId]?.subject ?? `task ${e.taskId}`}` }])
+        if (e.status === 'completed') {
+          const what = (await read($, tasks))[e.taskId]?.subject ?? t(lang, 'feed.task', { id: e.taskId })
+          await recordEvents($, [{ agent: loop, kind: 'step', text: t(lang, 'feed.done', { what }) }])
+        }
       } else if ((e.tool === 'Write' || e.tool === 'Edit') && isTeamFile((e as { file_path?: unknown }).file_path)) {
         // the team skill (or the person) just wrote the team file: load it now, so its roles can be used this turn.
         // Only the main session's own write of the file in force is trusted; anything else waits for the person's /hq trust.
         const expected = await expectedOwnTeamText($, e as TeamWrite, teamBefore)
         const loaded = await loadTeam($, expected === null ? {} : { approve: true, expect: expected })
         const trusted = expected !== null && (await read($, teamSource))?.needsApproval !== true
-        if (loaded && trusted) $.ui.toast(`Agent HQ: team "${loaded.name}" loaded, ${loaded.roles.length} roles`)
+        if (loaded && trusted) $.ui.toast(t(lang, 'team.loaded', { name: loaded.name, n: loaded.roles.length }))
       }
       await syncStatus($)
       await requestLive($)
     })().catch(error => $.ui.log(`Agent HQ: could not note a ${String(e.tool)} call (${error instanceof Error ? error.message : String(error)})`, { to: 'debug' }))
 
     return ran
-  })
+  }).catch(($, e, next) =>
+    // the hook failed (threw or overran): the call it already let through stands; one not yet decided runs only for the
+    // lead, who is never guarded. A member's is refused, so the rule guard never fails open
+    next.called ? next(e) : e.agentId ? { deny: GUARD_FAILED } : next(e),
+  )
 
   // what each agent used: the engine reports tokens and time at the end of every turn (no price, so no cost)
   on('turn.complete', async ($, e, next) => {
@@ -851,6 +1026,21 @@ export const register: Register = (on, options) => {
     await update($, usage, all => ({ ...all, [loop]: addTurn(all[loop], e) }))
       .then(() => requestLive($))
       .catch(error => $.ui.log(`Agent HQ: could not note a turn (${error instanceof Error ? error.message : String(error)})`, { to: 'debug' }))
+    // the loop's turn is over (the lead's or a member's), and so is what it said it was doing
+    if ((await read($, says))[loop]) {
+      await update($, says, ({ [loop]: _said, ...rest }) => rest)
+        .then(() => requestLive($))
+        .catch(() => {}) // the next turn's sentence replaces it anyway
+    }
+    // a member's run ended: what reached whoever started it (the engine's delivered copy: a hand-back's report, made safe,
+    // else its last answer) shows on its card. A teammate's turn text reaches nobody: it reports with SendMessage
+    if (e.agentId !== undefined && e.reason === 'answer') {
+      const member = e.agentId
+      await (async () => {
+        if ((await $.agent.list()).some(a => a.id === member && a.teammateId !== undefined)) return
+        await talk($, member, (await read($, agents))[member]?.parentId ?? MAIN, e.answer)
+      })().catch(error => $.ui.log(`Agent HQ: could not note an answer (${error instanceof Error ? error.message : String(error)})`, { to: 'debug' }))
+    }
     // the loop's turn is over, so none of its calls waits on a dialog now: also an ask whose tool.call never reached
     // this mod (an Agent call made through $.agent.spawn), which would otherwise wait in the inbox forever
     if (Object.values(await read($, asks)).some(ask => ask.agent === loop)) {
@@ -876,6 +1066,18 @@ export const register: Register = (on, options) => {
     }
     return verdict
   })
+
+  // a message between the lead and a member, or between members, shows over the member's card (hooks/talk.ts); the
+  // person's own message from the live page is theirs, not the team's talk
+  on('session.send', async ($, e, next) => {
+    const sent = await next(e)
+    if (!sent.isDelivered || (e.origin.kind === 'plugin' && e.text.startsWith(PERSON_FRAME))) return sent
+    await (async () => {
+      const to = recipientOf(e.to, await read($, agents))
+      if (to) await talk($, e.agentId ?? MAIN, to, e.text)
+    })().catch(error => $.ui.log(`Agent HQ: could not note a message (${error instanceof Error ? error.message : String(error)})`, { to: 'debug' }))
+    return sent
+  }).catch(($, e, next) => next(e)) // the bubble is a nicety: whatever failed, the message still goes (or its first send stands)
 
   // which agent moves which plan-progress bar: its response row names the bar; every plugin sees every row,
   // whatever order the plugins stand in (plan-progress answers its tool itself, so tool.call may never reach us)
@@ -925,7 +1127,7 @@ export const register: Register = (on, options) => {
       seat($, 'band', { requestId: e.requestId, data, draw: t => bandRasters(data, W, t, isLight) })
       const draw = (key: string) => {
         const r = drawn.find(x => x.key === key)
-        return r ? <Raster key={r.key} columns={r.columns} rows={r.rows} cells={r.cells} /> : null
+        return r ? withAside(els, r, <Raster key={r.key} columns={r.columns} rows={r.rows} cells={r.cells} />) : null
       }
       tree = BandView(els, data, actions, draw, hasClicks)
     } else {
@@ -953,7 +1155,7 @@ export const register: Register = (on, options) => {
       onToggleHide: () => void update($, hideFinished, v => !v),
       onClear: () => clearDone($),
       onClose: () => void closeSidebar($).catch(() => {}),
-      onBuildTeam: () => void $.command.run({ command: 'agent-hq:team' }).catch(() => $.ui.toast('Agent HQ: run /agent-hq:team to build a team')),
+      onBuildTeam: () => void $.command.run({ command: 'agent-hq:team' }).catch(() => $.ui.toast(t(lang, 'team.buildHint'))),
       onToggleExpand: () => void update($, isTreeExpanded, v => !v),
     }
     if (e.surface !== 'terminal') {
@@ -966,7 +1168,7 @@ export const register: Register = (on, options) => {
     seat($, 'sidebar', { requestId: e.requestId, data, draw: t => sidebarRasters(data, t) })
     const draw = (key: string) => {
       const r = drawn.find(x => x.key === key)
-      return r ? <Raster key={r.key} columns={r.columns} rows={r.rows} cells={r.cells} /> : null
+      return r ? withAside(els, r, <Raster key={r.key} columns={r.columns} rows={r.rows} cells={r.cells} />) : null
     }
     return SidebarView(els, data, actions, draw)
   })

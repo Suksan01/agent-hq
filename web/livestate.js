@@ -9,6 +9,7 @@ import { soundSummary, soundsFor } from './sounds.js'
 import { playEvent, playNav } from './space-sounds.js'
 import { connectEvents, postAction } from './net.js'
 import { keyOf, nicknamed, sessionsOf, signatureOf } from './livemap.js'
+import { t } from './i18n.js'
 
 const { useCallback, useEffect, useMemo, useRef, useState } = React
 const TOAST_MS = 4500
@@ -42,12 +43,12 @@ function wakeAudio() {
 export async function post(action, target) {
   const body = target?.session ? { ...action, session: target.session } : action
   const res = await postAction(body)
-  if (res.ok) return { ok: true, text: 'Sent to Agent HQ…' }
+  if (res.ok) return { ok: true, text: t('post.sent') }
   const where = target?.label ? `${target.label}: ` : ''
-  if (res.status === 404) return { ok: false, text: `${where}that session has stopped` }
-  if (res.status === 503) return { ok: false, text: `${where}could not reach the session` }
-  if (res.status === 429) return { ok: false, text: `${where}too many requests are waiting; try again shortly` }
-  return { ok: false, text: 'Could not reach Agent HQ' }
+  if (res.status === 404) return { ok: false, text: t('post.stopped', { where }) }
+  if (res.status === 503) return { ok: false, text: t('post.unreachable', { where }) }
+  if (res.status === 429) return { ok: false, text: t('post.busy', { where }) }
+  return { ok: false, text: t('post.offline') }
 }
 
 export function useLive() {

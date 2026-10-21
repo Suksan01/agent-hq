@@ -3,6 +3,7 @@
 //  - `tests_red` (a failing test command) is an addition to the event list: it adds nothing and resets the test streak;
 //  - `task_done` carries the task `subject` and optionally `startedAt`; speedy needs startedAt and now - startedAt < 120 000 ms;
 //  - bug_squasher matches the whole words fix, fixes, fixed, bug, bugs (case-insensitive): "Prefix" and "Debugging" do not;
+//    in Thai, แก้ or บั๊ก anywhere (Thai has no word breaks);
 //  - comeback is earned by the first task_done or agent_done that comes after an agent_failed;
 //  - `badges` returned are the ones THIS event earned (in BADGES order); `stats.badges` holds every id earned so far.
 import { expect, test } from 'claude-code/testing'
@@ -115,6 +116,13 @@ test('test_streak_5 needs five green runs in a row; a red run starts the count o
   expect(replay([...green(3), { type: 'tests_red' }, ...green(5)]).earned).toEqual(['test_streak_5'])
   expect(replay(green(9)).earned).toEqual(['test_streak_5']) // not again
   expect(replay([...green(2), { type: 'tests_red' }]).stats.testStreak).toBe(0)
+})
+
+test('bug_squasher is earned by a Thai task about a fix or a bug too', () => {
+  for (const subject of ['แก้บั๊กหน้าค้นหา', 'แก้หน้าแรก', 'บั๊กในตะกร้า']) {
+    expect(ids(applyEvent(stats({ badges: ['first_task'] }), task(subject), NOW)), subject).toEqual(['bug_squasher'])
+  }
+  expect(ids(applyEvent(stats({ badges: ['first_task'] }), task('เพิ่มหน้าค้นหา'), NOW))).toEqual([])
 })
 
 test('bug_squasher is earned by a finished task about a fix or a bug, by whole word', () => {

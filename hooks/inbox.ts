@@ -4,6 +4,9 @@
 import type { HqAgent, HqStatus } from '../types'
 import { baseName, commandWords, hostOf } from './activity'
 import { MAIN, isFinished } from './model'
+import { headOf } from './cells'
+import { t } from './i18n'
+import type { Key, Lang } from './i18n'
 
 export type InboxItem = { agent: string; since: number; what: string }
 /** An open permission ask, by the tool call it is for. */
@@ -15,7 +18,7 @@ const ASKS_MAX = 50
 /** How long an idle teammate (done with its turn) counts as needing the person; after that it is only resting. */
 export const IDLE_LIMIT_MS = 10 * 60_000
 
-const clip = (text: string) => (text.length > WHAT_MAX ? `${text.slice(0, WHAT_MAX - 1)}…` : text)
+const clip = (text: string) => (text.length > WHAT_MAX ? `${headOf(text, WHAT_MAX - 1)}…` : text)
 
 /** A tool call in a few words: `Bash: npm test`, `Edit: page.tsx`, `WebFetch: example.com`, or just the tool. Never a command's arguments, a full path or a URL's path and query. */
 export function describeAsk(tool: string, input: unknown): string {
@@ -42,9 +45,9 @@ export const liveAsks = (asks: Asks, agents: Record<string, HqAgent>): Asks =>
  * Why an agent waits on the person, by its status: `waiting` is held on a plan's approval, background work or an Agent
  * call (the sidebar calls it "needs approval"); `idle` is a teammate done with its turn, waiting for a message.
  */
-const HELD: Partial<Record<HqStatus, string>> = {
-  waiting: 'held, waiting on an approval or a background task',
-  idle: 'idle, waiting for a message',
+const HELD: Partial<Record<HqStatus, Key>> = {
+  waiting: 'inbox.held',
+  idle: 'inbox.idle',
 }
 
 /** The agents newly waiting on the person (see HELD) get a start time, the ones no longer waiting lose theirs. */
@@ -60,11 +63,12 @@ export function trackWaiting(since: Record<string, number>, agents: Record<strin
  * Everything waiting on the person at `now`, longest waiting first: open permission asks, then held agents and idle
  * teammates (an idle one only for IDLE_LIMIT_MS: a teammate idle for hours is resting, not waiting on anyone).
  */
-export function buildInbox(asks: Asks, agents: Record<string, HqAgent>, waitingSince: Record<string, number>, now: number): InboxItem[] {
+export function buildInbox(asks: Asks, agents: Record<string, HqAgent>, waitingSince: Record<string, number>, now: number, lang: Lang = 'en'): InboxItem[] {
   const fromAsks = Object.values(liveAsks(asks, agents))
   const askers = new Set(fromAsks.map(a => a.agent))
   const fromAgents = Object.values(agents).flatMap((a): InboxItem[] => {
-    const what = HELD[a.status]
+    const held = HELD[a.status]
+    const what = held && t(lang, held)
     const since = waitingSince[a.id] ?? a.startedAt
     const isResting = a.status === 'idle' && now - since > IDLE_LIMIT_MS
     return a.id !== MAIN && what && !askers.has(a.id) && !isResting ? [{ agent: a.id, since, what }] : []
@@ -73,7 +77,7 @@ export function buildInbox(asks: Asks, agents: Record<string, HqAgent>, waitingS
 }
 
 /** The status line: how many are working and how many need the person; nothing at all when there is nothing to show. */
-export function statusText(working: number, needsYou: number, tasks: { done: number; total: number }): string | undefined {
+export function statusText(working: number, needsYou: number, tasks: { done: number; total: number }, lang: Lang = 'en'): string | undefined {
   if (working === 0 && needsYou === 0 && tasks.total === 0) return undefined
-  return `🪐 ${working} working${needsYou > 0 ? ` · ${needsYou} needs you` : ''}${tasks.total > 0 ? ` · ${tasks.done}/${tasks.total} tasks` : ''}`
+  return `${t(lang, 'line.working', { n: working })}${needsYou > 0 ? t(lang, 'line.needsYou', { n: needsYou }) : ''}${tasks.total > 0 ? t(lang, 'line.tasks', tasks) : ''}`
 }
