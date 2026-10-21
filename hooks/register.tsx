@@ -6,7 +6,7 @@ import { cleanSaying, currentStep, maskedWork, pruneSays } from './says'
 import type { HqTeam, HqTodo } from '../types'
 import { MEMORY_SCOPE, NO_TEAM_PROMPT, SELF_EVAL_SKILL, TEAM_FILE, languageSection, leadModelWarning, leadPrompt, parseTeam, rolePrompt } from './team'
 import { LANGUAGE_CHOICES, LANGUAGE_HEADER, LANGUAGE_OPTION, LANGUAGE_QUESTION, langOf, languageOfAnswer, t } from './i18n'
-import type { Lang } from './i18n'
+import type { Key, Lang } from './i18n'
 import { PERSON_FRAME, personStarts, runFreshActions } from './actions'
 import type { ActionDeps, PageAction } from './actions'
 import { hasOldRecord, isApproved, withApproval } from './approval'
@@ -15,6 +15,7 @@ import { EMPTY_FEED, addEvents, statusEvents, stepEvents } from './feed'
 import type { NewEvent } from './feed'
 import { buildSnapshot } from './live'
 import { parseSuggestions, suggestPrompt } from './suggest'
+import { ALLOWED, DENIED, HELPER_TIMEOUT_MS, answerOf, approvalRequest, canHold, pageCount } from './pageapproval'
 import { addBubble, bubbleText, liveBubbles, placeTalk, recipientOf, talkLine } from './talk'
 import { configureLock } from './lock'
 import { createReport, reportToast } from './report'
@@ -28,7 +29,7 @@ import { addAsk, buildInbox, describeAsk, dropAsksOf, removeAsk, statusText, tra
 import { announceXp, createLedger, creditActivity, creditTestRun, xpStoreOf, xpSummaries } from './xpstore'
 import { ASSIGN_TOOL, HIRE_TOOL, LEAD_TOOLS_NOTE, REVIEW_TOOL, STATUS_TOOL, TOOL_SPECS, hqAssign, hqHire, hqReview, hqStatus, keepResult, textOfContent } from './tools'
 import type { ToolAnswer, ToolDeps } from './tools'
-import { BandView, SidebarView, bandRasters, bandTrackWidth, folderOf, hasBand, sidebarRasters, textTrack, withAside } from './view'
+import { BandView, SidebarView, bandRasters, bandTrackWidth, folderOf, hasBand, labelOf, sidebarRasters, textTrack, withAside } from './view'
 import type { BandActions, HqActions, HqData, Raster } from './view'
 
 const PANE = 'agent-hq'
@@ -592,8 +593,33 @@ function startWeb($: EngineInterface): Promise<string> {
   return webStarting
 }
 
+// ---------- the page's settings, and how many pages are open ----------
+type Setting = { key: string; isDefaultOn: boolean; on: Key; off: Key; usage: Key }
+// $.store keys, each a boolean the person set; unset means its default
+const NEXT_TASKS: Setting = { key: 'nextTasks', isDefaultOn: true, on: 'web.nextOn', off: 'web.nextOff', usage: 'web.nextUsage' }
+const PAGE_APPROVALS: Setting = { key: 'pageApprovals', isDefaultOn: false, on: 'web.approvalsOn', off: 'web.approvalsOff', usage: 'web.approvalsUsage' }
+const WEB_SETTINGS: Readonly<Record<string, Setting>> = { next: NEXT_TASKS, approvals: PAGE_APPROVALS } // /hq web <word> [on|off]
+
+async function isSettingOn($: EngineInterface, setting: Setting): Promise<boolean> {
+  const stored = await $.store.get(setting.key)
+  return typeof stored === 'boolean' ? stored : setting.isDefaultOn
+}
+
+/** `/hq web next|approvals [on|off]`: sets it, and says which is in force. */
+async function settingCommand($: EngineInterface, setting: Setting, word: string): Promise<{ text: string }> {
+  if (word !== '' && word !== 'on' && word !== 'off') return { text: t(lang, setting.usage) }
+  if (word !== '') await $.store.set(setting.key, word === 'on')
+  return { text: t(lang, (await isSettingOn($, setting)) ? setting.on : setting.off) }
+}
+
+/** Pages open on the hub (its pages.json beside this session's state file); 0 without the page server, or unreadable. */
+async function openPages($: EngineInterface): Promise<number> {
+  if (!web) return 0
+  const text = await $.fs.read(`${web.statePath.slice(0, web.statePath.lastIndexOf('/'))}/pages.json`).catch(() => '')
+  return pageCount(text)
+}
+
 // ---------- next-task suggestions on the live page (hooks/suggest.ts) ----------
-const NEXT_OFF = 'nextTasksOff' // $.store key: /hq web next off; unset means on
 let suggestFor: string | null = null // the lead's answered turn the next fork drafts for; null once its next turn started
 let isSuggesting = false // one fork at a time
 
@@ -608,21 +634,18 @@ async function suggestNext($: EngineInterface) {
   try {
     while (suggestFor !== null) {
       const turnId = suggestFor
-      // shortcut: "a page is open" is read as "this session's page server runs" (from /hq web to the session's end); the
-      // hub's page count costs a process run and mints a login code each turn. Ask it if closed tabs should stop the cost
-      if (!web || (await $.store.get(NEXT_OFF)) === true) break
+      if (!(await isSettingOn($, NEXT_TASKS)) || (await openPages($)) === 0) break
       const reply = await $.model.fork({ prompt: suggestPrompt(lang) })
       if (suggestFor !== turnId) continue
-      suggestFor = null
-      if (!reply.isAnswered) {
-        $.ui.log(`Agent HQ: no next-task suggestions (${reply.reason})`, { to: 'debug' })
-        break
+      if (!reply.isAnswered) $.ui.log(`Agent HQ: no next-task suggestions (${reply.reason})`, { to: 'debug' })
+      const parsed = reply.isAnswered ? parseSuggestions(reply.text) : null
+      if (parsed) {
+        const at = await $.clock.now()
+        // the lead's next turn may start while this is written: only a draft still current lands
+        await update($, suggestions, current => (suggestFor === turnId ? { ...parsed, at } : current))
+        await requestLive($)
       }
-      const parsed = parseSuggestions(reply.text)
-      if (!parsed) break
-      const at = await $.clock.now()
-      await update($, suggestions, () => ({ ...parsed, at }))
-      await requestLive($)
+      if (suggestFor === turnId) suggestFor = null // else a newer answered turn waits: the loop forks for it
     }
   } catch (error) {
     $.ui.log(`Agent HQ: could not suggest next tasks (${error instanceof Error ? error.message : String(error)})`, { to: 'debug' })
@@ -639,12 +662,47 @@ async function clearSuggestions($: EngineInterface) {
   await requestLive($)
 }
 
-/** `/hq web next on|off`: the live page's next-task suggestions, on unless turned off; bare, which is in force. */
-async function nextCommand($: EngineInterface, word: string): Promise<{ text: string }> {
-  if (word !== '' && word !== 'on' && word !== 'off') return { text: t(lang, 'web.nextUsage') }
-  if (word !== '') await $.store.set(NEXT_OFF, word === 'off')
-  if (word === 'off') await clearSuggestions($)
-  return { text: t(lang, (await $.store.get(NEXT_OFF)) === true ? 'web.nextOff' : 'web.nextOn') }
+// ---------- page approvals (hooks/pageapproval.ts) ----------
+// the permission mode each loop was last seen in (main, or an agent id), from the classic hooks that carry it; a mod's
+// classic.PreToolUse gets no mode. shortcut: a switch mid-turn is seen once the next tool call ends
+const modes = new Map<string, string>()
+let isApprovalOpen = false // one approval at a time
+
+function noteMode(e: { permission_mode?: string; agent_id?: string }) {
+  if (typeof e.permission_mode === 'string') modes.set(e.agent_id ?? MAIN, e.permission_mode)
+}
+
+type Ask = { tool: string; input: unknown; tool_use_id?: string; agentId?: string; ceiling?: string }
+type Verdict = { decision: 'allow' | 'ask' | 'deny'; reason?: string }
+
+/**
+ * An ask offered on the live page first: tool.check waits while web/approve.mjs waits for the person's answer there.
+ * Only an ask is held, one at a time; only their Allow or Deny changes it. No answer, "Ask in terminal now", a helper
+ * that failed or timed out, and Esc (which aborts the run) all leave the ask, so the engine's dialog follows.
+ */
+async function askOnPage<V extends Verdict>($: EngineInterface, e: Ask, verdict: V): Promise<V | Verdict> {
+  if (verdict.decision !== 'ask' || isApprovalOpen) return verdict
+  isApprovalOpen = true // taken before the first await, so a second ask meanwhile goes to the dialog
+  try {
+    const loop = e.agentId ?? MAIN
+    const facts = { decision: verdict.decision, isOn: await isSettingOn($, PAGE_APPROVALS), pages: await openPages($), toolUseId: e.tool_use_id, tool: e.tool, ceiling: e.ceiling, mode: modes.get(loop), input: e.input }
+    if (!canHold(facts) || !web || !e.tool_use_id) return verdict
+    const row = (await read($, agents))[loop]
+    const current = await read($, team)
+    const role = loop === MAIN ? (current?.lead.title ?? null) : row ? labelOf(row, current, lang).role : null
+    const request = approvalRequest({ id: e.tool_use_id, agent: row ? who(row) : loop, role, tool: e.tool, input: e.input, cwd: await $.session.cwd(), lang, at: await $.clock.now() })
+    $.ui.toast(t(lang, 'approval.waiting'))
+    const ran = await $.process.run(['node', `${$.plugin.root}/web/approve.mjs`, '--state', web.statePath], { stdin: request, timeoutMs: HELPER_TIMEOUT_MS })
+    const answer = ran.exitCode === 0 ? answerOf(ran.stdout) : null
+    if (answer === 'allow') return { decision: 'allow', reason: ALLOWED }
+    if (answer === 'deny') return { decision: 'deny', reason: DENIED }
+    return verdict
+  } catch (error) {
+    $.ui.log(`Agent HQ: the page approval ended without an answer (${error instanceof Error ? error.message : String(error)})`, { to: 'debug' })
+    return verdict
+  } finally {
+    isApprovalOpen = false
+  }
 }
 
 /** A new one-time login link for the running page, and how many pages are open (`server.mjs --login` asks the hub). */
@@ -851,7 +909,7 @@ export const register: Register = (on, options) => {
     await $.command.register({
       name: 'hq',
       description: t(lang, 'hq.description'),
-      argumentHint: '[open|close|web [next on|off]|report|trust|lang]',
+      argumentHint: '[open|close|web [next|approvals on|off]|report|trust|lang]',
     })
     // shortcut: a light theme name picks the light tint; "auto" is read as dark (plan-progress also probes macOS appearance).
     const theme = (await $.config.list().catch(() => [])).find(row => row.key === 'theme')
@@ -878,7 +936,13 @@ export const register: Register = (on, options) => {
   on('command.run', { command: 'hq' }, async ($, e) => {
     const [verb, ...words] = e.args.trim().split(/\s+/)
     if (verb?.toLowerCase() === 'lang') return langCommand($, words.join(' '))
-    if (verb?.toLowerCase() === 'web' && words[0]?.toLowerCase() === 'next') return nextCommand($, (words[1] ?? '').toLowerCase())
+    const setting = verb?.toLowerCase() === 'web' ? WEB_SETTINGS[words[0]?.toLowerCase() ?? ''] : undefined
+    if (setting) {
+      const word = (words[1] ?? '').toLowerCase()
+      const answer = await settingCommand($, setting, word)
+      if (setting === NEXT_TASKS && word === 'off') await clearSuggestions($)
+      return answer
+    }
     if (e.args.trim().toLowerCase() === 'report') return runReport($)
     if (e.args.trim().toLowerCase() === 'trust') return trustCommand($, e.origin)
     if (e.args.trim().toLowerCase() === 'web') {
@@ -1134,8 +1198,22 @@ export const register: Register = (on, options) => {
         .then(() => requestLive($))
         .catch(error => $.ui.log(`Agent HQ: could not note a permission ask (${error instanceof Error ? error.message : String(error)})`, { to: 'debug' }))
     }
-    return verdict
-  })
+    return askOnPage($, e, verdict)
+  }).catch(($, e, next) => next(e)) // the hook failed: the engine's own verdict stands (next replays it)
+
+  // the permission mode each loop runs in, for page approvals: these classic events carry it, a mod's PreToolUse does not
+  on('classic.UserPromptSubmit', async ($, e, next) => {
+    noteMode(e)
+    return next(e)
+  }).catch(($, e, next) => next(e))
+  on('classic.PostToolUse', async ($, e, next) => {
+    noteMode(e)
+    return next(e)
+  }).catch(($, e, next) => next(e))
+  on('classic.PostToolUseFailure', async ($, e, next) => {
+    noteMode(e)
+    return next(e)
+  }).catch(($, e, next) => next(e))
 
   // a message between the lead and a member, or between members, shows over the member's card (hooks/talk.ts); the
   // person's own message from the live page is theirs, not the team's talk

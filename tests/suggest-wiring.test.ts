@@ -8,6 +8,7 @@ import type { Engine, MockClock } from 'claude-code/testing'
 import { suggestPrompt } from '../hooks/suggest'
 
 const STATE = '/home/me/.claude/agent-hq/live/sess.json'
+const PAGES = '/home/me/.claude/agent-hq/live/pages.json' // the hub's count of open pages
 type Suggestions = { recap: string | null; items: string[]; at: number } | null
 type Snapshot = { suggestions?: Suggestions }
 type Reply = { isAnswered: true; text: string; usage: Record<string, number> } | { isAnswered: false; reason: string }
@@ -16,6 +17,8 @@ type Session = {
   forks: string[]
   logs: string[]
   stored: Record<string, unknown>
+  /** What pages.json holds (null: missing). */
+  setPages: (text: string | null) => void
   /** Holds every fork until `release` answers it (the reply given, or a throw). */
   hold: () => void
   release: (reply: Reply | Error) => void
@@ -35,6 +38,7 @@ async function session($: Engine, on: On, options: { web?: boolean; stored?: Rec
   const stored: Record<string, unknown> = { languageAsked: true, ...options.stored }
   let reply: Reply | Error = REPLY
   let held: ((value: Reply | Error) => void)[] | null = null
+  let pages: string | null = JSON.stringify({ count: 1, at: 1 })
   on('store.get', (_, e) => ({ value: stored[e.key] }))
   on('store.set', (_, e) => {
     stored[e.key] = e.value
@@ -44,7 +48,7 @@ async function session($: Engine, on: On, options: { web?: boolean; stored?: Rec
   on('session.cwd', () => ({ value: '/work/app' }))
   on('session.id', () => ({ value: 'sess' }))
   on('fs.exists', () => ({ value: false }))
-  on('fs.read', () => ({ value: '' }))
+  on('fs.read', (_, e) => (e.path === PAGES ? (pages === null ? { deny: 'ENOENT: no such file' } : { value: pages }) : { value: '' }) as never)
   on('fs.write', (_, e) => {
     if (e.path === STATE) snaps.push(JSON.parse(e.text))
     return { value: undefined }
@@ -79,6 +83,7 @@ async function session($: Engine, on: On, options: { web?: boolean; stored?: Rec
     forks,
     logs,
     stored,
+    setPages: text => void (pages = text),
     hold: () => void (held = []),
     release: given => {
       reply = given
@@ -127,7 +132,7 @@ test("no fork for a member's turn, an interrupted or failed lead turn, without t
   await leadTurn($, 't3')
   await s.snapshot()
   expect(s.forks).toEqual([])
-  expect(s.stored.nextTasksOff).toBe(true)
+  expect(s.stored.nextTasks).toBe(false)
 
   await s.command('web next on')
   await leadTurn($, 't4')
@@ -140,6 +145,20 @@ test('no page, no fork', async ($, on) => {
   await leadTurn($, 't1')
   await s.clock.settle()
   expect(s.forks).toEqual([])
+})
+
+test('no page open (pages.json count 0, missing or unreadable): no fork', async ($, on) => {
+  const s = await session($, on)
+  for (const [i, pages] of [JSON.stringify({ count: 0, at: 1 }), null, 'not json'].entries()) {
+    s.setPages(pages)
+    await leadTurn($, `t${i}`)
+    await s.snapshot()
+  }
+  expect(s.forks).toEqual([])
+  s.setPages(JSON.stringify({ count: 2, at: 1 }))
+  await leadTurn($, 't9')
+  await s.snapshot()
+  expect(s.forks.length).toBe(1)
 })
 
 test("the lead's next turn start clears them; a fork still running then is ignored", async ($, on) => {
@@ -156,6 +175,22 @@ test("the lead's next turn start clears them; a fork still running then is ignor
   await $.turn.start({ text: 'next', turnId: 't3' } as never)
   s.release(REPLY)
   expect((await s.snapshot()).suggestions).toBeNull()
+})
+
+test("a lead turn start that lands while the fork's answer is being written still leaves no suggestion", async ($, on) => {
+  const s = await session($, on)
+  const ticks = async (n: number) => {
+    for (let i = 0; i < n; i++) await Promise.resolve()
+  }
+  // the gap between the fork's answer and its write is some microtask ticks wide: start the next turn across it
+  for (const [i, n] of [0, 5, 10, 15, 20, 25, 30, 40, 50, 60].entries()) {
+    s.hold()
+    await leadTurn($, `a${i}`)
+    s.release(REPLY)
+    await ticks(n)
+    await $.turn.start({ text: 'go on', turnId: `b${i}` } as never)
+    expect([n, (await s.snapshot()).suggestions]).toEqual([n, null])
+  }
 })
 
 test('turning it off clears what shows', async ($, on) => {
@@ -201,7 +236,7 @@ test('/hq web next on|off answers in English and keeps the choice; a bare one sa
   expect(await s.command('web next off')).toBe('Agent HQ will not suggest next tasks on the live page. Turn it back on with /hq web next on.')
   expect(await s.command('web next')).toBe('Agent HQ will not suggest next tasks on the live page. Turn it back on with /hq web next on.')
   expect(await s.command('web next on')).toBe("Agent HQ will suggest up to 3 next tasks on the live page after each of the lead's turns.")
-  expect(s.stored.nextTasksOff).toBe(false)
+  expect(s.stored.nextTasks).toBe(true)
   expect(await s.command('web next maybe')).toBe('Agent HQ: use /hq web next on or /hq web next off.')
 })
 
