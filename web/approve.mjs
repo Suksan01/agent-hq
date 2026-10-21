@@ -1,4 +1,4 @@
-// The helper the mod's tool.check holds in while the person answers a permission ask on the live page (0.7.0):
+// The helper the mod's tool.check holds in while the person answers a permission ask on the live page (0.8.0; dormant in 0.7.0 unless AGENT_HQ_APPROVALS=1):
 //   node approve.mjs --state <the session's state file>
 // stdin: the request JSON { id, agent, role, tool, input, cwd, lang, at, timeoutMs }.
 // stdout: one line, `allow`, `deny` or `ask`, then it exits 0. `ask` is also the answer to anything that goes wrong (no hub,

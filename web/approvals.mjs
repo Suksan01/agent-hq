@@ -1,4 +1,4 @@
-// The hub's page approvals (0.7.0): a permission ask the mod holds for at most a minute while the person answers it on the
+// The hub's page approvals (0.8.0; dormant in 0.7.0 unless AGENT_HQ_APPROVALS=1): a permission ask the mod holds for at most a minute while the person answers it on the
 // page. In memory only, one at a time. web/approve.mjs registers one and waits; the open pages get it as an SSE `approval`
 // event (with a token that only ever goes over that stream); the first valid answer from a page settles it, and every way it
 // ends (answered, timed out, the helper gone) tells the pages `approval-withdrawn`. No dependencies.
