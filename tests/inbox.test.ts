@@ -2,7 +2,7 @@
 import { expect, test } from 'claude-code/testing'
 import type { AgentInfo } from 'claude-code'
 
-import { addAsk, buildInbox, describeAsk, liveAsks, removeAsk, statusText, trackWaiting } from '../hooks/inbox'
+import { IDLE_LIMIT_MS, addAsk, buildInbox, describeAsk, dropAsksOf, liveAsks, removeAsk, statusText, trackWaiting } from '../hooks/inbox'
 import { MAIN, mergeAgents, workingCount } from '../hooks/model'
 
 const info = (id: string, status: AgentInfo['status'] = 'running'): AgentInfo => ({ id, name: id, type: 'general-purpose', description: 'x', status })
@@ -67,12 +67,12 @@ test('the inbox lists open asks and held agents, longest waiting first, an agent
   const agents = mergeAgents({}, [info('a1', 'waiting'), info('a2', 'waiting'), info('a3')], 0)
   const asks = { u1: { agent: 'a1', since: 50, what: 'Bash: git push' }, u2: { agent: MAIN, since: 20, what: 'Edit: x' } }
 
-  expect(buildInbox(asks, agents, { a1: 10, a2: 30 })).toEqual([
+  expect(buildInbox(asks, agents, { a1: 10, a2: 30 }, 100)).toEqual([
     { agent: MAIN, since: 20, what: 'Edit: x' },
     { agent: 'a2', since: 30, what: expect.stringContaining('waiting') },
     { agent: 'a1', since: 50, what: 'Bash: git push' }, // its ask says more than "held"
   ])
-  expect(buildInbox({}, mergeAgents({}, [info('a3')], 0), {})).toEqual([])
+  expect(buildInbox({}, mergeAgents({}, [info('a3')], 0), {}, 100)).toEqual([])
 })
 
 test('an idle teammate needs the person: dated once, listed, and counted on the status line', () => {
@@ -80,9 +80,9 @@ test('an idle teammate needs the person: dated once, listed, and counted on the 
   const since = trackWaiting({}, idle, 100)
 
   expect(since).toEqual({ a1: 100 })
-  expect(buildInbox({}, idle, since)).toEqual([{ agent: 'a1', since: 100, what: 'idle, waiting for a message' }])
+  expect(buildInbox({}, idle, since, 100)).toEqual([{ agent: 'a1', since: 100, what: 'idle, waiting for a message' }])
   // "0 working · 1 needs you", whatever the status line's emoji
-  expect(statusText(workingCount(idle), buildInbox({}, idle, since).length, { done: 0, total: 0 })).toBe(statusText(0, 1, { done: 0, total: 0 }))
+  expect(statusText(workingCount(idle), buildInbox({}, idle, since, 100).length, { done: 0, total: 0 })).toBe(statusText(0, 1, { done: 0, total: 0 }))
 })
 
 test('the status line counts who works and who needs the person, and is empty when there is nothing', () => {
@@ -90,4 +90,20 @@ test('the status line counts who works and who needs the person, and is empty wh
   expect(statusText(2, 0, { done: 1, total: 4 })).toBe('🪐 2 working · 1/4 tasks')
   expect(statusText(0, 2, { done: 0, total: 0 })).toBe('🪐 0 working · 2 needs you')
   expect(statusText(0, 0, { done: 0, total: 0 })).toBeUndefined()
+})
+
+test('an idle teammate needs the person only until the idle limit; a held agent and an open ask stay however long', () => {
+  const agents = mergeAgents({}, [info('i1', 'idle'), info('w1', 'waiting')], 0)
+  const asks = { u1: { agent: MAIN, since: 0, what: 'Bash: ls' } }
+  const since = { i1: 0, w1: 0 }
+
+  expect(buildInbox(asks, agents, since, IDLE_LIMIT_MS).map(item => item.agent)).toEqual([MAIN, 'i1', 'w1'])
+  expect(buildInbox(asks, agents, since, IDLE_LIMIT_MS + 1).map(item => item.agent)).toEqual([MAIN, 'w1'])
+  expect(statusText(0, buildInbox(asks, agents, since, 10 * IDLE_LIMIT_MS).length, { done: 0, total: 0 })).toBe('🪐 0 working · 2 needs you')
+})
+
+test('dropAsksOf drops every ask of one loop and keeps the others', () => {
+  const asks = { u1: { agent: MAIN, since: 1, what: 'Agent' }, u2: { agent: 'a1', since: 2, what: 'Bash: ls' }, u3: { agent: MAIN, since: 3, what: 'Agent' } }
+  expect(Object.keys(dropAsksOf(asks, MAIN))).toEqual(['u2'])
+  expect(dropAsksOf(asks, 'nobody')).toEqual(asks)
 })

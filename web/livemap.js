@@ -13,7 +13,7 @@ export const statusOf = status => STATUS_OF[status] ?? (['working', 'waiting', '
 const LEAD_TONE = { running: 'working', needs_input: 'waiting', done: 'done', error: 'failed' }
 export const agentStatus = a => (a.isMain ? LEAD_TONE[a.tone] ?? 'working' : statusOf(a.status))
 
-export const BLANK = { at: 0, team: null, agents: [], tasks: [], roles: [], overall: { done: 0, active: 0, total: 0 }, tasksProgress: { done: 0, active: 0, total: 0 }, notice: null, hideFinished: false, events: [] }
+export const BLANK = { at: 0, team: null, agents: [], tasks: [], roles: [], overall: { done: 0, active: 0, total: 0 }, tasksProgress: { done: 0, active: 0, total: 0 }, notice: null, hideFinished: false, events: [], folded: { done: 0, failed: 0 } }
 
 /** /events and /state carry {v: 2, sessions: [{session, cwd, label, alive, snapshot}]}; an older single snapshot is one session. Stable order: name, then id. */
 export function sessionsOf(data) {
@@ -78,10 +78,11 @@ export function groupsOf(sessions, names, clockOf = () => 0) {
   })
 }
 
-/** The members' counts by state (the lead is not counted; stopped counts as failed), over the sessions shown. */
+/** The members' counts by state (the lead is not counted; stopped counts as failed), over the sessions shown, with those that left the page (`folded`). */
 export function countsOf(shown) {
   const states = shown.flatMap(s => s.snapshot.agents.filter(a => !a.isMain)).map(a => statusOf(a.status))
-  return { working: states.filter(t => t === 'working').length, waiting: states.filter(t => t === 'waiting').length, done: states.filter(t => t === 'done').length, failed: states.filter(t => t === 'failed' || t === 'stopped').length }
+  const folded = key => shown.reduce((sum, s) => sum + (s.snapshot.folded?.[key] ?? 0), 0)
+  return { working: states.filter(t => t === 'working').length, waiting: states.filter(t => t === 'waiting').length, done: states.filter(t => t === 'done').length + folded('done'), failed: states.filter(t => t === 'failed' || t === 'stopped').length + folded('failed') }
 }
 
 /** The title HUD: one team's name and folder, or "N systems"; the Doto counts; the team's progress 0-100. */

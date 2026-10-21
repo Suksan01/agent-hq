@@ -116,3 +116,22 @@ test('a call the engine allows outright never reaches the inbox', async ($, on) 
   expect(last(s.snapshots)?.inbox).toEqual([])
   s.finish()
 })
+
+// hq_assign starts its agent through $.agent.spawn: the engine asks about that Agent call (tool.check), but no tool.call
+// of it ever reaches the mod, so the ask cannot leave the way a model's own call's does
+test('an ask whose call the mod never sees leaves the inbox when its loop\'s turn ends; another loop\'s ask stays', async ($, on) => {
+  on('turn.complete', (_, e) => ({ text: e.answer }))
+  const s = await boot($, on, [info('a1')])
+
+  await $.tool.check({ tool: 'Agent', input: { prompt: 'Build it' }, tool_use_id: 'u9' } as never)
+  await $.tool.check({ tool: 'Bash', input: { command: 'ls' }, tool_use_id: 'u8', agentId: 'a1' } as never)
+  await s.clock.advance(1000)
+  expect(last(s.snapshots)?.inbox.map(item => item.agent)).toEqual(['main', 'a1'])
+
+  await $.turn.complete({ answer: 'ok', durationMs: 5, isAborted: false, turnId: 't1', reason: 'answer' } as never)
+  await s.clock.advance(1000)
+
+  expect(last(s.snapshots)?.inbox.map(item => item.agent)).toEqual(['a1'])
+  expect(last(s.statuses)).toBe('🪐 1 working · 1 needs you')
+  s.finish()
+})

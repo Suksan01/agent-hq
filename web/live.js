@@ -111,14 +111,18 @@ function App() {
     if (session === null) live.sound.nav('fit', { duration: 600 }) // a chosen system plays its own 'travel' through onMove
   }, [live.sound])
 
-  // the agent in the drawer
+  // the agent in the drawer; one that leaves the page while its drawer is open (it finished a while ago) stays there, as
+  // last seen, until the person closes the drawer
+  const lastPick = useRef(null)
   const pick = useMemo(() => {
-    if (!selected) return null
+    if (!selected) return (lastPick.current = null)
     const [key, id] = selected.split('|')
     const session = list.find(s => keyOf(s) === key)
     const agent = session?.snapshot.agents.find(a => a.id === id)
     const index = groups.find(g => keyOf(g) === key)?.agents.find(a => a.id === id)?.index ?? 0
-    return agent ? { session, agent, index } : null
+    if (agent) return (lastPick.current = { session, agent, index })
+    const kept = lastPick.current
+    return kept && keyOf(kept.session) === key && kept.agent.id === id ? kept : null
   }, [selected, sessions])
 
   if (!sessions) return html`<${SpaceCanvas} className="hq-app"><div className="hq-center"><${EmptyState} title="Connecting to Agent HQ…" text="One moment." /></div><//>`

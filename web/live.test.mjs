@@ -179,6 +179,19 @@ test('the drawer shows one agent in full and closes with Escape', { skip, timeou
   await until(() => page.eval(`!document.querySelector(${JSON.stringify(SEL.drawer)})`), 5000, 'the drawer to close')
 })
 
+test('a member that leaves the page while its drawer is open stays in the drawer until the person closes it', { skip, timeout: slow(60_000) }, async t => {
+  const { page, alphaMod } = await openLive(t)
+  await openCard(page, 'Tamago')
+  // the mod folds Tamago (finished more than the grace ago): the next snapshot no longer lists it
+  alphaMod.make = mark => buildSnapshot({ team: 'Alpha Team', mark, agents: [['dev1', 'Mochi-chan', 'running'], ['qa1', 'Tanuki', 'waiting']] })
+  alphaMod.write(2)
+  await until(async () => !(await members(page)).some(m => /Tamago/.test(m.name)), 8000, 'the Tamago card to leave the page')
+
+  assert.match(await page.eval(`document.querySelector(${JSON.stringify(SEL.drawer)})?.innerText ?? ''`), /Tamago/, 'the drawer still shows it')
+  await page.eval(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))`)
+  await until(() => page.eval(`!document.querySelector(${JSON.stringify(SEL.drawer)})`), 5000, 'the drawer to close')
+})
+
 // ---- the five actions ------------------------------------------------------------------------------------------------------
 
 test('message the lead: the text reaches the mod as a lead action', { skip, timeout: slow(60_000) }, async t => {

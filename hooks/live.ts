@@ -4,11 +4,13 @@
 import type { Tone } from './cells'
 import type { LiveEvent } from './feed'
 import type { InboxItem } from './inbox'
+import { IDLE_LIMIT_MS } from './inbox'
 import type { AgentUsage } from './usage'
 import { botState, paletteOf, speciesOf, spriteFrames } from './sprites'
 import { MAIN, isFinished, progressOf } from './model'
 import { currentActivity } from './activity'
 import type { Progress } from './model'
+import type { HqAgent } from '../types'
 import type { HqData } from './view'
 import { TONE_OF, fallbackOf, labelOf, mascotTone, nowLine, teamProgress, treeRows } from './view'
 import type { BarFallback } from './view'
@@ -61,10 +63,29 @@ export type LiveSnapshot = {
   events: LiveEvent[]
   /** What waits on the person: permission asks and agents held on an approval, longest waiting first. */
   inbox: InboxItem[]
+  /** Members that left the page (see FINISHED_GRACE_MS) and are only counted: completed, and failed or stopped. */
+  folded: { done: number; failed: number }
 }
 
 /** What the snapshot carries beyond the agents and tasks: the acknowledged request id and the activity feed. */
-export type LiveExtras = { lastAction?: number; events?: readonly LiveEvent[]; inbox?: readonly InboxItem[]; usage?: Readonly<Record<string, AgentUsage>> }
+export type LiveExtras = {
+  lastAction?: number
+  events?: readonly LiveEvent[]
+  inbox?: readonly InboxItem[]
+  usage?: Readonly<Record<string, AgentUsage>>
+  /** Since when each held or idle agent waits (see ./inbox trackWaiting): an idle one past IDLE_LIMIT_MS leaves the page. */
+  waitingSince?: Readonly<Record<string, number>>
+}
+
+/** A finished member stays on the page this long after it ended, then leaves it and is only counted. */
+export const FINISHED_GRACE_MS = 2 * 60_000
+
+/** Is this member off the page at `at`: ended longer than the grace ago, or idle past the limit? Never the lead. */
+function isFolded(agent: HqAgent, at: number, waitingSince: Readonly<Record<string, number>>): boolean {
+  if (agent.id === MAIN) return false
+  if (isFinished(agent.status)) return at - (agent.endedAt ?? agent.startedAt) > FINISHED_GRACE_MS
+  return agent.status === 'idle' && at - (waitingSince[agent.id] ?? agent.startedAt) > IDLE_LIMIT_MS
+}
 
 /** Roles the page offers, each with how many of it are at work now (a role's count caps that). */
 export function rolesOf(data: HqData): LiveSnapshot['roles'] {
@@ -85,11 +106,14 @@ function activityOf(data: HqData, id: string): LiveAgent['activity'] {
 }
 
 export function buildSnapshot(data: HqData, at: number, notice: LiveSnapshot['notice'] = null, extras: LiveExtras = {}): LiveSnapshot {
-  const agents = treeRows(data).map(({ agent, work }): LiveAgent => {
+  const gone = Object.values(data.agents).filter(a => isFolded(a, at, extras.waitingSince ?? {}))
+  const goneIds = new Set(gone.map(a => a.id))
+  const agents = treeRows(data).filter(({ agent }) => !goneIds.has(agent.id)).map(({ agent, work }): LiveAgent => {
     const isMain = agent.id === MAIN
     const label = labelOf(agent, data.team)
     const species = speciesOf(agent.mascot)
-    const parent = isMain ? null : agent.parentId && data.agents[agent.parentId] ? agent.parentId : MAIN
+    // a helper of a member that left the page hangs on the lead
+    const parent = isMain ? null : agent.parentId && data.agents[agent.parentId] && !goneIds.has(agent.parentId) ? agent.parentId : MAIN
     const tone: Tone = isMain ? mascotTone(agent, data) : TONE_OF[agent.status]
     return {
       id: agent.id,
@@ -136,5 +160,6 @@ export function buildSnapshot(data: HqData, at: number, notice: LiveSnapshot['no
     lastAction: extras.lastAction ?? 0,
     events: [...(extras.events ?? [])],
     inbox: [...(extras.inbox ?? [])],
+    folded: { done: gone.filter(a => a.status === 'completed').length, failed: gone.filter(a => a.status === 'failed' || a.status === 'killed').length },
   }
 }
