@@ -514,12 +514,14 @@ function startWeb($: EngineInterface): Promise<string> {
   return webStarting
 }
 
-/** A new one-time login link for the page that is already running (`server.mjs --login` asks the hub for it). */
-async function freshLoginUrl($: EngineInterface, statePath: string): Promise<string> {
+/** A new one-time login link for the running page, and how many pages are open (`server.mjs --login` asks the hub). */
+async function freshLogin($: EngineInterface, statePath: string): Promise<{ url: string; pages: number }> {
   const ran = await $.process.run(['node', `${$.plugin.root}/web/server.mjs`, '--login', '--state', statePath], { timeoutMs: 10_000 })
-  const line = ran.stdout.split('\n').map(parseChannelLine).find(heard => heard?.kind === 'url')
+  const heard = ran.stdout.split('\n').map(parseChannelLine)
+  const line = heard.find(h => h?.kind === 'url')
   if (ran.exitCode !== 0 || line?.kind !== 'url') throw new Error(ran.stderr.trim().split('\n').pop() || 'the page did not give a new link')
-  return line.url
+  const pages = heard.find(h => h?.kind === 'pages')
+  return { url: line.url, pages: pages?.kind === 'pages' ? pages.count : 0 } // a hub that does not say: none open
 }
 
 /** Opens a URL in the default browser: `open` on macOS, `xdg-open` elsewhere. */
@@ -632,9 +634,17 @@ export const register: Register = (on, options) => {
       await loadTeam($).catch(() => null)
       await syncAgents($)
       try {
-        // the first link of a started server is single-use and spent by the first visit: a repeated /hq web asks the hub for a new one
-        const url = web ? await freshLoginUrl($, web.statePath) : await startWeb($)
+        const isFirstRun = web === null
+        const startUrl = await startWeb($)
         await update($, isWebWanted, () => true)
+        // every run asks the hub for a fresh link (a link works once) and how many pages are open: one page shows every
+        // session, so while one is open another tab would only cost memory
+        if (!web) throw new Error('the local server stopped')
+        const { url, pages } = await freshLogin($, web.statePath).catch(error => {
+          if (isFirstRun) return { url: startUrl, pages: 0 } // the link the new server printed is unused yet
+          throw error
+        })
+        if (pages > 0) return { text: `Agent HQ live page is already open in your browser (${pages === 1 ? 'one tab' : `${pages} tabs`}); it shows this session too. To open it in another browser: ${url}` }
         const opened = await openInBrowser($, url)
         return { text: opened ? `Agent HQ live page opened: ${url}` : `Agent HQ live page is running; open it at ${url}` }
       } catch (error) {
