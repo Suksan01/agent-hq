@@ -186,7 +186,9 @@ The mod notices who is waiting on you: a tool call that Claude Code puts to you 
 held on an approval. They are listed on the live page as the **inbox** (who, since when, what: for example
 `Bash: npm test` or `Edit: page.tsx`: a command's name (plus the subcommand for tools like `git` and `npm`), a file's name and a web address's host, never the whole input), and counted in the status line: `working` is the number of agents running a
 turn, and `needs you` is the number of inbox items. Agents that are idle between turns or held do not count as
-working, and the status line is empty when there is nothing to show.
+working, and the status line is empty when there is nothing to show. A teammate idle between turns is in the inbox for
+its first 10 minutes only; an agent held on an approval and an open dialog stay until they are answered, and a
+dialog's ask leaves when its agent's turn ends.
 
 ## Nicknames, sounds and XP
 
@@ -241,6 +243,10 @@ What the page shows:
   - **Message lead** sends a prompt to the main session. It runs once Claude is free.
   - Click an agent to message it, or to stop it (asks you to confirm).
   - **Hide done**, **Show done** and **Clear done** manage finished agents and tasks.
+- **Finished agents leave by themselves.** A member that completed, failed or was stopped leaves the page 2 minutes
+  after it ended and stays counted in the done and failed numbers at the top; a teammate idle for more than 10 minutes
+  leaves too (it is in no count). An agent that works again comes back, and one whose drawer is open stays in the
+  drawer until you close it.
 
 Nothing is loaded from the internet: React, HeroUI, the mascot library and the fonts are bundled in `web/vendor/`
 and served by the local server (rebuilt with `node web/build-vendor.mjs`, which is the only step that needs npm and a
@@ -257,7 +263,9 @@ and refuses any other folder.
 - **Logging in.** The server listens on 127.0.0.1 only and checks the `Host` header. Each session prints a
   one-time login link (`http://127.0.0.1:<port>/?c=<code>`) that works once, for two minutes; opening it sets a
   session cookie named for the hub's port (`HttpOnly`, `SameSite=Strict`) and every other request needs that cookie.
-  Run `/hq web` again and you get a new link; a browser that is already logged in is simply sent to the page. Requests from another
+  Run `/hq web` again and you get a new link; a browser that is already logged in is simply sent to the page.
+  `/hq web` opens a browser tab only when no page is open (one page shows every session); otherwise it says so and
+  prints the link. Requests from another
   origin, or with a cross-site fetch header, are refused. The page runs under a strict Content-Security-Policy:
   its own scripts, styles and fonts only, no framing, no forms.
 - **Your requests are not lost.** The page's request is answered `202` only after the session's server has written it
@@ -416,6 +424,8 @@ From the mod folder:
   page. It prints the numbers it measures. It is timing-sensitive, so run it alone or with `--test-concurrency=1`. On a
   busy machine it scales every wait and latency budget by the machine's load (set `AGENT_HQ_TEST_SLOWDOWN=<n>` to
   force a factor).
+- `node --test web/browser-kit.test.mjs` checks, with a stand-in for Chrome, that a browser the tests started is
+  closed with its test even when its start fails.
 - `node --test --test-concurrency=1 web/browser.test.mjs` opens the live page in a real headless Chrome of its own (a
   throwaway profile and debugging port; your Chrome is never touched) against a real hub. It is skipped when no Chrome
   is found; `CHROME_BIN` overrides the path.
