@@ -22,9 +22,10 @@ Open the sidebar with `/hq`. In the sidebar, `h` hides finished items, `c` clear
 opens its transcript.
 
 Commands: `/hq` (sidebar), `/hq web` (live page), `/hq web next on|off` (the page's next-task suggestions),
-`/hq report` (session report), `/hq trust` (use a project's team file), `/hq lang thai|english` (language). Skills:
-`/agent-hq:team`, `/agent-hq:feature`, `/agent-hq:standup`, `/agent-hq:retro`, `/agent-hq:handoff`, and
-`agent-hq:self-evaluation`, which every team member carries.
+`/hq web approvals on|off` (answer permission asks on the page), `/hq report` (session report), `/hq trust` (use a
+project's team file), `/hq lang thai|english` (language). Skills: `/agent-hq:team`, `/agent-hq:feature`,
+`/agent-hq:standup`, `/agent-hq:retro`, `/agent-hq:handoff`, and `agent-hq:self-evaluation`, which every team member
+carries.
 
 ### English or Thai
 
@@ -275,9 +276,10 @@ What the page shows:
   - **Next tasks.** After each of the lead's answered turns the page offers a short recap and up to three tasks you
     could send it next, in your language; a press drafts one into the Message lead box for you to edit and send (it
     is never sent by itself). They go when the lead's next turn starts. On by default; `/hq web next off` turns them
-    off, `/hq web next on` back on. **Cost:** one forked model call per lead turn while the page's server runs (from
-    `/hq web` until the session ends, even with the tab closed). The fork reuses the session's own transcript, so it
-    shares the session's prompt cache and pays mostly for its short reply.
+    off, `/hq web next on` back on. **Cost:** one forked model call per lead turn while at least one live page is
+    open (none while every tab is closed). The fork reuses the session's own transcript, so it shares the session's
+    prompt cache and pays mostly for its short reply.
+  - **Approvals** (off by default; see below) show a permission ask as a card you answer on the page.
   - Click an agent to message it, or to stop it (asks you to confirm).
   - **Hide done**, **Show done** and **Clear done** manage finished agents and tasks.
 - **Finished agents leave by themselves.** A member that completed, failed or was stopped leaves the page 2 minutes
@@ -294,6 +296,33 @@ calls are allowed), and writes `web/vendor/SHA256SUMS`; `node web/vendor-guard.m
 edit), not a hostile change of both; the lockfile and the build-time scan are the real guards.
 `node web/build-design.mjs [folder]` builds the design showcase into a new or empty folder (default `web/design/out`)
 and refuses any other folder.
+
+### Approvals on the page
+
+`/hq web approvals on` lets you answer Claude Code's permission asks on the live page; `/hq web approvals off` (the
+default) leaves them to the usual dialog. While it is on and a live page is open, a call that would ask you waits up
+to 60 seconds for your answer on the page, and a toast in the terminal says so (Esc there cancels the wait and the
+call). The page shows one card at a time: the agent, its role, the tool and its exact, full input, with **Allow**,
+**Deny** and **Ask in terminal now**. Allow runs the call, Deny refuses it. Anything else (no answer within the
+minute, Ask in terminal now, the page or its helper failing) brings up the usual dialog, which can then take up to a
+minute longer to appear. While it waits, the terminal shows only a spinner.
+
+What stays with the usual dialog, whatever the setting:
+
+- Only an ask is ever offered. A call your rules or another hook allow or deny is never held or changed, and the rule
+  guard refuses a member's call before any ask.
+- Questions put to you (AskUserQuestion) and plan approvals (ExitPlanMode), calls under an organization ceiling, an
+  input that seems to hold a secret, and an input larger than 20 KB.
+- A second ask while one card is open.
+- Any mode but `default` and `acceptEdits`, and a loop whose mode is not known yet. **Keep approvals off in auto
+  mode**: they are not offered there anyway. A mod cannot read the mode on the call itself, so Agent HQ uses the mode
+  each loop (the lead, each member) was last seen in, from the prompt you sent and from each tool call that ended. A
+  switch to auto or dontAsk with Shift+Tab therefore applies to page approvals only after the next tool call ends, and
+  a member's first ask is never offered. Only your own Allow, on your logged-in page, can ever allow a call.
+- "Always allow" is not offered on the page: make that choice in the dialog.
+
+**Cost and limits:** no model calls. Each held ask runs a small `node web/approve.mjs` helper for up to 65 seconds,
+and the card lives only in memory (a hub restart drops it, and the dialog follows).
 
 ### Safe and lossless
 
@@ -386,7 +415,9 @@ Agent HQ reads what Claude Code does so it can draw it, and it acts in the place
 - **Your team file**: `.claude/agent-hq/team.json` in the project, else in your home folder. It is read at the start
   of a session, on `/hq`, and right after a tool writes that file.
 - **Test and git commands** an agent runs through Bash (only to tell a green test run from a red one, for XP).
-- **The live page's requests**, as lines the local server prints.
+- **The live page's requests**, as lines the local server prints, and how many pages are open (`pages.json`).
+- **The permission mode** (`default`, `auto`, ...) each loop was last seen in, from Claude Code's prompt and
+  after-tool hook events, for page approvals.
 
 What it does with that:
 
@@ -400,7 +431,8 @@ What it does with that:
   the main session's system prompt naming it the team's lead, with the lead's rules, the roster and a note on the
   lead tools.
 - **Answers its own three tools** (`hq_assign`, `hq_status`, `hq_review`) and, for subagents only, **can deny a tool
-  call** under the rule guard. It changes no other call and rewrites nothing.
+  call** under the rule guard. With page approvals on, it turns a permission ask into an allow or a deny only when you
+  press Allow or Deny on the page. It changes no other call and rewrites nothing.
 - Plays a sound in terminals with audio (the `assets/` clips), if the option is on.
 - `/hq report` asks the model for a three-sentence summary of the session report (one model call), and writes the
   report file in your project.
@@ -408,7 +440,9 @@ What it does with that:
   state, the same names, statuses and progress the sidebar shows, to `~/.claude/agent-hq/live/<session id>.json`
   whenever it changes, and the hub keeps `hub.json` (its port, process id and a secret) in the same folder, readable
   by you only. Files of sessions that ended are deleted after 24 hours.
-- While the live page runs and next tasks are on: after each of the lead's answered turns, forks the session once
+- With page approvals on and a page open: holds a permission ask while `node web/approve.mjs` puts it on the page,
+  with the call's id, tool, full input, agent, role and folder on the helper's stdin.
+- While a live page is open and next tasks are on: after each of the lead's answered turns, forks the session once
   (`$.model.fork`, no tools) for a recap and up to three next tasks, and writes them, masked and cut short, into the
   page's state.
 - Only when you ask for it from the live page, and only then: submits your text as a prompt to the lead, sends your

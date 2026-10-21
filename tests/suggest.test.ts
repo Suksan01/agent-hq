@@ -35,7 +35,7 @@ test('secrets are masked, control and bidi characters stripped, each one line', 
   const parsed = parseSuggestions(
     JSON.stringify({
       recap: 'Pushed with ghp_abcdefghijklmnopqrstuvwxyz0123456789\nand done.',
-      next: ['Rotate API_KEY=supersecretvalue now', 'Fix \u001b[31mred\u001b[0m\tthe‮ build\u0007', 'Run\r\nthe tests'],
+      next: ['Rotate API_KEY=supersecretvalue now', 'Fix \u001b[31mred\u001b[0m\tthe\u202e build\u0007', 'Run\r\nthe tests'],
     }),
   )
   expect(parsed?.recap).toBe('Pushed with *** and done.')
