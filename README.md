@@ -302,15 +302,17 @@ and refuses any other folder.
 `/hq web approvals on` lets you answer Claude Code's permission asks on the live page; `/hq web approvals off` (the
 default) leaves them to the usual dialog. While it is on and a live page is open, a call that would ask you waits up
 to 60 seconds for your answer on the page, and a toast in the terminal says so (Esc there cancels the wait and the
-call). The page shows one card at a time: the agent, its role, the tool and its exact, full input, with **Allow**,
-**Deny** and **Ask in terminal now**. Allow runs the call, Deny refuses it. Anything else (no answer within the
+call). The page shows one card at a time: the agent, its role, the tool and its exact, full input, why Claude Code
+asked (its reason, secrets masked, and the setting or hook behind it), with **Allow**, **Deny** and **Ask in terminal
+now**. Allow runs the call, Deny refuses it. Anything else (no answer within the
 minute, Ask in terminal now, the page or its helper failing) brings up the usual dialog, which can then take up to a
 minute longer to appear. While it waits, the terminal shows only a spinner.
 
 What stays with the usual dialog, whatever the setting:
 
 - Only an ask is ever offered. A call your rules or another hook allow or deny is never held or changed, and the rule
-  guard refuses a member's call before any ask.
+  guard refuses a member's call before any ask. An ask that a host answers (an SDK or `-p` permission callback, a
+  call served for a cloud session) is never offered either.
 - Questions put to you (AskUserQuestion) and plan approvals (ExitPlanMode), calls under an organization ceiling, an
   input that seems to hold a secret, and an input larger than 20 KB.
 - A second ask while one card is open.
@@ -320,6 +322,16 @@ What stays with the usual dialog, whatever the setting:
   switch to auto or dontAsk with Shift+Tab therefore applies to page approvals only after the next tool call ends, and
   a member's first ask is never offered. Only your own Allow, on your logged-in page, can ever allow a call.
 - "Always allow" is not offered on the page: make that choice in the dialog.
+
+Only you can turn approvals on: `/hq web approvals on` from a plugin, a scheduled prompt or another session is
+refused, and a run Claude Code cannot attest as yours asks you in its own dialog first ("No" first). Anyone may turn
+them off.
+
+**Keep the login link away from Claude.** While approvals are on, `/hq web` never puts the page's one-time login link
+in its reply (a reply lands in the transcript the model reads, and an agent with a browser could log in and press
+Allow on its own ask): the link shows only in a notice, which the model never sees, or the page simply opens in your
+browser. For the same reason, **do not answer approvals in Claude's built-in browser pane**, or in any browser an agent
+can drive: use your own browser.
 
 **Cost and limits:** no model calls. Each held ask runs a small `node web/approve.mjs` helper for up to 65 seconds,
 and the card lives only in memory (a hub restart drops it, and the dialog follows).

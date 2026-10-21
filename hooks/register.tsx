@@ -15,7 +15,8 @@ import { EMPTY_FEED, addEvents, statusEvents, stepEvents } from './feed'
 import type { NewEvent } from './feed'
 import { buildSnapshot } from './live'
 import { parseSuggestions, suggestPrompt } from './suggest'
-import { ALLOWED, DENIED, HELPER_TIMEOUT_MS, answerOf, approvalRequest, canHold, pageCount } from './pageapproval'
+import { ALLOWED, APPROVAL_MS, DENIED, HELPER_TIMEOUT_MS, LINK_NOTICE_MS, answerOf, approvalRequest, canHold, pageCount } from './pageapproval'
+import { maskSecrets } from './secrets'
 import { addBubble, bubbleText, liveBubbles, placeTalk, recipientOf, talkLine } from './talk'
 import { configureLock } from './lock'
 import { createReport, reportToast } from './report'
@@ -673,7 +674,7 @@ function noteMode(e: { permission_mode?: string; agent_id?: string }) {
 }
 
 type Ask = { tool: string; input: unknown; tool_use_id?: string; agentId?: string; ceiling?: string }
-type Verdict = { decision: 'allow' | 'ask' | 'deny'; reason?: string }
+type Verdict = { decision: 'allow' | 'ask' | 'deny'; reason?: string; setting?: string; hook?: string; decider?: 'host' }
 
 /**
  * An ask offered on the live page first: tool.check waits while web/approve.mjs waits for the person's answer there.
@@ -685,13 +686,37 @@ async function askOnPage<V extends Verdict>($: EngineInterface, e: Ask, verdict:
   isApprovalOpen = true // taken before the first await, so a second ask meanwhile goes to the dialog
   try {
     const loop = e.agentId ?? MAIN
-    const facts = { decision: verdict.decision, isOn: await isSettingOn($, PAGE_APPROVALS), pages: await openPages($), toolUseId: e.tool_use_id, tool: e.tool, ceiling: e.ceiling, mode: modes.get(loop), input: e.input }
+    const reason = verdict.reason ? maskSecrets(verdict.reason) : undefined
+    const facts = {
+      decision: verdict.decision,
+      decider: verdict.decider,
+      isOn: await isSettingOn($, PAGE_APPROVALS),
+      pages: await openPages($),
+      toolUseId: e.tool_use_id,
+      tool: e.tool,
+      ceiling: e.ceiling,
+      mode: modes.get(loop),
+      input: e.input,
+      reason,
+    }
     if (!canHold(facts) || !web || !e.tool_use_id) return verdict
     const row = (await read($, agents))[loop]
     const current = await read($, team)
     const role = loop === MAIN ? (current?.lead.title ?? null) : row ? labelOf(row, current, lang).role : null
-    const request = approvalRequest({ id: e.tool_use_id, agent: row ? who(row) : loop, role, tool: e.tool, input: e.input, cwd: await $.session.cwd(), lang, at: await $.clock.now() })
-    $.ui.toast(t(lang, 'approval.waiting'))
+    const request = approvalRequest({
+      id: e.tool_use_id,
+      agent: row ? who(row) : loop,
+      role,
+      tool: e.tool,
+      input: e.input,
+      reason: reason ?? null,
+      setting: verdict.setting ?? null,
+      hook: verdict.hook ?? null,
+      cwd: await $.session.cwd(),
+      lang,
+      at: await $.clock.now(),
+    })
+    $.ui.toast(t(lang, 'approval.waiting'), { timeoutMs: APPROVAL_MS })
     const ran = await $.process.run(['node', `${$.plugin.root}/web/approve.mjs`, '--state', web.statePath], { stdin: request, timeoutMs: HELPER_TIMEOUT_MS })
     const answer = ran.exitCode === 0 ? answerOf(ran.stdout) : null
     if (answer === 'allow') return { decision: 'allow', reason: ALLOWED }
@@ -713,6 +738,16 @@ async function freshLogin($: EngineInterface, statePath: string): Promise<{ url:
   if (ran.exitCode !== 0 || line?.kind !== 'url') throw new Error(ran.stderr.trim().split('\n').pop() || 'the page did not give a new link')
   const pages = heard.find(h => h?.kind === 'pages')
   return { url: line.url, pages: pages?.kind === 'pages' ? pages.count : 0 } // a hub that does not say: none open
+}
+
+// what each /hq web reply says instead of its link, while page approvals are on
+const NO_LINK: Record<'web.alreadyOpen' | 'web.opened' | 'web.running', Key> = { 'web.alreadyOpen': 'web.alreadyOpenNoLink', 'web.opened': 'web.openedNoLink', 'web.running': 'web.runningNoLink' }
+
+/** A /hq web reply; while page approvals are on, its login link goes in a notice instead (a browser already opened needs none). */
+function linkReply($: EngineInterface, isGuarded: boolean, key: keyof typeof NO_LINK, params: Record<string, string>): { text: string } {
+  if (!isGuarded) return { text: t(lang, key, params) }
+  if (key !== 'web.opened') $.ui.toast(t(lang, 'web.linkNotice', { url: params.url ?? '' }), { timeoutMs: LINK_NOTICE_MS })
+  return { text: t(lang, NO_LINK[key], params) }
 }
 
 /** Opens a URL in the default browser: `open` on macOS, `xdg-open` elsewhere. */
@@ -786,6 +821,17 @@ async function askTrust($: EngineInterface, isExplicit: boolean): Promise<{ text
   const answer = await $.ui.ask(question, { options: [no, yes], header: t(lang, 'dialog.teamFile') }).catch(() => null)
   if (answer === no) declinedTrust.set(source.path, text)
   return answer === yes ? approveTeam($, text) : null
+}
+
+/**
+ * `/hq web approvals on` from a run that is not the person's own: through the engine's dialog (No first) where the engine
+ * cannot attest the run, never from a plugin, a schedule or another session. Turning them off is open to every run.
+ */
+async function approvalsOnFrom($: EngineInterface, origin: PromptOrigin): Promise<{ text: string }> {
+  if (!ASKING_ORIGINS.has(origin.kind)) return { text: t(lang, 'approvals.notYours', { origin: origin.kind === 'plugin' ? t(lang, 'trust.aPlugin') : origin.kind }) }
+  const [no, yes] = [t(lang, 'dialog.no'), t(lang, 'approvals.yes')]
+  const answer = await $.ui.ask(t(lang, 'approvals.question'), { options: [no, yes], header: t(lang, 'approvals.header') }).catch(() => null)
+  return answer === yes ? settingCommand($, PAGE_APPROVALS, 'on') : { text: t(lang, PAGE_APPROVALS.off) }
 }
 
 /** `/hq trust`: at once from the person's own run, through the dialog from a run the engine cannot attest, never otherwise. */
@@ -939,6 +985,7 @@ export const register: Register = (on, options) => {
     const setting = verb?.toLowerCase() === 'web' ? WEB_SETTINGS[words[0]?.toLowerCase() ?? ''] : undefined
     if (setting) {
       const word = (words[1] ?? '').toLowerCase()
+      if (setting === PAGE_APPROVALS && word === 'on' && !PERSON_ORIGINS.has(e.origin.kind)) return approvalsOnFrom($, e.origin)
       const answer = await settingCommand($, setting, word)
       if (setting === NEXT_TASKS && word === 'off') await clearSuggestions($)
       return answer
@@ -959,9 +1006,12 @@ export const register: Register = (on, options) => {
           if (isFirstRun) return { url: startUrl, pages: 0 } // the link the new server printed is unused yet
           throw error
         })
-        if (pages > 0) return { text: t(lang, 'web.alreadyOpen', { tabs: pages === 1 ? t(lang, 'web.oneTab') : t(lang, 'web.tabs', { n: pages }), url }) }
-        const opened = await openInBrowser($, url)
-        return { text: t(lang, opened ? 'web.opened' : 'web.running', { url }) }
+        // with page approvals on, a login link must not reach the model: a reply lands in the transcript, and an agent with
+        // a browser could log in and allow its own ask. The link then shows in a notice only (toasts never reach it)
+        const isGuarded = await isSettingOn($, PAGE_APPROVALS)
+        const tabs = pages === 1 ? t(lang, 'web.oneTab') : t(lang, 'web.tabs', { n: pages })
+        if (pages > 0) return linkReply($, isGuarded, 'web.alreadyOpen', { tabs, url })
+        return linkReply($, isGuarded, (await openInBrowser($, url)) ? 'web.opened' : 'web.running', { url })
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error)
         return { text: t(lang, 'web.failed', { reason }) }
