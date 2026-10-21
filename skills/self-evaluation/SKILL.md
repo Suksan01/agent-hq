@@ -9,6 +9,8 @@ Before you report to the lead, rate what you are handing over against your assig
 it is a short, honest check that catches a gap before the lead or a reviewer does, and turns it into a lesson for
 your next run.
 
+**Language:** speak, ask and write the files the person reads in the language Agent HQ's language section names (English when there is none); keep code, commands, paths, JSON keys and commit messages English.
+
 ## When
 
 - Before your final reply on an assignment that changed code, ran several steps (implement, test, review), took three

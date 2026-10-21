@@ -15,7 +15,7 @@ async function mountWith($: Engine, on: On, listed: AgentInfo[]) {
   mock.clock(on)
   on('agent.list', () => ({ value: listed }))
   on('agent.spawn', () => ({ model: 'haiku', agentId: listed[0]?.id ?? 'x' }))
-  await $.agent.spawn({ prompt: 'go', description: 'seed' } as never)
+  await $.agent.spawn({ prompt: 'go' } as never) // no description: a start's talk bubble would draw the full row for six seconds
   return $.ui.mount({ plugin: 'agent-hq', surface: 'terminal', component: 'Pane', requestId: 'agent-hq', props: PANE_PROPS as never })
 }
 
@@ -75,7 +75,7 @@ test('a finished one-line agent shows its last item, cut to the room before the 
   on('agent.spawn', () => ({ model: 'haiku', agentId: 'finisher' }))
   let id = 0
   on('tool.call', (_, e) => (e.tool === 'TaskCreate' ? { result: { task: { id: String(++id), subject: 'x' } } } : { result: {} as never }))
-  await $.agent.spawn({ prompt: 'go', description: 'seed' } as never)
+  await $.agent.spawn({ prompt: 'go' } as never) // no description: a start's talk bubble would draw the full row for six seconds
   const call = $.tool.call as unknown as (input: Record<string, unknown>) => Promise<unknown>
   await call({ tool: 'TaskCreate', subject: 'Ship the whole release to production', description: 'd' })
   await call({ tool: 'TaskUpdate', taskId: '1', status: 'completed', owner: 'finisher' })
@@ -113,7 +113,7 @@ test('the sidebar draws that bar on both surfaces, never leaving a working agent
   on('agent.list', () => ({ value: listed }))
   on('agent.spawn', () => ({ model: 'haiku', agentId: 'plain' }))
   on('tool.call', (_, e) => (e.tool === 'TaskCreate' ? { result: { task: { id: '1', subject: 'x' } } } : { result: {} as never }))
-  await $.agent.spawn({ prompt: 'go', description: 'seed' } as never)
+  await $.agent.spawn({ prompt: 'go' } as never) // no description: a start's talk bubble would draw the full row for six seconds
   const call = $.tool.call as unknown as (input: Record<string, unknown>) => Promise<unknown>
   await call({ tool: 'TaskCreate', subject: 'Own it', description: 'd' })
   await call({ tool: 'TaskUpdate', taskId: '1', status: 'in_progress', owner: 'owner' })

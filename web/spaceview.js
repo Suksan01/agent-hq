@@ -14,7 +14,8 @@
 //   nothing (onSelect(null, null)). Without WebGL it shows a glass note (`unavailable`) and calls onError.
 
 import React from './vendor/libs.js'
-import { AgentCard, GlassTile, html } from './spacekit.js'
+import { AgentCard, GlassTile, TalkBubble, html } from './spacekit.js'
+import { t } from './i18n.js'
 import { LeadDeck } from './leadcard.js'
 import { cardProps, leadDeckProps, useOffscreenClass } from './diagram.js'
 import { loadEngine } from './spaceengine.js'
@@ -28,7 +29,6 @@ import { playNav } from './space-sounds.js'
 const { useEffect, useLayoutEffect, useMemo, useRef, useState } = React
 
 export { webglAvailable }
-export const UNAVAILABLE = "The Space view needs WebGL, which this browser has turned off. Quit and reopen Chrome, or turn on 'Use graphics acceleration' in chrome://settings/system."
 
 const GUESS = { full: { w: 316, h: 250 }, lead: { w: 320, h: 190 }, compact: { w: 260, h: 96 }, chip: { w: 150, h: 34 } }
 const PRIORITY = { waiting: 5, failed: 4, working: 3, done: 1, idle: 1, stopped: 0 }
@@ -91,7 +91,7 @@ export function SpaceView({ groups = [], focus = null, selected = null, inset = 
     let cancelled = false
     let space = null
     if (!webglAvailable()) {
-      const error = new Error('WebGL is not available in this browser, so the space view cannot be drawn')
+      const error = new Error(t('space.noWebgl'))
       setFailure(error)
       onError?.(error)
       return undefined
@@ -275,7 +275,7 @@ export function SpaceView({ groups = [], focus = null, selected = null, inset = 
   }
 
   if (failure) {
-    return html`<div className=${`spv ${className}`} style=${style}><div className="spv-note"><${GlassTile}><h3>Space view unavailable</h3><p>${UNAVAILABLE}</p><p style=${{ opacity: 0.6 }}>${String(failure.message ?? failure)}</p><//></div></div>`
+    return html`<div className=${`spv ${className}`} style=${style}><div className="spv-note"><${GlassTile}><h3>${t('space.unavailableTitle')}</h3><p>${t('space.unavailable')}</p><p style=${{ opacity: 0.6 }}>${String(failure.message ?? failure)}</p><//></div></div>`
   }
   const handlers = { onSelect, onLeadMessage, onLeadHire, onLeadTasks }
   const drawn = uid => {
@@ -284,7 +284,7 @@ export function SpaceView({ groups = [], focus = null, selected = null, inset = 
   }
   return html`<div ref=${boxRef} className=${`spv ${className}`} style=${style} onPointerDown=${onPointerDown} onPointerUp=${onPointerUp}>
     <div ref=${sceneRef} className="spv-scene"></div>
-    ${loaded ? null : html`<div className="spv-loading sk-label">loading the space view…</div>`}
+    ${loaded ? null : html`<div className="spv-loading sk-label">${t('space.loading')}</div>`}
     <div className="spv-overlay">
       <svg className="spv-leaders" aria-hidden="true">${[...agentOf.keys()].map(id => html`<path key=${id} className="spv-leader" ref=${el => { if (el) lines.current.set(id, el); else lines.current.delete(id) }} />`)}</svg>
       ${groups.map(g => html`<div key=${`title|${g.session ?? ''}`} className="spv-title" ref=${el => measure(`title|${g.session ?? ''}`, el)}><div className="spv-measure" style=${{ display: 'inline-block' }}><h2>${g.team || g.folder}</h2><div className="sk-label">${g.team ? g.folder : ''}</div></div></div>`)}
@@ -300,9 +300,11 @@ export function SpaceView({ groups = [], focus = null, selected = null, inset = 
         const needs = `${agent.needsYou && state !== 'waiting' ? ' spv-card--needs' : ''}${group.alive === false ? ' spv-card--lost' : ''}`
         const card = kind === 'lead' ? html`<${LeadDeck} variant="compact" ...${leadDeckProps(agent, group, handlers)} />` : html`<${AgentCard} ...${p} compact=${kind === 'compact'} orbs=${false} />`
         const hoverable = kind === 'compact' ? { onMouseEnter: () => setHover(uid), onMouseLeave: () => setHover(h => (h === uid ? null : h)) } : {}
-        return html`<div key=${`${uid}|${kind}`} className=${`spv-card${kind === 'compact' ? ' spv-card--compact' : ''}${needs}`} ref=${el => measure(`${uid}|${kind}`, el)} ...${hoverable}>
+        const bubble = kind === kinds[uid] ? agent.bubble : undefined // on the card shown now, not on one fading out
+        return html`<div key=${`${uid}|${kind}`} className=${`spv-card${kind === 'compact' ? ' spv-card--compact' : ''}${needs}${bubble ? ' spv-card--talk' : ''}`} ref=${el => measure(`${uid}|${kind}`, el)} ...${hoverable}>
           <div className="spv-measure" style=${kind === 'lead' ? { width: LEAD_WIDTH } : undefined}>${card}</div>
           ${kind === 'compact' && hover === uid ? html`<div className="spv-full"><${AgentCard} ...${p} orbs=${false} /></div>` : null}
+          ${bubble ? html`<${TalkBubble} key=${bubble.key} ...${bubble} />` : null}
         </div>`
       }))}
     </div>

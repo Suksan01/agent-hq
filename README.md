@@ -22,8 +22,19 @@ Open the sidebar with `/hq`. In the sidebar, `h` hides finished items, `c` clear
 opens its transcript.
 
 Commands: `/hq` (sidebar), `/hq web` (live page), `/hq report` (session report), `/hq trust` (use a project's team
-file). Skills: `/agent-hq:team`, `/agent-hq:feature`, `/agent-hq:standup`, `/agent-hq:retro`, `/agent-hq:handoff`, and
-`agent-hq:self-evaluation`, which every team member carries.
+file), `/hq lang thai|english` (language). Skills: `/agent-hq:team`, `/agent-hq:feature`, `/agent-hq:standup`,
+`/agent-hq:retro`, `/agent-hq:handoff`, and `agent-hq:self-evaluation`, which every team member carries.
+
+### English or Thai
+
+The first session asks once, in both languages, which one Agent HQ speaks (English when the question is dismissed or
+nobody can be asked, as in `claude -p`). Change it later in `/config` (the **Language / ภาษา** option) or with
+`/hq lang thai` / `/hq lang english`; the plugin reloads in the new language. In Thai the sidebar, band, status line,
+toasts, command replies, dialogs, the session report and the live page are Thai, and the lead and every member are told
+to speak Thai to you and to write the files you read (specs, plans, reports, team titles and missions) in Thai. Code,
+paths, commands, comments and commit messages stay English, and so does everything the model reads (tool answers,
+errors, prompts). In the terminal Thai is drawn in text lines, never cut inside a letter and its marks; a track's pill keeps its
+count and the word sits beside it, since a Thai mark has no cell of its own.
 
 ## Teams
 
@@ -108,7 +119,18 @@ The lead (the main session) gets four tools, offered as `mcp__agent-hq__hq_assig
   asked, what it reported, what to focus on and what its verdict must look like. If the review role is already at its
   count, the brief goes to the running reviewer as a message.
 
-Only the lead can use them; a subagent that calls one gets an error. The `/agent-hq:handoff` skill describes a good
+Only the lead can use them; a subagent that calls one gets an error.
+
+One more tool is for everyone, lead and members alike (a member with a tools list keeps it, and the rule guard never
+refuses it): **`hq_doing`** (`mcp__agent-hq__hq_doing`, input `text`) says in one short sentence, in your language, what
+the agent is doing now, e.g. "Working on the old API and fixing its issues". It shows as the second line of the
+agent's sidebar row (its tool and seconds move to the line below while that line is free), on the band's activity line
+and on the live page. The text is one line of at most 90 characters, with tokens, keys, `KEY=value`, long opaque strings
+and URL credentials masked; an empty text clears it. A sentence lasts until the agent's step in progress changes, it
+finishes, or (the lead's) its turn ends. With no sentence the row shows the step in progress, else the first line of the
+agent's assignment, and for the lead "Waiting for 3 of 4 members" or "Planning".
+
+The `/agent-hq:handoff` skill describes a good
 brief, `/agent-hq:standup` collects a three-line status from every running member, and `/agent-hq:retro` turns a
 finished task into proposed edits to the team's rules (applied only after you approve each). `/agent-hq:feature`
 runs a big feature in six phases (brainstorm, spec, parallel UI prototype variants, plan, build one reviewed task at

@@ -7,7 +7,8 @@
 // nothing moves offscreen, in a hidden tab or under reduced motion. Props only: callbacks, nothing fetched.
 
 import React from './vendor/libs.js'
-import { Blob, DotNumber, Elapsed, Icon, Orb, html } from './spacekit.js'
+import { Blob, DotNumber, Elapsed, Icon, Orb, html, statusLabel } from './spacekit.js'
+import { t } from './i18n.js'
 
 const { useEffect, useRef, useState } = React
 const cx = (...parts) => parts.filter(Boolean).join(' ')
@@ -15,9 +16,10 @@ const cx = (...parts) => parts.filter(Boolean).join(' ')
 export const LEAD_STATES = ['working', 'idle', 'needs-you', 'all-done', 'failure']
 const STATE_HUE = { working: 'var(--st-working)', idle: 'var(--st-idle)', 'needs-you': 'var(--st-waiting)', 'all-done': 'var(--st-done)', failure: 'var(--st-failed)' }
 const STATE_FACE = { working: 'working', idle: 'idle', 'needs-you': 'waiting', 'all-done': 'done', failure: 'working' }
-const STATE_WORD = { working: 'Working', idle: 'Idle', 'needs-you': 'Needs you', 'all-done': 'All done', failure: 'Failure in team' }
-const STATUS_WORD = { working: 'working', waiting: 'needs you', done: 'done', failed: 'failed', idle: 'idle', stopped: 'stopped' }
-const COUNTS = [['working', 'Working'], ['waiting', 'Needs you'], ['done', 'Done'], ['failed', 'Failed']]
+const STATE_KEY = { working: 'status.working', idle: 'status.idle', 'needs-you': 'status.waiting', 'all-done': 'lead.allDone', failure: 'lead.failure' }
+const stateWord = mood => t(STATE_KEY[mood])
+const statusWord = status => statusLabel(status).toLowerCase() // "needs you" in a sentence
+const COUNTS = ['working', 'waiting', 'done', 'failed']
 const CREW_ORDER = ['waiting', 'failed', 'stopped', 'working', 'idle', 'done'] // the board lists who needs the person first
 const CREW_SHOWN = { full: 8, compact: 4 } // as many as fit in the row (compact shares it with the actions)
 const ROSTER_SHOWN = 6 // the board's crew list; the rest (sorted last: idle and done) fold into one line
@@ -100,28 +102,28 @@ function Core({ seed, index, face, pct, size, orb }) {
 function Crew({ crew, max, small, onSelect }) {
   const shown = crew.slice(0, max)
   const more = crew.length - shown.length
-  return html`<div className="lc-crew"><ul className="lc-crew__list" aria-label="Crew">
-    ${shown.map((m, i) => html`<li key=${m.id ?? m.nickname} className="lc-crew__m" data-status=${m.status} title=${`${m.nickname} · ${STATUS_WORD[m.status] ?? m.status}`}>
-      <button type="button" className="lc-crew__btn" aria-label=${`${m.nickname}, ${STATUS_WORD[m.status] ?? m.status}`} onClick=${onSelect ? () => onSelect(m.id ?? m.nickname) : undefined}>
+  return html`<div className="lc-crew"><ul className="lc-crew__list" aria-label=${t('lead.crew')}>
+    ${shown.map((m, i) => html`<li key=${m.id ?? m.nickname} className="lc-crew__m" data-status=${m.status} title=${`${m.nickname} · ${statusWord(m.status)}`}>
+      <button type="button" className="lc-crew__btn" aria-label=${`${m.nickname}, ${statusWord(m.status)}`} onClick=${onSelect ? () => onSelect(m.id ?? m.nickname) : undefined}>
         <${Blob} seed=${m.seed ?? m.nickname} state=${m.status} size=${small ? 22 : 28} index=${m.index ?? i} />
         <span className="lc-dot"></span>
       </button>
     </li>`)}
-  </ul>${more > 0 ? html`<span className="lc-crew__more" aria-label=${`${more} more`}><${DotNumber} value=${`+${more}`} size="xs" /></span>` : null}</div>`
+  </ul>${more > 0 ? html`<span className="lc-crew__more" aria-label=${t('lead.more', { n: more })}><${DotNumber} value=${`+${more}`} size="xs" /></span>` : null}</div>`
 }
 
 function Counts({ counts }) {
   return html`<div className="lc-counts">
-    ${COUNTS.map(([key, label]) => html`<div key=${key} className="lc-count" data-status=${key} data-zero=${counts[key] === 0 ? '' : undefined}>
-      <${DotNumber} value=${counts[key]} /><span className="sk-label">${label}</span>
+    ${COUNTS.map(key => html`<div key=${key} className="lc-count" data-status=${key} data-zero=${counts[key] === 0 ? '' : undefined}>
+      <${DotNumber} value=${counts[key]} /><span className="sk-label">${statusLabel(key)}</span>
     </div>`)}
   </div>`
 }
 
 function Actions({ small, onMessage, onHire, onTasks }) {
   const btn = (icon, title, label, fn, primary) => html`<button type="button" className=${cx('sk-iconbtn', small && 'sk-iconbtn--sm', primary && 'sk-iconbtn--primary')} aria-label=${label} title=${title} onClick=${fn} disabled=${!fn}><${Icon} name=${icon} /></button>`
-  return html`<div className="lc-actions" role="group" aria-label="Lead actions">
-    ${btn('message', 'Message lead', 'Message the lead', onMessage, true)}${btn('plus', 'Add agent', 'Add an agent', onHire)}${btn('tasks', 'Tasks', 'Open the task board', onTasks)}
+  return html`<div className="lc-actions" role="group" aria-label=${t('lead.actions')}>
+    ${btn('message', t('lead.message'), t('lead.messageLabel'), onMessage, true)}${btn('plus', t('add.add'), t('add.title'), onHire)}${btn('tasks', t('lead.tasks'), t('lead.tasksLabel'), onTasks)}
   </div>`
 }
 
@@ -135,26 +137,26 @@ function Board({ plan, crew, open, onToggle, onSelect, id }) {
   const done = plan.filter(s => s.status === 'done').length
   const sorted = [...crew].sort((a, b) => CREW_ORDER.indexOf(a.status) - CREW_ORDER.indexOf(b.status))
   const folded = sorted.slice(ROSTER_SHOWN)
-  return html`<section className="lc-board" data-open=${open ? '' : undefined} aria-label="Mission board">
+  return html`<section className="lc-board" data-open=${open ? '' : undefined} aria-label=${t('lead.board')}>
     <button type="button" className="lc-board__bar" aria-expanded=${open} aria-controls=${`${id}-board`} onClick=${onToggle}>
-      <span className="sk-label">Mission board</span>
-      ${plan.length ? html`<span className="lc-board__tally"><${DotNumber} value=${`${done}/${plan.length}`} size="xs" /> <span className="sk-label">steps</span></span>` : null}
+      <span className="sk-label">${t('lead.board')}</span>
+      ${plan.length ? html`<span className="lc-board__tally"><${DotNumber} value=${`${done}/${plan.length}`} size="xs" /> <span className="sk-label">${t('lead.steps')}</span></span>` : null}
       <span className="lc-board__chev" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16"><path d="M6 9l6 6l6-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></span>
     </button>
     ${open ? html`<div className="lc-board__body" id=${`${id}-board`}>
       <div className="lc-board__col">
-        <div className="sk-label lc-board__h">Plan</div>
-        ${plan.length ? html`<ol className="lc-steps">${plan.map((s, i) => html`<li key=${i} className="lc-step" data-step=${s.status}><span className="lc-step__glyph" aria-hidden="true">${STEP_GLYPH[s.status] ?? '○'}</span><span className="lc-step__text">${s.text}</span><span className="sr-only lc-sr"> (${s.status})</span></li>`)}</ol>` : html`<p className="lc-empty">No plan yet.</p>`}
+        <div className="sk-label lc-board__h">${t('lead.plan')}</div>
+        ${plan.length ? html`<ol className="lc-steps">${plan.map((s, i) => html`<li key=${i} className="lc-step" data-step=${s.status}><span className="lc-step__glyph" aria-hidden="true">${STEP_GLYPH[s.status] ?? '○'}</span><span className="lc-step__text">${s.text}</span><span className="sr-only lc-sr"> (${STEP_GLYPH[s.status] ? t(`step.${s.status}`) : s.status})</span></li>`)}</ol>` : html`<p className="lc-empty">${t('lead.noPlan')}</p>`}
       </div>
       <div className="lc-board__col">
-        <div className="sk-label lc-board__h">Crew</div>
+        <div className="sk-label lc-board__h">${t('lead.crew')}</div>
         ${sorted.length ? html`<ul className="lc-roster">${sorted.slice(0, ROSTER_SHOWN).map((m, i) => html`<li key=${m.id ?? m.nickname} className="lc-roster__m" data-status=${m.status}>
           <button type="button" className="lc-roster__btn" onClick=${onSelect ? () => onSelect(m.id ?? m.nickname) : undefined}>
             <span className="lc-roster__blob"><${Blob} seed=${m.seed ?? m.nickname} state=${m.status} size=${24} index=${m.index ?? i} /><span className="lc-dot"></span></span>
             <span className="lc-roster__name">${m.nickname}</span>
-            <span className="lc-roster__word">${STATUS_WORD[m.status] ?? m.status}</span>
+            <span className="lc-roster__word">${statusWord(m.status)}</span>
           </button>
-        </li>`)}${folded.length ? html`<li className="lc-roster__more">+${folded.length} more · ${[...new Set(folded.map(m => STATUS_WORD[m.status] ?? m.status))].join(', ')}</li>` : null}</ul>` : html`<p className="lc-empty">No crew yet.</p>`}
+        </li>`)}${folded.length ? html`<li className="lc-roster__more">${t('lead.moreList', { n: folded.length, words: [...new Set(folded.map(m => statusWord(m.status)))].join(', ') })}</li>` : null}</ul>` : html`<p className="lc-empty">${t('lead.noCrew')}</p>`}
       </div>
     </div>` : null}
   </section>`
@@ -163,12 +165,12 @@ function Board({ plan, crew, open, onToggle, onSelect, id }) {
 /**
  * The lead's command deck. `variant`: full (the deck and its mission board, the diagram's centre), compact (the deck alone,
  * beside the star in the space view), mini (a chip). `crew`: [{ id, nickname, seed, status, index }] with status
- * working|waiting|done|failed|idle|stopped. `pct` the team's progress 0–100; `activity` + `elapsed` the live line;
+ * working|waiting|done|failed|idle|stopped. `pct` the team's progress 0–100; `says` the lead's own sentence; `activity` + `elapsed` the live line;
  * `plan`: [{ text, status: done|now|next }] for the board (or `now` / `next` alone). `state` is derived from the crew
  * (leadState) unless given. `board` false hides the board; `boardOpen` is its default before the viewer chooses.
  * Callbacks: onMessage, onHire, onTasks (opens the task board), onSelect(memberId), onOpen.
  */
-export function LeadDeck({ variant = 'full', id, nickname, title = 'Tech Lead', team, seed, index, status, state, pct, activity, elapsed, now, next, plan, crew = [], board = true, boardOpen = true, orbs = true, onMessage, onHire, onTasks, onSelect, onOpen, className }) {
+export function LeadDeck({ variant = 'full', id, nickname, title = t('lead.title'), team, seed, index, status, state, pct, says, activity, elapsed, now, next, plan, crew = [], board = true, boardOpen = true, orbs = true, onMessage, onHire, onTasks, onSelect, onOpen, className }) {
   ensureStyles()
   const ref = useOffscreen()
   const [open, setOpen] = useState(() => readOpen(boardOpen))
@@ -181,7 +183,7 @@ export function LeadDeck({ variant = 'full', id, nickname, title = 'Tech Lead', 
   const uid = `lc${String(id ?? nickname ?? 'lead').replace(/[^\w-]/g, '')}`
 
   if (variant === 'mini') {
-    return html`<button ref=${ref} type="button" className=${cx('lc', 'lc--mini', className)} data-state=${mood} data-working=${working ? '' : undefined} data-agent=${id} data-card="lead" style=${style} onClick=${onOpen} aria-label=${`${nickname}, ${title}, ${STATE_WORD[mood]}`}>
+    return html`<button ref=${ref} type="button" className=${cx('lc', 'lc--mini', className)} data-state=${mood} data-working=${working ? '' : undefined} data-agent=${id} data-card="lead" style=${style} onClick=${onOpen} aria-label=${`${nickname}, ${title}, ${stateWord(mood)}`}>
       <${Core} seed=${seed ?? nickname} index=${index} face=${face} pct=${shownPct} size=${40} orb=${false} />
       <span className="lc-mini__name"><span className="lc-star" aria-hidden="true">✦</span>${nickname}</span>
       <span className="lc-mini__counts">${COUNTS.map(([key]) => (counts[key] > 0 ? html`<span key=${key} data-status=${key}><i></i><${DotNumber} value=${counts[key]} size="xs" /></span>` : null))}</span>
@@ -192,19 +194,20 @@ export function LeadDeck({ variant = 'full', id, nickname, title = 'Tech Lead', 
   const compact = variant === 'compact'
   const steps = plan ?? [now && { text: now, status: 'now' }, next && { text: next, status: 'next' }].filter(Boolean)
   const toggle = () => setOpen(o => (writeOpen(!o), !o))
-  const badge = counts.waiting > 0 ? html`<span className="lc-badge" role="status"><${Icon} name="waiting" size=${12} /> ${counts.waiting} need${counts.waiting === 1 ? 's' : ''} you</span>` : null
-  const deck = html`<article className="lc-deck" aria-label=${`${nickname}, ${title}${team ? ` of ${team}` : ''}: ${STATE_WORD[mood]}`}>
+  const badge = counts.waiting > 0 ? html`<span className="lc-badge" role="status"><${Icon} name="waiting" size=${12} /> ${t(counts.waiting === 1 ? 'lead.needsOne' : 'lead.needsMany', { n: counts.waiting })}</span>` : null
+  const deck = html`<article className="lc-deck" aria-label=${`${nickname}, ${team ? t('lead.of', { title, team }) : title}: ${stateWord(mood)}`}>
     <div className="lc-stars" aria-hidden="true"></div>
     <div className="lc-left">
       <svg className="lc-orbit" viewBox="0 0 260 80" aria-hidden="true"><ellipse cx="130" cy="40" rx="127" ry="30" /><circle className="lc-orbit__moon" cx="12" cy="50" r="2.6" /></svg>
       <${Core} seed=${seed ?? nickname} index=${index} face=${face} pct=${shownPct} size=${compact ? 92 : 132} orb=${working && orbs} />
-      ${shownPct === undefined ? null : html`<div className="lc-pct"><${DotNumber} value=${Math.round(shownPct)} suffix="%" size=${compact ? 'xs' : 'sm'} /><span className="sk-label">Team</span></div>`}
+      ${shownPct === undefined ? null : html`<div className="lc-pct"><${DotNumber} value=${Math.round(shownPct)} suffix="%" size=${compact ? 'xs' : 'sm'} /><span className="sk-label">${t('team')}</span></div>`}
     </div>
     <div className="lc-right">
       <header className="lc-head">
         <h3 className="lc-name"><span className="lc-star" aria-hidden="true">✦</span>${onOpen ? html`<button type="button" className="lc-name__btn" onClick=${onOpen}>${nickname}</button>` : nickname}</h3>
         <div className="lc-sub"><span className="sk-label lc-title">${title}</span>${team ? html`<span className="lc-team">${team}</span>` : null}</div>
       </header>
+      ${says ? html`<p className="lc-says" title=${says}>${says}</p>` : null}
       <${Live} activity=${activity} elapsed=${elapsed} />
       <${Counts} counts=${counts} />
       <div className="lc-foot">
@@ -273,6 +276,7 @@ const STYLE = `
 .lc-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; }
 .lc-title { color: var(--st-lead); letter-spacing: .1em; }
 .lc-team { font: 500 12.5px var(--sk-font-title); color: var(--sk-text-2); }
+.lc-says { margin: 0; font: 500 14px/1.4 var(--sk-font-title); color: var(--sk-text); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
 .lc-live { display: flex; min-width: 0; font: 400 12px var(--sk-font-mono); color: color-mix(in srgb, var(--lc-hue) 40%, #fff); white-space: nowrap; }
 .lc-live__cursor { color: var(--lc-hue); margin-right: 6px; }
 .lc-live__text { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
@@ -337,12 +341,13 @@ const STYLE = `
 .lc-empty { margin: 0; font-size: 13px; color: var(--sk-text-3); }
 
 /* compact: the deck alone, stacked tighter */
-.lc--compact .lc-deck { min-height: 0; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: 'left head' 'left counts' 'live live' 'foot foot'; gap: 8px 12px; padding: 12px 14px 14px 12px; border-radius: 64px 30px 30px 64px; }
+.lc--compact .lc-deck { min-height: 0; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: 'left head' 'left counts' 'says says' 'live live' 'foot foot'; gap: 8px 12px; padding: 12px 14px 14px 12px; border-radius: 64px 30px 30px 64px; }
 .lc--compact .lc-head { display: grid; gap: 2px; }
 .lc--compact .lc-right { display: contents; }
 .lc--compact .lc-left { grid-area: left; }
 .lc--compact .lc-head { grid-area: head; }
 .lc--compact .lc-counts { grid-area: counts; padding: 8px 4px; }
+.lc--compact .lc-says { grid-area: says; font-size: 13px; }
 .lc--compact .lc-live { grid-area: live; }
 .lc--compact .lc-foot { grid-area: foot; }
 .lc--compact .lc-name { font-size: 19px; }

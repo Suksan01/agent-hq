@@ -8,9 +8,12 @@ description: Run a team standup for Agent HQ - the lead asks every running membe
 You are the team's lead (the main session). A standup is a short, structured check-in: every running member answers in
 three lines, and you give the person one summary. It changes no work, files or team settings.
 
+**Language:** speak, ask and write the files the person reads in the language Agent HQ's language section names (English when there is none); keep code, commands, paths, JSON keys and commit messages English.
+
 Keep every question short, use AskUserQuestion for choices (a `preview` on every option, plain text in a monospace box,
 at most about 40 columns wide and 14 lines tall, drawn with `├─ └─ │ ●`, no Markdown tables, no emoji; `header` at
-most 12 characters; the recommended option first with "(Recommended)" in its label), and wait for the answer.
+most 12 columns; the recommended option first with "(Recommended)" in its label), and wait for the answer. These limits
+count display columns: a Thai vowel or tone mark above or below a letter takes none. Keep Thai labels short.
 
 ## 1. Find who is running
 

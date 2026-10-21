@@ -2,7 +2,8 @@
 // section says so, and the stills below show what the view looks like (rendered once with software GL and saved beside the page as small WebP files).
 import React, { createRoot } from '../../vendor/libs.js'
 import { GlassTile, html } from '../../spacekit.js'
-import { SpaceView, UNAVAILABLE } from '../../spaceview.js'
+import { SpaceView } from '../../spaceview.js'
+import { t } from '../../i18n.js'
 import { setEngineChunk } from '../../spaceengine.js'
 import { playNav } from '../../space-sounds.js'
 import { webglAvailable } from '../../webgl.js'
@@ -24,7 +25,7 @@ function SpaceSection() {
       <${SpaceView} groups=${demoGroups} focus=${focus} onSelect=${(session) => setFocus(session)} onMove=${move => playNav('travel', move)} inset=${{ top: 16, right: 16, bottom: 16, left: 16 }} />
     </div>` : html`<${GlassTile} style=${{ padding: '24px 28px', maxWidth: 640, display: 'grid', gap: 8 }}>
       <b style=${{ font: "700 20px 'Space Grotesk', sans-serif" }}>Space view unavailable</b>
-      <span style=${{ font: "400 14px/1.55 'Space Grotesk', sans-serif", color: 'rgba(242,242,245,.62)' }}>${UNAVAILABLE}</span>
+      <span style=${{ font: "400 14px/1.55 'Space Grotesk', sans-serif", color: 'rgba(242,242,245,.62)' }}>${t('space.unavailable')}</span>
     <//>`}
     <div className="sc-h3" style=${{ margin: '8px 0 0' }}>Stills of the Space view</div>
     <div style=${{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: 18 }}>

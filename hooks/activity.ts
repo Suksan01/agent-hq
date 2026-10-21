@@ -3,13 +3,18 @@
 
 import type { HqActivity, HqAgent } from '../types'
 import { PLAN_TOOL, isFinished } from './model'
+import { headOf } from './cells'
+import { maskSecrets } from './secrets'
+import { t } from './i18n'
+import type { Key, Lang } from './i18n'
 
 const ARG_MAX = 24 // a pattern, a command's words, a name: cut to this
 const TEXT_MAX = 48 // the whole line
 
 const oneLine = (s: string) => s.replace(/\s+/g, ' ').trim()
-const cut = (s: string, max: number) => (s.length > max ? `${s.slice(0, max - 1).trimEnd()}…` : s)
-const arg = (v: unknown) => (typeof v === 'string' ? cut(oneLine(v), ARG_MAX) : '')
+const cut = (s: string, max: number) => (s.length > max ? `${headOf(s, max - 1).trimEnd()}…` : s)
+// masked before it is cut, so no part of a long key shows
+const arg = (v: unknown) => (typeof v === 'string' ? cut(maskSecrets(oneLine(v)), ARG_MAX) : '')
 export const baseName = (v: unknown) => (typeof v === 'string' ? (v.split(/[\\/]/).filter(Boolean).at(-1) ?? '') : '')
 
 // a command word worth showing: plain letters, digits, dots and dashes, never a flag, a path, a URL or an assignment
@@ -41,42 +46,43 @@ export function hostOf(url: unknown): string {
   }
 }
 
-const withArg = (verb: string, what: string, fallback: string) => (what ? `${verb} ${what}` : fallback)
+/** Its words with `what` when the call names something, else the fallback's. */
+const withArg = (lang: Lang, key: Key, what: string, fallback: Key) => (what ? t(lang, key, { what }) : t(lang, fallback))
 
 /** The line for a tool call as it starts, from the tool's name and input (read untrusted). */
-export function describeCall(tool: string, input: Record<string, unknown>): string {
+export function describeCall(tool: string, input: Record<string, unknown>, lang: Lang = 'en'): string {
   const text = (() => {
     switch (tool) {
       case 'Edit':
       case 'MultiEdit':
-        return withArg('Editing', cut(baseName(input.file_path), ARG_MAX), 'Editing a file')
+        return withArg(lang, 'call.editing', cut(baseName(input.file_path), ARG_MAX), 'call.editingFile')
       case 'NotebookEdit':
-        return withArg('Editing', cut(baseName(input.notebook_path), ARG_MAX), 'Editing a notebook')
+        return withArg(lang, 'call.editing', cut(baseName(input.notebook_path), ARG_MAX), 'call.editingNotebook')
       case 'Write':
-        return withArg('Writing', cut(baseName(input.file_path), ARG_MAX), 'Writing a file')
+        return withArg(lang, 'call.writing', cut(baseName(input.file_path), ARG_MAX), 'call.writingFile')
       case 'Read':
-        return withArg('Reading', cut(baseName(input.file_path), ARG_MAX), 'Reading a file')
+        return withArg(lang, 'call.reading', cut(baseName(input.file_path), ARG_MAX), 'call.readingFile')
       case 'Grep':
       case 'Glob':
-        return withArg('Searching for', arg(input.pattern), 'Searching')
+        return withArg(lang, 'call.searchingFor', arg(input.pattern), 'call.searching')
       case 'Bash':
-        return withArg('Running', commandWords(input.command), 'Running a command')
+        return withArg(lang, 'call.running', commandWords(input.command), 'call.runningCommand')
       case 'Agent':
       case 'Task':
-        return withArg('Starting', arg(input.name) || arg(input.subagent_type) || arg(input.description), 'Starting an agent')
+        return withArg(lang, 'call.starting', arg(input.name) || arg(input.subagent_type) || arg(input.description), 'call.startingAgent')
       case 'WebFetch':
-        return withArg('Reading', cut(hostOf(input.url), ARG_MAX), 'Reading a web page')
+        return withArg(lang, 'call.reading', cut(hostOf(input.url), ARG_MAX), 'call.readingPage')
       case 'TodoWrite':
       case PLAN_TOOL:
-        return 'Planning'
+        return t(lang, 'call.planning')
       case 'SendMessage':
-        return withArg('Messaging', arg(input.to), 'Sending a message')
+        return withArg(lang, 'call.messaging', arg(input.to), 'call.sendingMessage')
     }
     const mcp = /^mcp__(.+?)__(.+)$/.exec(tool)
-    if (mcp) return `Using ${cut(mcp[1] ?? '', ARG_MAX)} ${cut(mcp[2] ?? '', ARG_MAX)}`
-    return `Using ${cut(tool, ARG_MAX)}`
+    if (mcp) return t(lang, 'call.using', { what: `${cut(mcp[1] ?? '', ARG_MAX)} ${cut(mcp[2] ?? '', ARG_MAX)}` })
+    return t(lang, 'call.using', { what: cut(tool, ARG_MAX) })
   })()
-  return cut(text, TEXT_MAX)
+  return cut(maskSecrets(text), TEXT_MAX) // a pattern or a start's name is the model's words: no secret on the live line
 }
 
 export type Activities = Record<string, HqActivity>

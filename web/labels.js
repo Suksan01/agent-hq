@@ -36,7 +36,9 @@ export function sessionNames(sessions) {
 
 // ---- result toasts ------------------------------------------------------------------------------------------------
 
+// what an older mod's English failure text starts with; a mod that marks its events (`failed`) is believed instead, in any language
 const FAILURE = /^(failed|blocked)\b/i
+const isFailure = e => ('failed' in e ? e.failed === true : FAILURE.test(e.text))
 
 /**
  * The toasts for a session's push, from its numbered feed (`events`, oldest first, `n` rising): every event of kind 'action' with
@@ -49,6 +51,6 @@ export function actionToasts(lastN, events) {
   const toasts = events
     .filter(e => e.kind === 'action' && e.n > lastN)
     .sort((a, b) => a.n - b.n)
-    .map(e => ({ n: e.n, agent: e.agent, ok: !FAILURE.test(e.text), text: e.text.replace(/^failed:\s*/i, '') }))
+    .map(e => ({ n: e.n, agent: e.agent, ok: !isFailure(e), text: e.text.replace(/^failed:\s*/i, '') }))
   return { toasts, lastN: newest }
 }

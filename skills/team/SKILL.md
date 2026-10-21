@@ -13,6 +13,11 @@ shows the team in its sidebar (`/hq`).
 Ask, don't assume: the person decides what the team is for, its size and its roles. Keep each question short, use
 AskUserQuestion for choices, and wait for the answer before moving on.
 
+**Language:** speak, ask and write the files the person reads in the language Agent HQ's language section names (English when there is none); keep code, commands, paths, JSON keys and commit messages English.
+In the team file, write the name, purpose, titles, missions, tasks and rules in that language (the person reads them in
+the sidebar and in reports); role ids, tool names, skill names, models, globs and paths stay English, since Agent HQ
+matches them.
+
 ## How to ask
 
 - **Open questions first, in plain text** (what the team is for, what the first task is): the person's own words
@@ -35,7 +40,9 @@ AskUserQuestion for choices, and wait for the answer before moving on.
   build: ...").
 - **No catch-all options** such as "Change it" or "Something else": "Other" already lets the person type what to
   change. An option that goes back to an earlier step names that step ("Change the lineup").
-- Keep `header` to 12 characters and 2 to 4 options. The person can always pick "Other" to type their own answer.
+- Keep `header` to 12 columns and 2 to 4 options. The person can always pick "Other" to type their own answer.
+  These limits count display columns: a Thai vowel or tone mark above or below a letter takes none. Keep Thai labels
+  short.
 - **Say where the person is**: start every question's text with its step, `Step 4 of 8 · ` then the question
   ("Step 4 of 8 · Which lineup fits the checkout work?"), so the interview never feels open-ended. Skipped steps keep
   their numbers.
@@ -126,6 +133,8 @@ role pre-filled (id, title, count, mission, tasks, rules, skills, tools, model) 
 - **purpose**: replace the `<purpose: ...>` placeholder with one sentence from the goal the person gave in step 2;
   never save the placeholder.
 - **name**: the template's name is only a suggestion; step 5 asks the person for the team's name.
+- **language**: the templates are English starting points: when the language is Thai, translate the picked template's
+  titles, missions, tasks and rules (the lead's too), and keep its ids, tools, skills and models as they are.
 - **adapt**: rewrite titles, missions, tasks and rules where the goal calls for it (name the real stack, area or
   documents; drop a task that does not apply). Keep each role's `id`, `tools` (reviewers stay read-only) and the
   rules about review, tests and never pushing or merging.
@@ -175,8 +184,8 @@ trade-offs for the person before work starts, and drafts the lead's updates and 
 Assistant" first (Recommended when the team has 3 or more members) and "No assistant". It counts toward the 12 roles.
 
 If the person adds it, use this card as the starting point for step 6 (adapt the mission to the goal; keep the id, the
-tools, the guard and the rules). Edit and Write let it save the spec and the plan of `/agent-hq:feature`; its guard keeps
-them to those two folders, and everything else it writes comes back in its reply:
+tools, the guard and the rules, in the team's language). Edit and Write let it save the spec and the plan of
+`/agent-hq:feature`; its guard keeps them to those two folders, and everything else it writes comes back in its reply:
 
 ```json
 {
@@ -214,7 +223,7 @@ strongest model. Save it as the lead's `"model": "opus"`; Agent HQ then warns wh
 model (switch with `/model opus`).
 
 Then pick a model for every role (all members of a role share it). AskUserQuestion, one question per role, up to four
-in one call (a second call for the fifth role on), header the role's title cut to 12 characters, the suggested model
+in one call (a second call for the fifth role on), header the role's title cut to 12 columns, the suggested model
 first with "(Recommended)":
 - **Use opus**: architecture, hard debugging, security review; best results, slowest, costs most.
 - **Use sonnet**: building, testing, reviewing, writing; the balanced choice for most roles.
@@ -243,12 +252,12 @@ Opus is `●●●` depth and cost with `●○○` speed, haiku the reverse; "S
 Ask the person what to call the team: the name shows as the sidebar header, on the island's flag in the live page and
 in every report. AskUserQuestion, header "Team name", 3 options built from the goal (step 2) and the project (the
 working directory's folder name), each option's preview showing where the name appears. Rules for the names:
-- at most 40 characters, Title Case, no `<` or `>` and no leftovers of a template (a picked template's own name is only a
-  suggestion: it may be offered when it fits, never assumed);
+- at most 40 columns, Title Case for an English name, no `<` or `>` and no leftovers of a template (a picked
+  template's own name is only a suggestion: it may be offered when it fits, never assumed);
 - the most descriptive first, marked **(Recommended)**, for example "Booking App Team"; then a shorter one with a role
   flavour ("Medusa Crew"); the last one playful ("Storefront Squad", "Booking Bandits");
 - when step 1 found a team to edit, add **Keep "<current name>"** as the first option;
-- "Other" lets the person type their own; trim it, cut it to 40 characters and refuse `<...>`.
+- "Other" lets the person type their own; trim it, cut it to 40 columns and refuse `<...>`.
 
 Unique among the person's teams: read both `team.json` places (`<working directory>/.claude/agent-hq/team.json` and
 `<home directory>/.claude/agent-hq/team.json`) and compare names ignoring case. Never offer a name another team file
@@ -266,14 +275,14 @@ Saved     "name": "Booking App Team"
 most descriptive · used nowhere else
 ```
 
-The preview shows the sidebar header in capitals followed by the folder name, the flag cut to its 16 characters plus
+The preview shows the sidebar header in capitals followed by the folder name, the flag cut to its 16 columns plus
 "…" when longer (the flag is small), and the line that will be saved. Use the picked name as the team's `name` from here
 on; it also replaces a template's default name.
 
 ## 6. Give every role a clear job
 
 For the lead and each role, draft the fields below from the goal, then go through them with the person: one
-AskUserQuestion per role (header: the role's title, cut to 12 characters), options **Looks good (Recommended)** and
+AskUserQuestion per role (header: the role's title, cut to 12 columns), options **Looks good (Recommended)** and
 the two changes this role is most likely to need, each labelled with the change itself and previewing the role card
 as it would be saved, with its changed lines marked. Pick the two from: stricter or looser rules, one more or one
 fewer member, an extra task or skill that fits the goal (the model was picked in step 4). For example **Ask before new
@@ -298,7 +307,8 @@ Access   full
 safer · asks before adding a dep
 ```
 
-- **id**: kebab-case, letters, digits and `-` only (`senior-dev`, `qa`); becomes `agent-hq:<id>`.
+- **id**: kebab-case, ASCII letters, digits and `-` only, in English whatever the title's language (`senior-dev`,
+  `qa`); becomes `agent-hq:<id>`.
 - **title**: what the sidebar shows (`Senior Developer`).
 - **count**: how many may run at once.
 - **mission**: one or two sentences, what this role is for.

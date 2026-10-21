@@ -213,6 +213,6 @@ test('runFreshActions records one feed event per request: a message, or an actio
     { agent: 'd1', kind: 'message', text: `message sent to ${s.called('d1')}` },
     { agent: MAIN, kind: 'message', text: 'message queued for the lead' },
     { agent: MAIN, kind: 'action', text: 'finished agents hidden' },
-    { agent: 'ghost', kind: 'action', text: 'failed: no such agent' },
+    { agent: 'ghost', kind: 'action', text: 'failed: no such agent', failed: true }, // flagged, so the page needs no English words
   ])
 })

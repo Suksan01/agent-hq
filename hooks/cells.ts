@@ -49,6 +49,59 @@ export const fit = (s: string, w: number) => {
   return w <= 1 ? '…'.slice(0, Math.max(0, w)) : chars.slice(0, w - 1).join('').trimEnd() + '…'
 }
 
+// ---------- Text lines: Thai shown whole. Never in a Raster cell: a mark has no column of its own there ----------
+
+const isThai = (cp: number) => cp >= 0x0e00 && cp <= 0x0e7f
+// the marks drawn over or under the consonant before them: no column of their own (sara am, U+0E33, is a spacing vowel)
+const isThaiMark = (cp: number) => cp === 0x0e31 || (cp >= 0x0e34 && cp <= 0x0e3a) || (cp >= 0x0e47 && cp <= 0x0e4e)
+const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+const clustersOf = (s: string) => Array.from(segmenter.segment(s), part => part.segment)
+export const hasThai = (s: string) => [...s].some(ch => isThai(ch.codePointAt(0) ?? 0))
+
+// เ แ โ ใ ไ are written before the consonant they are said after: a cut must not part them from it
+const isLeadingVowel = (s: string) => /^[เ-ไ]$/.test(s)
+
+/** A Text line's pieces with their columns: a Thai cluster whole (its marks take none), anything else as the cells draw it. */
+function textPieces(s: string): { text: string; width: number }[] {
+  const pieces = clustersOf(s).flatMap(cluster => {
+    const points = [...cluster].map(ch => ch.codePointAt(0) ?? 0)
+    if (isThai(points[0] ?? 0)) return [{ text: cluster, width: points.filter(cp => !isThaiMark(cp)).length }]
+    return [...cluster].map(ch => ({ text: cellChar(ch), width: 1 }))
+  })
+  return pieces.reduce<{ text: string; width: number }[]>((out, piece) => {
+    const last = out.at(-1)
+    return last && isLeadingVowel(last.text) ? [...out.slice(0, -1), { text: last.text + piece.text, width: last.width + piece.width }] : [...out, piece]
+  }, [])
+}
+
+/** How many columns a Text line takes; outside Thai, exactly what `cellText` gives. */
+export const textWidth = (s: string) => textPieces(s).reduce((w, piece) => w + piece.width, 0)
+
+/** `fit` for a Text line: Thai kept, and cut only between clusters, so a consonant never loses its marks. */
+export function fitText(s: string, w: number): string {
+  const pieces = textPieces(s)
+  if (pieces.reduce((sum, piece) => sum + piece.width, 0) <= w) return pieces.map(piece => piece.text).join('')
+  if (w <= 1) return '…'.slice(0, Math.max(0, w))
+  let used = 0
+  let out = ''
+  for (const piece of pieces) {
+    if (used + piece.width > w - 1) break
+    used += piece.width
+    out += piece.text
+  }
+  return `${out.trimEnd()}…`
+}
+
+/** The leading clusters of `s` that fit in `max` code units: raw text cut short without splitting a cluster. */
+export function headOf(s: string, max: number): string {
+  let out = ''
+  for (const cluster of clustersOf(s)) {
+    if (out.length + cluster.length > max) break
+    out += cluster
+  }
+  return out
+}
+
 class Grid {
   readonly cells: number[][]
   constructor(
@@ -116,7 +169,7 @@ export function trackCells(spec: TrackSpec, W: number, t: number, isLight: boole
 
   const icon = spec.tone === 'running' ? '' : `${TONE_GLYPH[spec.tone]} `
   const name = fit(spec.label, Math.max(3, Math.floor(W * (W < 60 ? 0.7 : 0.5)) - icon.length - spec.count.length - 4))
-  const shown = icon + name
+  const shown = (icon + name).trimEnd() // a glyph with no words keeps one space before the count, not two
   if (!shown && !spec.count) return g.encode()
   const gap = shown && spec.count ? 1 : 0
   const kw = [...shown].length + gap + spec.count.length + 2

@@ -2,6 +2,8 @@
 // the lead's request in, the new text (checked by parseTeam) or the reason it cannot be done out.
 
 import { MAX_COUNT, MAX_ROLES, parseTeam } from './team'
+import { t } from './i18n'
+import type { Lang } from './i18n'
 
 export type HirePlan =
   | { ok: true; source: string; roleId: string; title: string; before: number; after: number; hired: number; created: boolean; capped: boolean; roster: string; card: string }
@@ -9,12 +11,12 @@ export type HirePlan =
 
 const ID = /^[A-Za-z0-9_-]{1,48}$/
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
-const READ_ONLY_TITLE = /review|audit|inspect/i
+// read against the id too: a title may be in Thai (ผู้ตรวจ is an inspector), the id stays ASCII
+const READ_ONLY_TITLE = /review|audit|inspect|ตรวจ|รีวิว/i
 const LIST_FIELDS = ['tasks', 'rules', 'skills', 'tools'] as const
 const TEXT_FIELDS = ['model', 'effort', 'playbook'] as const
 const CARD_FIELDS = [...LIST_FIELDS, ...TEXT_FIELDS]
 const strings = (v: unknown) => (Array.isArray(v) ? v.flatMap(x => (typeof x === 'string' && x.trim() !== '' ? [x.trim()] : [])) : [])
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 // a playbook is a file the role is told to read and follow at every start (rolePrompt), so only a Markdown file by full path
 const PLAYBOOK = /^(\/|[A-Za-z]:[\\/]).*\.md$/i
 
@@ -26,16 +28,18 @@ function cardOf(input: Record<string, unknown>): Record<string, string | string[
 }
 
 /** One line for the person's confirmation: what the new role was given. */
-function describeCard(role: Record<string, unknown>): string {
+function describeCard(role: Record<string, unknown>, lang: Lang): string {
   const list = (f: string) => strings(role[f])
+  const tasks = list('tasks').length
+  const rules = list('rules').length
   return [
-    list('tasks').length > 0 ? plural(list('tasks').length, 'task') : '',
-    list('rules').length > 0 ? plural(list('rules').length, 'rule') : '',
-    list('skills').length > 0 ? `skills ${list('skills').join(', ')}` : '',
-    list('tools').length > 0 ? `tools ${list('tools').join(', ')}` : '',
-    typeof role.model === 'string' ? `model ${role.model}` : '',
-    typeof role.effort === 'string' ? `effort ${role.effort}` : '',
-    typeof role.playbook === 'string' ? `playbook ${role.playbook}` : '',
+    tasks > 0 ? t(lang, tasks === 1 ? 'card.task' : 'card.tasks', { n: tasks }) : '',
+    rules > 0 ? t(lang, rules === 1 ? 'card.rule' : 'card.rules', { n: rules }) : '',
+    list('skills').length > 0 ? t(lang, 'card.skills', { list: list('skills').join(', ') }) : '',
+    list('tools').length > 0 ? t(lang, 'card.tools', { list: list('tools').join(', ') }) : '',
+    typeof role.model === 'string' ? t(lang, 'card.model', { value: role.model }) : '',
+    typeof role.effort === 'string' ? t(lang, 'card.effort', { value: role.effort }) : '',
+    typeof role.playbook === 'string' ? t(lang, 'card.playbook', { value: role.playbook }) : '',
   ]
     .filter(Boolean)
     .join(', ')
@@ -44,10 +48,10 @@ function describeCard(role: Record<string, unknown>): string {
 /**
  * `input` is hq_hire's `{ role, add?, title?, mission?, tasks?, rules?, skills?, tools?, model?, effort?, playbook? }`.
  * An existing role's count rises by `add` (default 1) up to the team's limit of 10 per role; a role that does not exist
- * is created (title and mission needed, at most 12 roles) with the role card it was given, and a reviewer-like title
+ * is created (title and mission needed, at most 12 roles) with the role card it was given, and a reviewer-like title or id
  * makes it read-only. Everything else in the file is kept as it is.
  */
-export function planHire(source: string, input: unknown): HirePlan {
+export function planHire(source: string, input: unknown, lang: Lang = 'en'): HirePlan {
   if (!isRecord(input)) return { ok: false, error: 'needs an object like { role, add }' }
   const id = typeof input.role === 'string' ? input.role.trim() : ''
   if (!ID.test(id)) return { ok: false, error: 'give the "role" to add staff to: its id (letters, digits, _ or -)' }
@@ -81,7 +85,7 @@ export function planHire(source: string, input: unknown): HirePlan {
     const mission = typeof input.mission === 'string' ? input.mission.trim() : ''
     if (!title || !mission) return { ok: false, error: `there is no role "${id}" yet: to create it give its "title" and "mission" too (roles now: ${current.roles.map(r => r.id).join(', ')})` }
     after = add
-    const readOnly = READ_ONLY_TITLE.test(title)
+    const readOnly = READ_ONLY_TITLE.test(title) || READ_ONLY_TITLE.test(id)
     const card = cardOf(input)
     if (typeof card.playbook === 'string' && !PLAYBOOK.test(card.playbook)) return { ok: false, error: `"playbook" must be the absolute path of a Markdown file the role reads and follows (got "${card.playbook.slice(0, 80)}")` }
     const rules = [...(readOnly ? ['Do not edit files; report findings only.'] : []), ...((card.rules as string[] | undefined) ?? [])]
@@ -106,6 +110,6 @@ export function planHire(source: string, input: unknown): HirePlan {
     created: !known,
     capped: known !== undefined && before + add > MAX_COUNT,
     roster: checked.roles.map(r => `${r.title} x${r.count}`).join(', '),
-    card: known ? '' : describeCard(roles.at(-1) as Record<string, unknown>),
+    card: known ? '' : describeCard(roles.at(-1) as Record<string, unknown>, lang),
   }
 }

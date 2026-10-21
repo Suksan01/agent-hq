@@ -2,6 +2,8 @@ import type { HqAgent, HqStatus, HqTask, HqTaskStatus, HqTodo } from '../types'
 import { isThemeName, pickNickname } from './names'
 import { DEFAULT_THEME, THEMES, type NameTheme } from './themes'
 import { MASCOT_COUNT, SPECIES } from './sprites'
+import { t } from './i18n'
+import type { Lang } from './i18n'
 
 export const MAIN = 'main'
 const FINISHED: readonly HqStatus[] = ['completed', 'failed', 'killed']
@@ -200,12 +202,14 @@ export function agentWork(agent: HqAgent, todos: Record<string, HqTodo[]>, tasks
 // ---------- plan-progress bars as todo lists ----------
 
 export const PLAN_TOOL = 'mcp__plan-progress__plan_progress'
+/** The mod's own tool for "what I am doing now" (hooks/says.ts): the lead and every member may call it. */
+export const DOING_TOOL = 'mcp__agent-hq__hq_doing'
 /**
  * The tools every team member always has, whatever its role's tools list says: the ones it reports and coordinates
  * with (a member that cannot SendMessage cannot answer the lead). The guard never refuses them and parseTeam adds them
  * to every tools list.
  */
-export const COORDINATION_TOOLS = ['SendMessage', 'SubagentHandback', 'TodoWrite', PLAN_TOOL, 'TaskCreate', 'TaskUpdate', 'TaskGet', 'TaskList']
+export const COORDINATION_TOOLS = ['SendMessage', 'SubagentHandback', 'TodoWrite', PLAN_TOOL, 'TaskCreate', 'TaskUpdate', 'TaskGet', 'TaskList', DOING_TOOL]
 export type BarOwner = { owner: string; at: number }
 type Raw = Record<string, unknown>
 const isRaw = (v: unknown): v is Raw => typeof v === 'object' && v !== null
@@ -289,10 +293,15 @@ export function clearFinished(
   }
 }
 
-export function elapsed(ms: number): string {
+const pad2 = (n: number) => String(n).padStart(2, '0')
+
+/** "4m 12s"; in Thai "4 นาที 12 วิ", or "4:12" where the row is narrow (`isNarrow`; English is short already). */
+export function elapsed(ms: number, lang: Lang = 'en', isNarrow = false): string {
   const s = Math.max(0, Math.round(ms / 1000))
-  if (s < 60) return `${s}s`
-  return s < 3600 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`
+  const [h, m] = [Math.floor(s / 3600), Math.floor((s % 3600) / 60)]
+  if (s < 60) return t(lang, 'time.s', { s })
+  if (isNarrow && lang !== 'en') return s < 3600 ? `${m}:${pad2(s % 60)}` : `${h}:${pad2(m)}:${pad2(s % 60)}`
+  return s < 3600 ? t(lang, 'time.ms', { m, s: s % 60 }) : t(lang, 'time.hm', { h, m })
 }
 
 /** Children of each parent, main's children being agents with no (known) parent. */

@@ -351,9 +351,9 @@ test('/vendor serves only files listed in web/vendor: traversal and unknown name
   }
 })
 
-test('/live.js and /panels.js serve their web/ files when they exist and are 404 otherwise', async t => {
+test('/live.js, /panels.js and /i18n.js serve their web/ files when they exist and are 404 otherwise', async t => {
   const server = await startServer(t)
-  for (const name of ['live.js', 'panels.js']) {
+  for (const name of ['live.js', 'panels.js', 'i18n.js']) {
     const res = await call(server, { path: `/${name}` })
     const file = join(WEB, name)
     if (existsSync(file)) {

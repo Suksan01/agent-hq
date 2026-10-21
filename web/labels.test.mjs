@@ -75,3 +75,17 @@ test('only action events toast, a blocked tool counts as a failure, and a restar
   assert.equal(actionToasts(0, [ev(1, 'action', 'blocked Bash: not allowed')]).toasts[0].ok, false)
   assert.deepEqual(actionToasts(50, [ev(1, 'action', 'x'), ev(2, 'action', 'y')]), { toasts: [], lastN: 2 })
 })
+
+test('a failure is what the mod marks `failed: true`, in any language; the English words decide only for events without the mark', () => {
+  const marked = (n, text, failed) => ({ ...ev(n, 'action', text), failed })
+  const { toasts } = actionToasts(0, [
+    marked(1, 'ล้มเหลว: ส่งไม่ถึง Mochi-chan', true),
+    marked(2, 'ไม่อนุญาต Alex (frontend-dev-1): Bash', true),
+    marked(3, 'ส่งข้อความถึง Mochi-chan แล้ว', false),
+    marked(4, 'failed: an English word, but the mod says it went through', false),
+    ev(5, 'action', 'failed: an older snapshot, no mark'),
+    ev(6, 'action', 'an older success'),
+  ])
+  assert.deepEqual(toasts.map(t => [t.n, t.ok]), [[1, false], [2, false], [3, true], [4, true], [5, false], [6, true]])
+  assert.equal(toasts[0].text, 'ล้มเหลว: ส่งไม่ถึง Mochi-chan', 'the Thai text is shown as the mod wrote it')
+})

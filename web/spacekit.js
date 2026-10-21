@@ -6,11 +6,13 @@
 
 import React, { htm, Liquid, ThinkingOrb } from './vendor/libs.js'
 import { blobSvg } from './blobs.js'
+import { has, t } from './i18n.js'
 
 const { useEffect, useLayoutEffect, useRef, useState } = React
 export const html = htm.bind(React.createElement)
 
-export const STATUS_LABEL = { working: 'Working', waiting: 'Needs you', done: 'Done', failed: 'Failed', idle: 'Idle', stopped: 'Stopped', lead: 'Lead' }
+/** A status in the page's words: Working, Needs you, Done, Failed, Idle, Stopped, Lead (an unknown one as it is). */
+export const statusLabel = status => (has(`status.${status}`) ? t(`status.${status}`) : status)
 const cx = (...parts) => parts.filter(Boolean).join(' ')
 
 /* ---------- icons ---------- */
@@ -63,7 +65,7 @@ export function GlassTile({ status, edge, soft, bright, lift, dim, className, ch
 
 export function StatusPill({ status = 'idle', label, ghost }) {
   return html`<span className=${cx('sk-pill', ghost && 'sk-pill--ghost')} data-status=${status}>
-    <span className="sk-pill__disc"><${Icon} name=${status} /></span>${label ?? STATUS_LABEL[status] ?? status}
+    <span className="sk-pill__disc"><${Icon} name=${status} /></span>${label ?? statusLabel(status)}
   </span>`
 }
 
@@ -86,10 +88,29 @@ export function Blob({ seed, state = 'idle', lead, size = 72, index, label }) {
 }
 
 
-/** Seconds as a Doto number with a unit: 12s, 4m, 2h. */
+/** Seconds as a Doto number with a unit: 12s, 4m, 2h (12 วิ, 4 นาที, 2 ชม. in Thai). */
 export function Elapsed({ secs = 0, size }) {
-  const [value, unit] = secs < 60 ? [secs, 's'] : secs < 3600 ? [Math.floor(secs / 60), 'm'] : [Math.floor(secs / 3600), 'h']
-  return html`<${DotNumber} value=${value} suffix=${unit} size=${size} />`
+  const [value, unit] = secs < 60 ? [secs, 'unit.s'] : secs < 3600 ? [Math.floor(secs / 60), 'unit.m'] : [Math.floor(secs / 3600), 'unit.h']
+  return html`<${DotNumber} value=${value} suffix=${t(unit, { n: '' })} size=${size} />`
+}
+
+/** What the agent says it is doing, in its own words: one line above the tool line, at most two lines high. */
+export function SaysLine({ text }) {
+  return html`<div className="sk-agent__says" title=${text}>${text}</div>`
+}
+
+/**
+ * A talk bubble over a card: the other party it talks to (→) or hears from (←) and the first words. It sits outside the card's
+ * layout (absolute, above it) and never takes a click, so it moves no card and hides no control; it fades over its six seconds
+ * (`age`: ms already gone, so a page opened late fades in step with the mod), and under reduced motion it just stays until the
+ * snapshot drops it.
+ */
+export function TalkBubble({ dir, who, text, age = 0 }) {
+  const [delay] = useState(-Math.max(0, age)) // fixed when it appears: a later push's older age would push a running fade ahead
+  const label = `${t(dir === 'from' ? 'talk.from' : 'talk.to', { who })}: ${text}`
+  return html`<div className="sk-bubble" data-dir=${dir} role="note" aria-label=${label} style=${{ animationDelay: `${delay}ms` }}>
+    <b className="sk-bubble__who" aria-hidden="true">${dir === 'from' ? '←' : '→'} ${who}</b> <span aria-hidden="true">${text}</span>
+  </div>`
 }
 
 /** The live line: "▸ Editing view.tsx · 12s". */
@@ -134,11 +155,11 @@ export function Orb({ size = 20, live = size >= 32 }) {
   const reduce = useReducedMotion()
   const [ref, onScreen] = useOnScreen()
   if (!live) {
-    return html`<span ref=${ref} className="sk-orb" role="img" aria-label="Thinking" style=${{ width: size, height: size, borderRadius: '50%', background: 'radial-gradient(circle, rgba(61,123,255,.38), transparent 70%)' }}>
+    return html`<span ref=${ref} className="sk-orb" role="img" aria-label=${t('orb.thinking')} style=${{ width: size, height: size, borderRadius: '50%', background: 'radial-gradient(circle, rgba(61,123,255,.38), transparent 70%)' }}>
       <span style=${{ display: 'block', width: '100%', height: '100%', borderRadius: '50%', background: DOTS, animation: reduce ? 'none' : 'sk-spin 1.6s linear infinite' }}></span>
     </span>`
   }
-  return html`<span ref=${ref} className="sk-orb"><${ThinkingOrb} state="working" size=${size} theme="dark" paused=${reduce || !onScreen} aria-label="Thinking" /></span>`
+  return html`<span ref=${ref} className="sk-orb"><${ThinkingOrb} state="working" size=${size} theme="dark" paused=${reduce || !onScreen} aria-label=${t('orb.thinking')} /></span>`
 }
 
 /* ---------- the agent card ---------- */
@@ -162,10 +183,10 @@ function Beam({ active = true, children }) {
 
 const PCT_STATUS = { done: 100 }
 
-/** One agent. `activity` + `elapsed` is the live line ("▸ Editing view.tsx · 12s"), `task` the assignment, `now` / `next` the plan.
+/** One agent. `says` is its own sentence (above the live line), `activity` + `elapsed` the live line ("▸ Editing view.tsx · 12s"), `task` the assignment, `now` / `next` the plan.
  *  `compact` is the small card (blob, nickname, pill, %). The glass tile carries data-agent=${id} and data-card="full|compact|lead":
  *  measure it with getBoundingClientRect() to attach connection lines edge to edge (the border beam wraps outside it). */
-export function AgentCard({ id, nickname, name, role, status = 'idle', pct, task, activity, elapsed, now, next, seed, lead, selected, compact, index, className, onSelect, children, orbs = true }) {
+export function AgentCard({ id, nickname, name, role, status = 'idle', pct, task, says, activity, elapsed, now, next, seed, lead, selected, compact, index, className, onSelect, children, orbs = true }) {
   const shown = PCT_STATUS[status] ?? pct
   const [ref, onScreen] = useOnScreen()
   const tile = html`<${GlassTile} ref=${ref} as=${onSelect ? 'button' : 'div'} type=${onSelect ? 'button' : undefined} status=${lead ? 'lead' : status} lift edge=${status === 'failed' ? 'bottom' : undefined} data-agent=${id} data-card=${lead ? 'lead' : compact ? 'compact' : 'full'}
@@ -173,29 +194,31 @@ export function AgentCard({ id, nickname, name, role, status = 'idle', pct, task
     <div className="sk-agent__blob"><${Blob} seed=${seed ?? nickname} state=${status} lead=${lead} size=${lead ? 84 : 68} index=${index} /></div>
     <div className="sk-agent__head"><span className="sk-agent__name">${nickname}</span></div>
     <div className="sk-agent__meta">
-      <${StatusPill} status=${lead && status === 'working' ? 'lead' : status} label=${lead ? 'Lead' : undefined} />
+      <${StatusPill} status=${lead && status === 'working' ? 'lead' : status} label=${lead ? statusLabel('lead') : undefined} />
       ${status === 'working' && orbs ? html`<${Orb} />` : null}
       <span className="sk-label">${name}${role ? html` · ${role}` : null}</span>
     </div>
     <div className="sk-agent__pct">${shown === undefined ? null : html`<${DotNumber} value=${shown} suffix="%" size="sm" status=${status} />`}</div>
+    ${says && !compact ? html`<${SaysLine} text=${says} />` : null}
     ${activity && !compact ? html`<${ActivityLine} text=${activity} elapsed=${elapsed} />` : null}
     <div className="sk-agent__bar"><${DotProgress} value=${shown ?? 0} status=${status} indeterminate=${status === 'working' && shown === undefined} /></div>
     <div className="sk-agent__now">
       ${task ? html`<div className="sk-agent__task" title=${task}>${task}</div>` : null}
-      ${now ? html`<div className="sk-agent__line"><span className="sk-label">Now</span><b>${now}</b></div>` : null}
-      ${next ? html`<div className="sk-agent__line"><span className="sk-label">Next</span><span>${next}</span></div>` : null}
+      ${now ? html`<div className="sk-agent__line"><span className="sk-label">${t('card.now')}</span><b>${now}</b></div>` : null}
+      ${next ? html`<div className="sk-agent__line"><span className="sk-label">${t('card.next')}</span><span>${next}</span></div>` : null}
     </div>
     ${children}
   <//>`
   return status === 'working' && !compact ? html`<${Beam} active=${onScreen}>${tile}<//>` : tile
 }
 
-const CREW = [['working', 'Working'], ['waiting', 'Waiting'], ['done', 'Done'], ['failed', 'Failed']]
+const CREW = ['working', 'waiting', 'done', 'failed']
+const crewLabel = key => (key === 'waiting' ? t('crew.waiting') : statusLabel(key))
 
 /** The lead: a brighter card with the crew's counts under it. */
 export function LeadCard({ crew = {}, ...agent }) {
   return html`<${AgentCard} ...${agent} lead>
-    <div className="sk-agent__crew">${CREW.map(([key, label]) => html`<div key=${key} className="sk-stat sk-stat--sm" data-status=${key}><${DotNumber} value=${crew[key] ?? 0} /><span className="sk-label">${label}</span></div>`)}</div>
+    <div className="sk-agent__crew">${CREW.map(key => html`<div key=${key} className="sk-stat sk-stat--sm" data-status=${key}><${DotNumber} value=${crew[key] ?? 0} /><span className="sk-label">${crewLabel(key)}</span></div>`)}</div>
   <//>`
 }
 
@@ -208,7 +231,7 @@ export function SystemChip({ label, count, active, attention, seed, className, d
 }
 
 /** Chips with a liquid indicator that follows the selection like a drop of goo (liquid-gooey, effect "move"). */
-export function ChipBar({ items, value, onChange, label = 'Systems' }) {
+export function ChipBar({ items, value, onChange, label = t('chips.label') }) {
   const row = useRef(null)
   const [box, setBox] = useState({ x: 0, w: 0 })
   useLayoutEffect(() => {
@@ -233,12 +256,12 @@ export function IconButton({ icon, label, primary, small, pressed, dot, disabled
 export function PillButton({ children, primary, danger, small, hint, className, onClick, ...rest }) {
   return html`<button type="button" className=${cx('sk-pillbtn', primary && 'sk-pillbtn--primary', danger && 'sk-pillbtn--danger', small && 'sk-pillbtn--sm', className)} onClick=${onClick} ...${rest}>${children}${hint ? html`<span className="sk-label">${hint}</span>` : null}</button>`
 }
-export function Toolbar({ children, label = 'Tools' }) {
+export function Toolbar({ children, label = t('toolbar.label') }) {
   return html`<div className="sk-toolbar" role="toolbar" aria-label=${label}>${children}</div>`
 }
 
 /** A "+" that splits into round buttons like droplets (liquid-gooey, morph). */
-export function LiquidMenu({ actions, label = 'Actions' }) {
+export function LiquidMenu({ actions, label = t('menu.label') }) {
   const [open, setOpen] = useState(false)
   return html`<${Liquid} blur=${9} contrast=${22} fill="rgba(247,247,251,.16)" shadow="0 10px 30px rgba(0,0,0,.5)" style=${{ width: 56, height: 56 }}>
     ${actions.map((a, i) => html`<${Liquid.Item} key=${a.icon} x=${open ? -(i + 1) * 58 : 0} y=${0} transition="bouncy" delay=${i * 45} style=${{ position: 'absolute', right: 0, top: 0 }}>
@@ -256,11 +279,11 @@ export function TextInput({ multiline, className, children, ...field }) {
     ${multiline ? html`<textarea rows="3" ...${field} aria-label=${label}></textarea>` : html`<input ...${field} aria-label=${label} />`}${children}
   </div>`
 }
-export function SendButton({ label = 'Send', ...rest }) {
+export function SendButton({ label = t('send'), ...rest }) {
   return html`<${IconButton} icon="send" label=${label} primary ...${rest} />`
 }
 /** A message box: a field and a send button; Enter sends. */
-export function SendInput({ placeholder = 'Message the lead…', onSend, className }) {
+export function SendInput({ placeholder = `${t('lead.messageLabel')}…`, onSend, className }) {
   const [text, setText] = useState('')
   const send = () => {
     if (!text.trim()) return
@@ -276,47 +299,48 @@ export function SendInput({ placeholder = 'Message the lead…', onSend, classNa
 export function TitleHud({ team, folder, counts = {} }) {
   return html`<${GlassTile} status="lead" soft className="sk-hud">
     <div><div className="sk-hud__title">${team}</div>${folder ? html`<div className="sk-label sk-hud__folder">${folder}</div>` : null}</div>
-    <div className="sk-hud__stats">${CREW.map(([key, label]) => html`<div key=${key} className="sk-stat" data-status=${key}><${DotNumber} value=${counts[key] ?? 0} size="lg" status=${key} /><span className="sk-label">${label}</span></div>`)}</div>
+    <div className="sk-hud__stats">${CREW.map(key => html`<div key=${key} className="sk-stat" data-status=${key}><${DotNumber} value=${counts[key] ?? 0} size="lg" status=${key} /><span className="sk-label">${crewLabel(key)}</span></div>`)}</div>
   <//>`
 }
 
 /** The agent detail drawer. `stats` is [[label, value, suffix?]], `timeline` is [{ time, status, text }].
  *  Stop asks first, inline; `confirmStop` opens that question from the start. */
-export function Drawer({ nickname, name, role, team, status = 'working', seed, index, lead, pct, task, activity, elapsed, now, next, stats = [], level, xp, xpNext, badges = [], timeline = [], finished = false, confirmStop = false, onClose, onSend, onStop }) {
+export function Drawer({ nickname, name, role, team, status = 'working', seed, index, lead, pct, task, says, activity, elapsed, now, next, stats = [], level, xp, xpNext, badges = [], timeline = [], finished = false, confirmStop = false, onClose, onSend, onStop }) {
   const [confirming, setConfirming] = useState(confirmStop)
   const shown = PCT_STATUS[status] ?? pct
   const stoppable = !lead && !['done', 'stopped'].includes(status) // the lead is messaged, never stopped from here
-  return html`<${GlassTile} status=${lead ? 'lead' : status} edge="bottom" className="sk-drawer" role="dialog" aria-label=${`${nickname}, ${STATUS_LABEL[status]}`}>
+  return html`<${GlassTile} status=${lead ? 'lead' : status} edge="bottom" className="sk-drawer" role="dialog" aria-label=${`${nickname}, ${statusLabel(status)}`}>
     <div className="sk-drawer__head">
       <${Blob} seed=${seed ?? nickname} state=${status} lead=${lead} size=${64} index=${index} />
       <div style=${{ minWidth: 0 }}><div className="sk-name">${nickname}</div><div className="sk-label" style=${{ marginTop: 4 }}>${[name, role, team].filter(Boolean).join(' · ')}</div></div>
-      <${IconButton} icon="close" label="Close" small onClick=${onClose} />
+      <${IconButton} icon="close" label=${t('close')} small onClick=${onClose} />
     </div>
     <div style=${{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
       <${StatusPill} status=${lead && status === 'working' ? 'lead' : status} />${status === 'working' ? html`<${Orb} live />` : null}
     </div>
+    ${says ? html`<div><${SaysLine} text=${says} /></div>` : null}
     ${activity ? html`<div><${ActivityLine} text=${activity} elapsed=${elapsed} /></div>` : null}
     ${task ? html`<div className="sk-body-text">${task}</div>` : null}
     ${shown === undefined ? null : html`<div style=${{ display: 'grid', gap: 10 }}><${DotNumber} value=${shown} suffix="%" size="lg" status=${status} /><${DotProgress} value=${shown} status=${status} /></div>`}
     ${now || next ? html`<div style=${{ display: 'grid', gap: 4 }}>
-      ${now ? html`<div className="sk-agent__line"><span className="sk-label">Now</span><b>${now}</b></div>` : null}
-      ${next ? html`<div className="sk-agent__line"><span className="sk-label">Next</span><span>${next}</span></div>` : null}
+      ${now ? html`<div className="sk-agent__line"><span className="sk-label">${t('card.now')}</span><b>${now}</b></div>` : null}
+      ${next ? html`<div className="sk-agent__line"><span className="sk-label">${t('card.next')}</span><span>${next}</span></div>` : null}
     </div>` : null}
     ${stats.length ? html`<div className="sk-drawer__stats">${stats.map(([label, value, suffix]) => html`<div key=${label} className="sk-mini">${typeof value === 'number' ? html`<${DotNumber} value=${value} suffix=${suffix} size="sm" status=${status} />` : html`<span className="sk-body-text" style=${{ color: 'var(--sk-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title=${value}>${value}</span>`}<span className="sk-label">${label}</span></div>`)}</div>` : null}
     ${level === undefined ? null : html`<div className="sk-drawer__sec sk-xp">
-      <div className="sk-drawer__row"><span className="sk-label">Level <${DotNumber} value=${level} size="sm" status="lead" /></span><span className="sk-label"><${DotNumber} value=${xp} size="xs" /> / ${xpNext} XP</span></div>
+      <div className="sk-drawer__row"><span className="sk-label">${t('drawer.level')} <${DotNumber} value=${level} size="sm" status="lead" /></span><span className="sk-label"><${DotNumber} value=${xp} size="xs" /> / ${xpNext} XP</span></div>
       <${DotProgress} value=${xpNext ? (xp / xpNext) * 100 : 0} status="lead" />
       ${badges.length ? html`<div className="sk-badges">${badges.map(b => html`<span key=${b} className="sk-badge">✦ ${b}</span>`)}</div>` : null}
     </div>`}
-    ${timeline.length ? html`<div className="sk-drawer__sec"><span className="sk-label">Timeline</span><div className="sk-timeline">
+    ${timeline.length ? html`<div className="sk-drawer__sec"><span className="sk-label">${t('drawer.timeline')}</span><div className="sk-timeline">
       ${timeline.map((t, i) => html`<div key=${i} className="sk-timeline__item" data-status=${t.status}><span className="sk-timeline__dot"></span><span>${t.text}</span><${DotNumber} value=${t.time} size="xs" /></div>`)}
     </div></div>` : null}
-    ${finished ? html`<div className="sk-drawer__sec sk-body-text sk-dim">This agent has finished; nothing to send or stop.</div>` : html`<div className="sk-drawer__sec">
-      <${SendInput} placeholder=${`Message ${nickname}…`} onSend=${onSend} />
+    ${finished ? html`<div className="sk-drawer__sec sk-body-text sk-dim">${t('drawer.finished')}</div>` : html`<div className="sk-drawer__sec">
+      <${SendInput} placeholder=${t('drawer.messageTo', { name: nickname })} onSend=${onSend} />
       ${!stoppable ? null : confirming
-        ? html`<div className="sk-confirm" role="alertdialog" aria-label=${`Stop ${nickname}?`}><span>Stop ${nickname}? Work in progress is lost.</span>
-            <${PillButton} small onClick=${() => setConfirming(false)}>Keep<//><${PillButton} small danger autoFocus=${!confirmStop} onClick=${() => { setConfirming(false); onStop?.() }}>Stop<//></div>`
-        : html`<${PillButton} danger small style=${{ justifySelf: 'start' }} onClick=${() => setConfirming(true)}><${Icon} name="stop" size=${15} /> Stop agent<//>`}
+        ? html`<div className="sk-confirm" role="alertdialog" aria-label=${t('drawer.stopAsk', { name: nickname })}><span>${t('drawer.stopWarn', { name: nickname })}</span>
+            <${PillButton} small onClick=${() => setConfirming(false)}>${t('drawer.keep')}<//><${PillButton} small danger autoFocus=${!confirmStop} onClick=${() => { setConfirming(false); onStop?.() }}>${t('drawer.stop')}<//></div>`
+        : html`<${PillButton} danger small style=${{ justifySelf: 'start' }} onClick=${() => setConfirming(true)}><${Icon} name="stop" size=${15} /> ${t('drawer.stopAgent')}<//>`}
     </div>`}
   <//>`
 }
@@ -330,12 +354,12 @@ export function FeedRow({ time, status, who, text, marker, onPick }) {
     : html`<div className="sk-feed__row" data-status=${status}>${body}</div>`
 }
 /** The activity feed, newest first. `collapsible` folds it to its head (open by default); `onPick(row)` makes each line a button. */
-export function FeedTile({ rows, title = 'Activity', collapsible, defaultOpen = true, onPick }) {
+export function FeedTile({ rows, title = t('feed.title'), collapsible, defaultOpen = true, onPick }) {
   const [isOpen, setOpen] = useState(defaultOpen)
   const count = rows.filter(r => !r.marker).length
   return html`<${GlassTile} status="working" soft className="sk-feed" role="log" aria-label=${title}>
-    <div className="sk-feed__head"><span className="sk-label">${title}</span><span style=${{ display: 'flex', alignItems: 'center', gap: 8 }}><${DotNumber} value=${count} size="xs" />${collapsible ? html`<${IconButton} icon=${isOpen ? 'chevronUp' : 'chevronDown'} label=${isOpen ? `Fold ${title}` : `Open ${title}`} small aria-expanded=${isOpen} onClick=${() => setOpen(!isOpen)} />` : null}</span></div>
-    ${!isOpen ? null : rows.length ? rows.map((row, i) => html`<${FeedRow} key=${row.key ?? i} ...${row} onPick=${onPick && !row.marker ? () => onPick(row) : undefined} />`) : html`<div className="sk-body-text sk-dim" style=${{ padding: '4px 10px 8px' }}>Quiet for now.</div>`}
+    <div className="sk-feed__head"><span className="sk-label">${title}</span><span style=${{ display: 'flex', alignItems: 'center', gap: 8 }}><${DotNumber} value=${count} size="xs" />${collapsible ? html`<${IconButton} icon=${isOpen ? 'chevronUp' : 'chevronDown'} label=${t(isOpen ? 'feed.fold' : 'feed.open', { title })} small aria-expanded=${isOpen} onClick=${() => setOpen(!isOpen)} />` : null}</span></div>
+    ${!isOpen ? null : rows.length ? rows.map((row, i) => html`<${FeedRow} key=${row.key ?? i} ...${row} onPick=${onPick && !row.marker ? () => onPick(row) : undefined} />`) : html`<div className="sk-body-text sk-dim" style=${{ padding: '4px 10px 8px' }}>${t('feed.quiet')}</div>`}
   <//>`
 }
 
@@ -343,20 +367,20 @@ export function FeedTile({ rows, title = 'Activity', collapsible, defaultOpen = 
  *  the prompt itself, so it offers a message (`onMessage(item)`) and points to the terminal. */
 export function InboxTile({ items = [], onMessage }) {
   return html`<${GlassTile} status=${items.length ? 'waiting' : 'idle'} soft=${!items.length} className="sk-inbox">
-    <div className="sk-inbox__head"><span className="sk-label" style=${{ color: items.length ? 'var(--st-waiting)' : undefined }}>Needs you</span><${DotNumber} value=${items.length} size="sm" status="waiting" /></div>
-    ${items.length ? null : html`<div className="sk-body-text sk-dim" style=${{ padding: '0 4px 4px' }}>Nothing needs you. The crew is on it.</div>`}
+    <div className="sk-inbox__head"><span className="sk-label" style=${{ color: items.length ? 'var(--st-waiting)' : undefined }}>${statusLabel('waiting')}</span><${DotNumber} value=${items.length} size="sm" status="waiting" /></div>
+    ${items.length ? null : html`<div className="sk-body-text sk-dim" style=${{ padding: '0 4px 4px' }}>${t('inbox.empty')}</div>`}
     ${items.map((item, i) => html`<div key=${item.uid ?? i} className="sk-inbox__item">
-      <div className="sk-inbox__who"><${Blob} seed=${item.seed ?? item.who} state="waiting" size=${34} /><div style=${{ flex: 1, minWidth: 0 }}><div className="sk-name" style=${{ fontSize: 15 }}>${item.who}</div><div className="sk-label">${item.role}</div></div>${item.waited === undefined ? null : html`<span className="sk-label" title="Waiting for">waiting <${Elapsed} secs=${item.waited} size="xs" /></span>`}</div>
+      <div className="sk-inbox__who"><${Blob} seed=${item.seed ?? item.who} state="waiting" size=${34} /><div style=${{ flex: 1, minWidth: 0 }}><div className="sk-name" style=${{ fontSize: 15 }}>${item.who}</div><div className="sk-label">${item.role}</div></div>${item.waited === undefined ? null : html`<span className="sk-label" title=${t('inbox.waitingFor')}>${t('inbox.waiting')} <${Elapsed} secs=${item.waited} size="xs" /></span>`}</div>
       <div className="sk-inbox__ask">${item.ask}</div>
       ${item.command ? html`<div className="sk-inbox__cmd" title=${item.command}>${item.command}</div>` : null}
-      <div className="sk-inbox__actions"><${PillButton} primary small onClick=${() => onMessage?.(item)}><${Icon} name="message" size=${15} /> Message<//></div>
-      <div className="sk-label">Answer it in the terminal</div>
+      <div className="sk-inbox__actions"><${PillButton} primary small onClick=${() => onMessage?.(item)}><${Icon} name="message" size=${15} /> ${t('inbox.message')}<//></div>
+      <div className="sk-label">${t('inbox.terminal')}</div>
     </div>`)}
   <//>`
 }
 
 export function Toast({ status = 'working', children, onClose }) {
-  return html`<div className="sk-toast" data-status=${status} role="status"><span className="sk-pill__disc"><${Icon} name=${status} /></span><span className="sk-toast__text">${children}</span>${onClose ? html`<${IconButton} icon="close" label="Dismiss" small onClick=${onClose} />` : null}</div>`
+  return html`<div className="sk-toast" data-status=${status} role="status"><span className="sk-pill__disc"><${Icon} name=${status} /></span><span className="sk-toast__text">${children}</span>${onClose ? html`<${IconButton} icon="close" label=${t('toast.dismiss')} small onClick=${onClose} />` : null}</div>`
 }
 export function ToastStack({ children }) {
   return html`<div className="sk-toasts" aria-live="polite">${children}</div>`
@@ -394,17 +418,17 @@ export function AddAgentDialog({ sessions = [], roles = [], initialSession, inli
   const role = pickRole(teamRoles, chosenRole) // follows the team picked: a role that team lacks falls back to one it has
   const roleId = role?.id
   const send = hire => task.trim() && onAdd?.({ sessionKey, roleId, task: task.trim(), hire })
-  return html`<${Dialog} title="Add an agent" inline=${inline} onClose=${onClose} actions=${html`<${PillButton} onClick=${onClose}>Cancel<//>
-      <${PillButton} disabled=${!task.trim()} onClick=${() => send(true)}>Hire another<//>
-      <${PillButton} primary disabled=${!task.trim() || !role || isFull(role)} onClick=${() => send(false)}>Add agent<//>`}>
-    ${sessions.length > 1 ? html`<div className="sk-field"><span className="sk-label" id="sk-team-label">Team</span><div className="sk-chipset" role="group" aria-labelledby="sk-team-label">
+  return html`<${Dialog} title=${t('add.title')} inline=${inline} onClose=${onClose} actions=${html`<${PillButton} onClick=${onClose}>${t('add.cancel')}<//>
+      <${PillButton} disabled=${!task.trim()} onClick=${() => send(true)}>${t('add.hire')}<//>
+      <${PillButton} primary disabled=${!task.trim() || !role || isFull(role)} onClick=${() => send(false)}>${t('add.add')}<//>`}>
+    ${sessions.length > 1 ? html`<div className="sk-field"><span className="sk-label" id="sk-team-label">${t('team')}</span><div className="sk-chipset" role="group" aria-labelledby="sk-team-label">
       ${sessions.map(t => html`<${SystemChip} key=${t.key} label=${t.label} active=${t.key === sessionKey} onClick=${() => setSession(t.key)} />`)}
     </div></div>` : null}
-    <div className="sk-field"><span className="sk-label" id="sk-role-label">Role</span><div className="sk-chipset" role="group" aria-labelledby="sk-role-label">
-      ${teamRoles.length ? teamRoles.map(r => html`<${SystemChip} key=${r.id} label=${r.title} count=${`${r.active}/${r.count}`} active=${r.id === roleId} disabled=${isFull(r)} title=${isFull(r) ? `${r.title}: all ${r.count} at work` : `${r.active} of ${r.count} at work`} onClick=${() => setRole(r.id)} />`) : html`<span className="sk-body-text sk-dim">No team roles: use Hire another to ask the lead.</span>`}
+    <div className="sk-field"><span className="sk-label" id="sk-role-label">${t('add.role')}</span><div className="sk-chipset" role="group" aria-labelledby="sk-role-label">
+      ${teamRoles.length ? teamRoles.map(r => html`<${SystemChip} key=${r.id} label=${r.title} count=${`${r.active}/${r.count}`} active=${r.id === roleId} disabled=${isFull(r)} title=${isFull(r) ? t('add.full', { title: r.title, count: r.count }) : t('add.room', { active: r.active, count: r.count })} onClick=${() => setRole(r.id)} />`) : html`<span className="sk-body-text sk-dim">${t('add.noRoles')}</span>`}
     </div></div>
-    <label className="sk-field"><span className="sk-label">Task</span><${TextInput} multiline placeholder="What should it do?" value=${task} onChange=${e => setTask(e.target.value)} /></label>
-    <div className="sk-label" style=${{ textAlign: 'right' }}>Hire another asks the lead to bring one on</div>
+    <label className="sk-field"><span className="sk-label">${t('add.task')}</span><${TextInput} multiline placeholder=${t('add.taskHint')} value=${task} onChange=${e => setTask(e.target.value)} /></label>
+    <div className="sk-label" style=${{ textAlign: 'right' }}>${t('add.hireHint')}</div>
   <//>`
 }
 

@@ -13,6 +13,7 @@ import { feedRows } from './feed.js'
 import { TaskBoardTile } from './panels.js'
 import { post, useLive, useStored } from './livestate.js'
 import { pauseOffscreen } from './motion.js'
+import { langOf, setLang, t } from './i18n.js'
 
 const { AddAgentDialog, ChipBar, Dialog, DotNumber, DotProgress, Drawer, EmptyState, FeedTile, IconButton, InboxTile, PillButton, SegmentedToggle, SpaceCanvas, TitleHud, Toast, ToastStack, Toolbar, html } = kit
 const { useCallback, useEffect, useMemo, useRef, useState } = React
@@ -51,11 +52,11 @@ function useWide() {
 }
 
 function Hud({ hud, online, loginLost }) {
-  const word = online ? 'live' : loginLost ? 'lost its login: run /hq web again' : 'reconnecting'
+  const word = t(online ? 'live.on' : loginLost ? 'live.lost' : 'live.reconnecting')
   return html`<div className="hq-hud">
     <${TitleHud} team=${hud.title} folder=${hud.folder} counts=${hud.counts} />
     <div className="hq-hud__row">
-      <span className="sk-label">Team</span><div className="hq-hud__bar"><${DotProgress} value=${hud.pct} status=${hud.pct === 100 ? 'done' : 'working'} /></div><${DotNumber} value=${hud.pct} suffix="%" size="sm" />
+      <span className="sk-label">${t('team')}</span><div className="hq-hud__bar"><${DotProgress} value=${hud.pct} status=${hud.pct === 100 ? 'done' : 'working'} /></div><${DotNumber} value=${hud.pct} suffix="%" size="sm" />
       <span className=${`sk-pill hq-live${online ? '' : ' is-off'}`} data-status=${online ? 'done' : 'waiting'}><span className="sk-pill__disc"></span>${word}</span>
     </div>
   </div>`
@@ -76,10 +77,17 @@ function App() {
   const [clearing, setClearing] = useState(false)
   const view = useRef(null)
   const [barHeight, bar] = useHeight()
+  const [lastLang, keepLang] = useStored('agent-hq.lang', 'en') // so the screens before any session (connecting, none) speak it too
 
   useEffect(() => pauseOffscreen(document.body), [])
 
   const list = sessions ?? []
+  const lang = langOf(list) ?? lastLang
+  setLang(lang) // before anything below renders a word
+  useEffect(() => {
+    document.documentElement.lang = lang
+    if (lang !== lastLang) keepLang(lang)
+  }, [lang])
   const names = useMemo(() => sessionNames(list), [sessions])
   const focused = focus !== null && list.some(s => s.session === focus) ? focus : null
   const shown = focused === null ? list : list.filter(s => s.session === focused)
@@ -125,14 +133,14 @@ function App() {
     return kept && keyOf(kept.session) === key && kept.agent.id === id ? kept : null
   }, [selected, sessions])
 
-  if (!sessions) return html`<${SpaceCanvas} className="hq-app"><div className="hq-center"><${EmptyState} title="Connecting to Agent HQ…" text="One moment." /></div><//>`
-  if (list.length === 0) return html`<${SpaceCanvas} className="hq-app"><div className="hq-center"><${EmptyState} title="No Claude Code session is running" text="Start one, then run /hq web in it.">${live.loginLost ? html`<div className="sk-body-text">This page lost its login: run /hq web again.</div>` : null}<//></div><//>`
+  if (!sessions) return html`<${SpaceCanvas} className="hq-app"><div className="hq-center"><${EmptyState} title=${t('live.connecting')} text=${t('live.moment')} /></div><//>`
+  if (list.length === 0) return html`<${SpaceCanvas} className="hq-app"><div className="hq-center"><${EmptyState} title=${t('live.none')} text=${t('live.start')}>${live.loginLost ? html`<div className="sk-body-text">${t('live.lostPage')}</div>` : null}<//></div><//>`
 
   const alive = shown.filter(s => s.alive)
   const send = (action, target = current) => post(action, target).then(say)
   const finish = async mode => {
     const results = await Promise.all(alive.map(s => post({ type: 'finished', mode }, s)))
-    say(results.find(r => !r.ok) ?? results[0] ?? { ok: false, text: 'No session is running' })
+    say(results.find(r => !r.ok) ?? results[0] ?? { ok: false, text: t('live.noSession') })
   }
   const talkTo = s => { const lead = leadOf(s); if (lead) setSelected(`${keyOf(s)}|${lead.id}`) }
   const leadOf = s => s?.snapshot.agents.find(a => a.isMain)
@@ -145,7 +153,7 @@ function App() {
   const inset = wide
     ? { top: 16, right: side ? PANEL_W + 24 : 16, bottom: barHeight, left: PANEL_W + 24 }
     : { top: NARROW_TOP, right: 12, bottom: barHeight + (sheet ? Math.round(innerHeight * 0.4) : PILLS_H), left: 12 }
-  const chips = [{ id: 'all', label: 'All', count: list.length }, ...list.map(s => ({ id: keyOf(s), label: names.get(s.session)?.chip ?? s.label, count: s.snapshot.agents.filter(a => !a.isMain).length, seed: names.get(s.session)?.flag, attention: inbox.some(i => i.session === s.session) }))]
+  const chips = [{ id: 'all', label: t('live.all'), count: list.length }, ...list.map(s => ({ id: keyOf(s), label: names.get(s.session)?.chip ?? s.label, count: s.snapshot.agents.filter(a => !a.isMain).length, seed: names.get(s.session)?.flag, attention: inbox.some(i => i.session === s.session) }))]
   const target = focused === null ? 'all' : keyOf(list.find(s => s.session === focused) ?? list[0])
 
   return html`<${SpaceCanvas} className="hq-app">
@@ -159,32 +167,32 @@ function App() {
       ${boardOpen ? html`<${TaskBoardTile} sections=${boardSections(shown, names)} onClose=${() => setBoardOpen(false)} />` : null}
     </div>
     <div className=${`hq-right${drawer ? ' has-drawer' : ''}`}>
-      ${drawer?.lead && teams.length > 1 ? html`<${SegmentedToggle} label="Team to message" value=${keyOf(pick.session)} options=${teams.map(s => ({ id: keyOf(s), label: names.get(s.session)?.flag ?? s.label }))}
+      ${drawer?.lead && teams.length > 1 ? html`<${SegmentedToggle} label=${t('live.teamToMessage')} value=${keyOf(pick.session)} options=${teams.map(s => ({ id: keyOf(s), label: names.get(s.session)?.flag ?? s.label }))}
         onChange=${key => talkTo(list.find(s => keyOf(s) === key))} />` : null}
       ${drawer
         ? html`<${Drawer} key=${selected} ...${drawer} onClose=${() => setSelected(null)}
             onSend=${text => send(drawer.lead ? { type: 'lead', text } : { type: 'message', agent: pick.agent.id, text }, pick.session)}
             onStop=${() => send({ type: 'stop', agent: pick.agent.id }, pick.session)} />`
         : html`${inbox.length === 0 ? null : wide || inboxOpen
-            ? html`<${InboxTile} items=${inbox} onMessage=${item => setSelected(item.uid)} />${wide ? null : html`<${PillButton} small onClick=${() => setInboxOpen(false)}>Hide<//>`}`
-            : html`<${PillButton} primary onClick=${() => setInboxOpen(true)}>⚑ ${inbox.length} ${inbox.length === 1 ? 'needs' : 'need'} you<//>`}
+            ? html`<${InboxTile} items=${inbox} onMessage=${item => setSelected(item.uid)} />${wide ? null : html`<${PillButton} small onClick=${() => setInboxOpen(false)}>${t('live.hide')}<//>`}`
+            : html`<${PillButton} primary onClick=${() => setInboxOpen(true)}>⚑ ${t(inbox.length === 1 ? 'lead.needsOne' : 'lead.needsMany', { n: inbox.length })}<//>`}
           ${feedOpen
             ? html`<div className="hq-feed"><${FeedTile} rows=${feedItems(feedRows(shown, live.markers), live.clockOf, shown.length > 1, session => names.get(session)?.prefix ?? '')} />
-                <${IconButton} icon="close" label="Hide the activity feed" small className="hq-feed__close" onClick=${() => setFeedOpen(false)} /></div>`
-            : html`<${PillButton} small onClick=${() => setFeedOpen(true)}>Activity<//>`}`}
+                <${IconButton} icon="close" label=${t('live.hideFeed')} small className="hq-feed__close" onClick=${() => setFeedOpen(false)} /></div>`
+            : html`<${PillButton} small onClick=${() => setFeedOpen(true)}>${t('feed.title')}<//>`}`}
     </div>
     <div className="hq-bar" ref=${bar}>
       <${ChipBar} items=${chips} value=${target} onChange=${id => focusOn(id === 'all' ? null : list.find(s => keyOf(s) === id)?.session ?? null)} />
-      <${Toolbar} label="Tools">
-        <${PillButton} primary onClick=${() => talkTo(current)}>Message lead<//>
-        <${IconButton} icon="tasks" label=${boardOpen ? 'Hide the task board' : 'Show the task board'} pressed=${boardOpen} onClick=${() => setBoardOpen(!boardOpen)} />
-        <${IconButton} icon=${hidden ? 'eye' : 'eyeoff'} label=${hidden ? 'Show done agents' : 'Hide done agents'} pressed=${hidden} onClick=${() => finish(hidden ? 'show' : 'hide')} />
-        <${IconButton} icon="trash" label="Clear done agents and tasks" onClick=${() => setClearing(true)} />
-        <${IconButton} icon="fit" label="Fit everything" onClick=${() => { view.current?.fit(); live.sound.nav('fit', { duration: 600 }) }} />
-        <${IconButton} icon="expand" label="Full screen" onClick=${() => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.())} />
-        <${IconButton} icon=${live.sound.on ? 'volume' : 'mute'} label=${live.sound.on ? 'Sounds on' : 'Sounds off'} pressed=${live.sound.on} onClick=${live.sound.toggle} />
+      <${Toolbar} label=${t('toolbar.label')}>
+        <${PillButton} primary onClick=${() => talkTo(current)}>${t('lead.message')}<//>
+        <${IconButton} icon="tasks" label=${t(boardOpen ? 'live.boardHide' : 'live.boardShow')} pressed=${boardOpen} onClick=${() => setBoardOpen(!boardOpen)} />
+        <${IconButton} icon=${hidden ? 'eye' : 'eyeoff'} label=${t(hidden ? 'live.showDone' : 'live.hideDone')} pressed=${hidden} onClick=${() => finish(hidden ? 'show' : 'hide')} />
+        <${IconButton} icon="trash" label=${t('live.clearDone')} onClick=${() => setClearing(true)} />
+        <${IconButton} icon="fit" label=${t('live.fit')} onClick=${() => { view.current?.fit(); live.sound.nav('fit', { duration: 600 }) }} />
+        <${IconButton} icon="expand" label=${t('live.fullScreen')} onClick=${() => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.())} />
+        <${IconButton} icon=${live.sound.on ? 'volume' : 'mute'} label=${t(live.sound.on ? 'live.soundsOn' : 'live.soundsOff')} pressed=${live.sound.on} onClick=${live.sound.toggle} />
         <${ViewToggle} mode=${mode} canSpace=${canSpace} onChange=${setMode} />
-        <${IconButton} icon="plus" label="Add an agent" primary onClick=${() => setAdding(true)} />
+        <${IconButton} icon="plus" label=${t('add.title')} primary onClick=${() => setAdding(true)} />
       <//>
     </div>
     <${ToastStack}>${live.toasts.map(t => html`<${Toast} key=${t.id} status=${t.status} onClose=${() => live.dismiss(t.id)}>${t.text}<//>`)}<//>
@@ -195,11 +203,11 @@ function App() {
         const to = list.find(s => keyOf(s) === sessionKey) ?? current
         const action = addRequest({ roleId, task, hire }, to.snapshot.roles)
         if (action) send(action, to)
-        else live.toast(false, 'This team has no role to start an agent with')
+        else live.toast(false, t('live.noRole'))
       }} />` : null}
-    ${clearing ? html`<${Dialog} title="Clear done?" onClose=${() => setClearing(false)}
-      actions=${html`<${PillButton} onClick=${() => setClearing(false)}>Keep them<//><${PillButton} danger onClick=${() => { setClearing(false); finish('clear') }}>Clear<//>`}>
-      <div className="sk-body-text">Finished agents and completed tasks leave the page (and the sidebar). Running work stays.</div>
+    ${clearing ? html`<${Dialog} title=${t('live.clearTitle')} onClose=${() => setClearing(false)}
+      actions=${html`<${PillButton} onClick=${() => setClearing(false)}>${t('live.keepThem')}<//><${PillButton} danger onClick=${() => { setClearing(false); finish('clear') }}>${t('live.clear')}<//>`}>
+      <div className="sk-body-text">${t('live.clearText')}</div>
     <//>` : null}
   <//>`
 }

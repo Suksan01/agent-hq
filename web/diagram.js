@@ -6,10 +6,10 @@
 //   const view = mountDiagram(container, props)          the same in a root of its own: { update(props), fit(), focus(session), dispose() }
 //
 // groups: [{ session, team, folder, tag?, agents: [{ id, parentId, nickname, name, role, status, progress, isLead, needsYou?, task?, now?, next?,
-// activity?, elapsed?, seed?, index? }] }]; onMove({dx, dy, dz, duration}) is called with the camera's move to a newly chosen group (for the navigation sounds); onSelect(null, null) is a click on the background; onReady's api: { fit(), focus(session|null), zoomBy(factor) }. With reduced motion nothing pulses or eases.
+// says?, activity?, elapsed?, bubble?: { key, dir, who, text, age }, seed?, index? }] }]; onMove({dx, dy, dz, duration}) is called with the camera's move to a newly chosen group (for the navigation sounds); onSelect(null, null) is a click on the background; onReady's api: { fit(), focus(session|null), zoomBy(factor) }. With reduced motion nothing pulses or eases.
 
 import React, { createRoot } from './vendor/libs.js'
-import { AgentCard, html } from './spacekit.js'
+import { AgentCard, TalkBubble, html } from './spacekit.js'
 import { LeadDeck } from './leadcard.js'
 import { ZOOM_MAX, ZOOM_MIN, diagramWorld, edgePath, fitTransform, guessSize, isCompact, regionOf } from './diagramlayout.js'
 import { STATUS_HUE, normStatus } from './starlayout.js'
@@ -69,7 +69,7 @@ export function useOffscreenClass(ref) {
 export function cardProps(agent, uid, selected, onSelect, group) {
   return {
     nickname: agent.nickname || agent.name, name: agent.name, role: String(agent.role ?? '').toUpperCase(), status: normStatus(agent.status),
-    pct: agent.progress ?? agent.pct, task: agent.task, activity: agent.activity, elapsed: agent.elapsed, now: agent.now, next: agent.next,
+    pct: agent.progress ?? agent.pct, task: agent.task, says: agent.says, activity: agent.activity, elapsed: agent.elapsed, now: agent.now, next: agent.next,
     seed: agent.seed ?? agent.nickname ?? agent.id, index: agent.index, selected: uid === selected, onSelect: onSelect ? () => onSelect(group.session ?? null, agent.id) : undefined,
   }
 }
@@ -79,7 +79,7 @@ export function leadDeckProps(agent, group, handlers = {}) {
   const session = group.session ?? null
   return {
     id: agent.id, nickname: agent.nickname || agent.name, title: agent.role || undefined, team: group.team || group.folder, seed: agent.seed ?? agent.nickname ?? agent.id, index: agent.index,
-    status: normStatus(agent.status), pct: agent.progress ?? agent.pct, activity: agent.activity, elapsed: agent.elapsed, now: agent.now, next: agent.next,
+    status: normStatus(agent.status), pct: agent.progress ?? agent.pct, says: agent.says, activity: agent.activity, elapsed: agent.elapsed, now: agent.now, next: agent.next,
     crew: group.agents.filter(m => !m.isLead).map(m => ({ id: m.id, nickname: m.nickname || m.name, seed: m.seed ?? m.nickname ?? m.id, index: m.index, status: normStatus(m.needsYou ? 'waiting' : m.status) })),
     onMessage: handlers.onLeadMessage ? () => handlers.onLeadMessage(session) : undefined,
     onHire: handlers.onLeadHire ? () => handlers.onLeadHire(session) : undefined,
@@ -95,11 +95,12 @@ function Node({ card, agent, group, selected, onSelect, handlers, measure }) {
   const props = cardProps(agent, card.uid, selected, onSelect, group)
   const compact = isCompact(agent)
   const attention = agent.needsYou && props.status !== 'waiting'
-  return html`<div className=${`dg-node${group.alive === false ? ' dg-node--lost' : ''}${agent.isLead ? ' dg-node--lead' : ''}${compact ? ' dg-node--compact' : ''}${attention ? ' dg-node--needs' : ''}`} data-uid=${card.uid} style=${{ left: card.x, top: card.y }}>
+  return html`<div className=${`dg-node${group.alive === false ? ' dg-node--lost' : ''}${agent.isLead ? ' dg-node--lead' : ''}${compact ? ' dg-node--compact' : ''}${attention ? ' dg-node--needs' : ''}${agent.bubble ? ' dg-node--talk' : ''}`} data-uid=${card.uid} style=${{ left: card.x, top: card.y }}>
     <div className="dg-measure" ref=${el => measure(card.uid, el)} style=${agent.isLead ? { width: LEAD_WIDTH } : undefined}>
       ${agent.isLead ? html`<${LeadDeck} variant="full" ...${leadDeckProps(agent, group, handlers)} />` : html`<${AgentCard} ...${props} compact=${compact} orbs=${false} />`}
     </div>
     ${compact ? html`<div className="dg-full"><${AgentCard} ...${props} orbs=${false} /></div>` : null}
+    ${agent.bubble ? html`<${TalkBubble} key=${agent.bubble.key} ...${agent.bubble} />` : null}
   </div>`
 }
 

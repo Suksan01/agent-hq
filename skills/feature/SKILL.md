@@ -12,9 +12,14 @@ The spec's `Status:` line records where the feature is: `<phase> (draft)` while 
 `<phase> (approved)` once its gate passes, committed on the feature branch each time.
 Members never push or merge, and you push, merge or open a pull request only on the person's explicit yes.
 
+**Language:** speak, ask and write the files the person reads in the language Agent HQ's language section names (English when there is none); keep code, commands, paths, JSON keys and commit messages English.
+Here the spec and the plan are written in that language; the feature slug, branch names, code, tests, commit messages,
+and the spec's `Status:` and `Skipped:` words, phase names and `AC` ids stay English, so a resume can read them.
+
 Keep every question short, use AskUserQuestion for choices (a `preview` on every option, plain text in a monospace box,
 at most about 40 columns wide and 14 lines tall, drawn with `├─ └─ │ ●`, no Markdown tables, no emoji; `header` at
-most 12 characters; the recommended option first with "(Recommended)" in its label), and wait for the answer. Say which
+most 12 columns; the recommended option first with "(Recommended)" in its label), and wait for the answer. These limits
+count display columns: a Thai vowel or tone mark above or below a letter takes none. Keep Thai labels short. Say which
 phase you are in at the start of each one ("Phase 3 of 6: prototypes").
 
 ## Before you start

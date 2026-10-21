@@ -24,7 +24,7 @@ async function seed($: Engine, on: On, listed: AgentInfo[], owner?: string) {
     return { text: '' } as never
   })
   on('tool.call', (_, e) => (e.tool === 'TaskCreate' ? { result: { task: { id: '1', subject: 'x' } } } : { result: {} as never }))
-  await $.agent.spawn({ prompt: 'go', description: 'seed' } as never)
+  await $.agent.spawn({ prompt: 'go' } as never) // no description: a start's talk bubble would draw the full row for six seconds
   if (owner) {
     const call = $.tool.call as unknown as (input: Record<string, unknown>) => Promise<unknown>
     await call({ tool: 'TaskCreate', subject: 'Own it', description: 'd' })

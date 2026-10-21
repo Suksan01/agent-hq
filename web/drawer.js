@@ -1,16 +1,19 @@
-// What the agent drawer shows besides the card's own lines, with no DOM and no imports so `node --test` can check it.
+// What the agent drawer shows besides the card's own lines, with no DOM (only the page's words, i18n.js) so `node --test` can check it.
+
+import { t } from './i18n.js'
 
 const XP_PER_LEVEL_SQUARED = 50 // hooks/xp.ts: level = floor(sqrt(xp / 50)) + 1
 
-const BADGE_TITLES = {
-  first_task: ['First Task', 'Finish your first task'],
-  ten_tools: ['Getting Handy', 'Use 10 tools'],
-  hundred_tools: ['Toolbelt Titan', 'Use 100 tools'],
-  test_streak_5: ['Green Streak', 'Pass the tests 5 times in a row'],
-  bug_squasher: ['Bug Squasher', 'Finish a task about a fix or a bug'],
-  reviewer_eagle: ['Reviewer Eagle', 'Approve 5 reviews'],
-  speedy: ['Speedy', 'Finish a task in under 2 minutes'],
-  comeback: ['Comeback', 'Finish something after a failure'],
+// the known badges' hints; their titles are the page's words (i18n.js, badge.<id>)
+const BADGE_HINTS = {
+  first_task: 'Finish your first task',
+  ten_tools: 'Use 10 tools',
+  hundred_tools: 'Use 100 tools',
+  test_streak_5: 'Pass the tests 5 times in a row',
+  bug_squasher: 'Finish a task about a fix or a bug',
+  reviewer_eagle: 'Approve 5 reviews',
+  speedy: 'Finish a task in under 2 minutes',
+  comeback: 'Finish something after a failure',
 }
 
 /** The agent's own events, newest first, at most `limit`: its status changes, steps, tools and messages. */
@@ -32,7 +35,7 @@ export function badgesOf(badges) {
   return (Array.isArray(badges) ? badges : []).flatMap(b => {
     const id = typeof b === 'string' ? b : b?.id
     if (typeof id !== 'string') return []
-    const [title, hint] = BADGE_TITLES[id] ?? [id.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase()), '']
+    const [title, hint] = Object.hasOwn(BADGE_HINTS, id) ? [t(`badge.${id}`), BADGE_HINTS[id]] : [id.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase()), '']
     return [{ id, title: (typeof b === 'object' && b.title) || title, hint: (typeof b === 'object' && b.hint) || hint }]
   })
 }

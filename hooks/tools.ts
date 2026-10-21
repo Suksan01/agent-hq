@@ -12,6 +12,8 @@ import { LockTimeout, withLock } from './lock'
 import type { NewEvent } from './feed'
 import { MAIN, isFinished, who } from './model'
 import { roleTitle } from './team'
+import { t } from './i18n'
+import type { Lang } from './i18n'
 import type { HqData } from './view'
 
 export const TOOL_PREFIX = 'mcp__agent-hq__'
@@ -85,6 +87,17 @@ export const TOOL_SPECS: ToolSpec[] = [
       required: ['agent'],
     },
   },
+  {
+    // the lead and every member may call it (answered in register.tsx apart from the lead's tools)
+    name: 'hq_doing',
+    description:
+      'Say what you are doing now, in one short sentence in the person\'s language (at most 90 characters), e.g. "Working on the old API and fixing its issues". It shows beside your name in the Agent HQ sidebar and on the live page until your step changes. Call it at the start of each step. An empty text clears it. No secrets, tokens or long paths.',
+    inputSchema: {
+      type: 'object',
+      properties: { text: { type: 'string', description: 'One short sentence of what you are doing now; empty to clear.' } },
+      required: ['text'],
+    },
+  },
 ]
 
 /** Added to the lead's system prompt while a team exists. */
@@ -114,6 +127,8 @@ export type ToolDeps = {
   writeTeam: (path: string, source: string) => Promise<HqTeam | null>
   /** Asks the person to confirm (the engine's question dialog): 'unavailable' when nobody can be asked. */
   confirm: (question: string) => Promise<'yes' | 'no' | 'unavailable'>
+  /** The person's language, for what they read (the feed, the confirmation); the answers the model reads stay English. */
+  lang?: Lang
 }
 
 const fail = (text: string): ToolAnswer => ({ text, isError: true })
@@ -194,13 +209,13 @@ export async function hqAssign($: EngineInterface, input: unknown, deps: ToolDep
   if (!started.ok) return fail(`hq_assign: ${started.error}`)
   const board = await linkBoardTask($, started.name, started.task, !started.refused)
   if (started.refused) {
-    await deps.record({ agent: started.name, kind: 'action', text: `assigned ${started.name}: ${started.task} (not started: handed to the lead)` })
+    await deps.record({ agent: started.name, kind: 'action', text: t(deps.lang ?? 'en', 'feed.assignedHanded', { name: started.name, task: started.task }) })
     const kept = [...(board ? [`board task #${board}`] : []), ...(started.files.length > 0 ? ['the file scope'] : [])]
     return { text: leadStarts(started.refused.spec, started.refused.reason, kept.length > 0 ? `${kept.join(' and ')} ${kept.length > 1 ? 'are' : 'is'} already set` : '', board) }
   }
   const listed = Object.values((await deps.readData()).agents).find(a => a.name === started.name) // now listed, with its nickname
   const called = listed ? who(listed) : started.name
-  await deps.record({ agent: started.agentId ?? started.name, kind: 'action', text: `assigned ${called}: ${started.task}` })
+  await deps.record({ agent: started.agentId ?? started.name, kind: 'action', text: t(deps.lang ?? 'en', 'feed.assigned', { name: called, task: started.task }) })
   const title = roleTitle(started.team, started.team ? `agent-hq:${started.role}` : started.role)
   return {
     text: [
@@ -278,11 +293,11 @@ export async function hqReview($: EngineInterface, input: unknown, deps: ToolDep
   const spec = { subagentType: `agent-hq:${parsed.role}`, name: parsed.name, prompt: parsed.prompt, description: `Review ${subject.name}`.slice(0, 60) }
   const started = await spawnAgent($, spec)
   if (!started.ok) {
-    await deps.record({ agent: parsed.name, kind: 'action', text: `review of ${who(subject)} handed to ${parsed.name} (not started: handed to the lead)` })
+    await deps.record({ agent: parsed.name, kind: 'action', text: t(deps.lang ?? 'en', 'feed.reviewHanded', { who: who(subject), name: parsed.name }) })
     return { text: leadStarts(spec, started.error, 'the review assignment is already recorded') }
   }
   await deps.syncAgents()
-  await deps.record({ agent: started.agentId ?? parsed.name, kind: 'action', text: `review of ${who(subject)} handed to ${parsed.name}` })
+  await deps.record({ agent: started.agentId ?? parsed.name, kind: 'action', text: t(deps.lang ?? 'en', 'feed.review', { who: who(subject), name: parsed.name }) })
   return { text: `Started ${parsed.name} to review ${who(subject)}'s work. Its verdict arrives when it finishes.` }
 }
 
@@ -306,6 +321,9 @@ export function keepResult(all: Record<string, string>, agentId: string, text: s
   return Object.fromEntries(entries.slice(-MAX_KEPT))
 }
 
+/** "Developers" for more than one in English; Thai counts with คน and keeps the title as it is. */
+const pluralTitle = (title: string, n: number, lang: Lang) => (n === 1 || lang !== 'en' ? title : `${title}s`)
+
 /**
  * hq_hire: raise a role's headcount or create a role, in the team file the team came from, then reload the team.
  * It rewrites a file that decides what the lead and every member are told, so the person is asked first (the engine's own
@@ -313,9 +331,10 @@ export function keepResult(all: Record<string, string>, agentId: string, text: s
  * lock the other roster changes use, so two hires in a row both land and a file that changed meanwhile is not overwritten.
  */
 export async function hqHire(input: unknown, deps: ToolDeps): Promise<ToolAnswer> {
+  const lang = deps.lang ?? 'en'
   const proposed = await withLock(async () => {
     const file = await deps.readTeamFile()
-    return file ? { file, plan: planHire(file.source, input) } : null
+    return file ? { file, plan: planHire(file.source, input, lang) } : null
   })
   if (!proposed) return fail('hq_hire: there is no team in force to add staff to (a project team file must be trusted first); run /agent-hq:team to make one')
   if (!proposed.plan.ok) return fail(`hq_hire: ${proposed.plan.error}`)
@@ -323,8 +342,8 @@ export async function hqHire(input: unknown, deps: ToolDeps): Promise<ToolAnswer
   const path = proposed.file.path
   const asked = await deps.confirm(
     first.created
-      ? `Rewrite ${path} to create the role "${first.roleId}" (${first.title}) with ${first.after} on staff${first.card ? ` (${first.card})` : ''}?`
-      : `Rewrite ${path} to add ${first.hired} ${first.hired === 1 ? first.title : `${first.title}s`} (${first.title} ${first.before} -> ${first.after} on staff)?`,
+      ? t(lang, 'hire.askCreate', { path, id: first.roleId, title: first.title, n: first.after, card: first.card ? ` (${first.card})` : '' })
+      : t(lang, 'hire.askAdd', { path, n: first.hired, plural: pluralTitle(first.title, first.hired, lang), title: first.title, before: first.before, after: first.after }),
   )
   if (asked === 'unavailable') return fail('hq_hire: changing the team file needs the person\'s confirmation and nobody could be asked here (a run without a screen?); nothing was changed')
   if (asked === 'no') return fail('hq_hire: the person did not confirm; nothing was changed')
@@ -338,11 +357,12 @@ export async function hqHire(input: unknown, deps: ToolDeps): Promise<ToolAnswer
     if (plan.hired !== first.hired || plan.created !== first.created || plan.roleId !== first.roleId) return fail('hq_hire: the team changed while the person was being asked; nothing was changed, ask again')
     const loaded = await deps.writeTeam(file.path, plan.source)
     if (!loaded) return fail(`hq_hire: wrote ${file.path} but could not load the team from it; run /hq to see why`)
-    const plural = plan.hired === 1 ? plan.title : `${plan.title}s`
     await deps.record({
       agent: MAIN,
       kind: 'action',
-      text: plan.created ? `created the role ${plan.title} and hired ${plan.hired} (now ${plan.after})` : `hired ${plan.hired} ${plural} (now ${plan.after})`,
+      text: plan.created
+        ? t(lang, 'feed.createdRole', { title: plan.title, n: plan.hired, after: plan.after })
+        : t(lang, 'feed.hired', { n: plan.hired, plural: pluralTitle(plan.title, plan.hired, lang), after: plan.after }),
     })
     return {
       text: [

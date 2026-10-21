@@ -21,7 +21,7 @@ const EMPTY_STATE = { v: 1, at: 0, team: null, agents: [], tasks: [], overall: {
 // the page's own modules and stylesheets, from web/: a plain lower-case name and one of these extensions (never server.mjs, a test, or a folder)
 // the paths a browser is sent to
 const PAGES = ['/']
-const PAGE_FILE = /^\/[a-z][a-z-]*(\.js|\.css)$/
+const PAGE_FILE = /^\/[a-z][a-z0-9-]*(\.js|\.css)$/
 const TYPES = {
   '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',

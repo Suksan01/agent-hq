@@ -9,6 +9,8 @@ You are the team's lead. A member only knows what you put in the assignment, so 
 between finished work and a guess. Use this template every time you hand work over, whether you send it with the
 `hq_assign` tool or the Agent tool.
 
+**Language:** speak, ask and write the files the person reads in the language Agent HQ's language section names (English when there is none); keep code, commands, paths, JSON keys and commit messages English.
+
 ## The template
 
 Fill every field. A field you cannot fill means the work is not ready to hand over: find out first, or split it.

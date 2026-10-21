@@ -1,6 +1,6 @@
 {
   "name": "agent-hq",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Agent team command center: plan-progress style bars above the prompt, and a sidebar with the agent tree, each agent's now/next/last task, todo tracks and animated mascots.",
   "author": {
     "name": "Suksan01"
@@ -28,6 +28,16 @@
       "title": "Sounds",
       "description": "Play a short sound when an agent finishes, needs you, fails, or the team levels up (terminals with audio only).",
       "default": true
+    },
+    "language": {
+      "type": "string",
+      "title": "Language / ภาษา",
+      "description": "The language Agent HQ and its team speak to you: the sidebar, band, status line, toasts, the live page and the files the team writes for you to read. Code, comments and commits stay English. Also /hq lang thai or /hq lang english.",
+      "default": "english",
+      "options": [
+        "english",
+        "thai"
+      ]
     }
   }
 }

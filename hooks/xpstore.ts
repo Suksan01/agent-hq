@@ -13,6 +13,8 @@ import { pickSound, playSound } from './sounds'
 import type { Sound } from './sounds'
 import { BADGES, applyEvent, emptyStats } from './xp'
 import type { Badge, BadgeId, XpEvent, XpStats } from './xp'
+import { t } from './i18n'
+import type { Lang } from './i18n'
 
 export type XpStore = { get: (key: string) => Promise<unknown>; set: (key: string, value: unknown) => Promise<void> }
 
@@ -167,9 +169,14 @@ export async function xpSummaries(store: XpStore, ledger: XpLedger, agents: Reco
 }
 
 /** The person-facing side of some notices: a toast line each, and the one clip to play (a level up outranks done). */
-export function xpAnnouncement(notices: readonly XpNotice[], heard: Sound | null, muted: boolean): { toasts: string[]; sound: Sound | null } {
+export function xpAnnouncement(notices: readonly XpNotice[], heard: Sound | null, muted: boolean, lang: Lang = 'en'): { toasts: string[]; sound: Sound | null } {
   const toasts = notices.map(n =>
-    [n.level !== null ? `${n.nickname} reached level ${n.level}!` : '', ...n.badges.map(b => `${n.nickname} earned the ${b.title} badge`)].filter(Boolean).join(' · '),
+    [
+      n.level !== null ? t(lang, 'xp.level', { nick: n.nickname, level: n.level }) : '',
+      ...n.badges.map(b => t(lang, 'xp.badge', { nick: n.nickname, badge: t(lang, `badge.${b.id}.title`) })),
+    ]
+      .filter(Boolean)
+      .join(' · '),
   )
   const levelUp = !muted && notices.some(n => n.level !== null)
   return { toasts: toasts.map(t => `Agent HQ: ${t}`), sound: pickSound([heard, levelUp ? 'levelup' : null].filter((s): s is Sound => s !== null)) }
@@ -181,8 +188,8 @@ export function xpStoreOf($: EngineInterface): XpStore {
 }
 
 /** Toasts the notices and plays the one clip of this poll: the status change's, or a level up's when that is louder. */
-export async function announceXp($: EngineInterface, notices: readonly XpNotice[], heard: Sound | null, muted: boolean): Promise<void> {
-  const { toasts, sound } = xpAnnouncement(notices, heard, muted)
+export async function announceXp($: EngineInterface, notices: readonly XpNotice[], heard: Sound | null, muted: boolean, lang: Lang = 'en'): Promise<void> {
+  const { toasts, sound } = xpAnnouncement(notices, heard, muted, lang)
   for (const text of toasts) $.ui.toast(text)
   await playSound($, sound)
 }

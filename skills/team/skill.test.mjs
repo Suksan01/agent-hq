@@ -1,7 +1,7 @@
-// The team interview gives UI roles the HeroUI MCP rule. The mod's test sandbox cannot read Markdown.
+// The team interview: the HeroUI rules it gives UI roles, and the language rules every skill carries. The mod's test sandbox cannot read Markdown.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 
 const skill = readFileSync(new URL('./SKILL.md', import.meta.url), 'utf8')
 
@@ -25,4 +25,40 @@ test('the Team Assistant can write the spec and plan files, and only those', () 
   const card = JSON.parse(skill.match(/```json\n(\{\n  "id": "assistant"[\s\S]*?\n\})\n```/)[1])
   assert.ok(card.tools.includes('Write') && card.tools.includes('Edit'), 'it can write files')
   assert.deepEqual(card.guard.paths, ['docs/specs/**', 'docs/plans/**'])
+})
+
+// Every skill, not only this one, follows the language the person chose (Agent HQ's `language` option).
+const SKILLS = readdirSync(new URL('../', import.meta.url), { withFileTypes: true })
+  .filter(entry => entry.isDirectory() && existsSync(new URL(`../${entry.name}/SKILL.md`, import.meta.url)))
+  .map(entry => entry.name)
+const skillText = name => readFileSync(new URL(`../${name}/SKILL.md`, import.meta.url), 'utf8')
+const LANGUAGE_LINE = "**Language:** speak, ask and write the files the person reads in the language Agent HQ's language section names (English when there is none); keep code, commands, paths, JSON keys and commit messages English."
+
+test('every skill says, before its first section, to follow the chosen language and keep code English', () => {
+  assert.ok(SKILLS.length >= 6, `found the skills: ${SKILLS.join(', ')}`)
+  for (const name of SKILLS) {
+    const text = skillText(name)
+    const at = text.indexOf(LANGUAGE_LINE)
+    assert.ok(at > 0, `${name} has the language line`)
+    assert.ok(at < text.indexOf('\n## '), `${name} says it before its first section`)
+  }
+})
+
+test('every skill that limits AskUserQuestion headers and previews counts display columns, Thai marks taking none', () => {
+  const limited = SKILLS.filter(name => /`header`/.test(skillText(name)))
+  assert.deepEqual(limited.sort(), ['feature', 'retro', 'standup', 'team'])
+  for (const name of limited) {
+    const text = skillText(name).replace(/\s+/g, ' ') // wrapped lines read as one
+    assert.match(text, /limits count display columns/, `${name} counts columns`)
+    assert.match(text, /Thai vowel or tone mark above or below a letter takes none/, `${name} gives Thai marks no column`)
+    assert.match(text, /Keep Thai labels short/, `${name} keeps Thai labels short`)
+    assert.doesNotMatch(text, /\b(12|16|40) characters\b/, `${name} states its limits in columns`)
+  }
+})
+
+test('the interview writes titles, missions, tasks and rules in the chosen language, and ids stay English ASCII', () => {
+  assert.match(skill, /name, purpose, titles, missions, tasks and rules in that language/)
+  assert.match(skill, /role ids, tool names, skill names, models, globs and paths stay English/)
+  assert.match(skill, /\*\*id\*\*: kebab-case, ASCII letters, digits and `-` only/)
+  assert.match(skill, /templates are English[^.]*translate[^.]*keep[^.]*ids/i) // they ship as starting points
 })

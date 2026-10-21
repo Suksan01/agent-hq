@@ -3,7 +3,7 @@ import React, { createRoot } from '../../vendor/libs.js'
 import { html } from '../../spacekit.js'
 import { Cell, H3, Section } from '../frame.js'
 import { STATES, blobSpec } from '../../blobs.js'
-import { Blob, StatusPill, STATUS_LABEL } from '../../spacekit.js'
+import { Blob, StatusPill, statusLabel } from '../../spacekit.js'
 
 const SIX = ['working', 'waiting', 'done', 'failed', 'idle', 'stopped']
 const NAMES = [
@@ -25,11 +25,11 @@ export function Mascots() {
       ${SIX.map((state, i) => html`<div key=${state} className="sc-blobcell" data-status=${state}><${Blob} seed=${NAMES[i * 2]} index=${i * 2} state=${state} size=${112} /><${StatusPill} status=${state} /></div>`)}
     </div>
     <div className="sc-grid" style=${{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 22, marginTop: 18 }}>
-      ${SIX.map((state, i) => html`<div key=${state} className="sc-blobcell"><${Blob} seed=${NAMES[i * 2 + 13]} index=${i * 2 + 13} state=${state} size=${112} /><span className="sc-cap">${STATUS_LABEL[state]}</span></div>`)}
+      ${SIX.map((state, i) => html`<div key=${state} className="sc-blobcell"><${Blob} seed=${NAMES[i * 2 + 13]} index=${i * 2 + 13} state=${state} size=${112} /><span className="sc-cap">${statusLabel(state)}</span></div>`)}
     </div>
     <${H3}>The lead: larger, brighter, a white-hot core and a ring with a moon<//>
     <div className="sc-grid" style=${{ gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 22 }}>
-      ${SIX.map((state, i) => html`<div key=${state} className="sc-blobcell"><${Blob} seed="Sirius Prime" index=${5} state=${state} lead size=${140} /><span className="sc-cap">lead · ${STATUS_LABEL[state]}</span></div>`)}
+      ${SIX.map((state, i) => html`<div key=${state} className="sc-blobcell"><${Blob} seed="Sirius Prime" index=${5} state=${state} lead size=${140} /><span className="sc-cap">lead · ${statusLabel(state)}</span></div>`)}
     </div>
   <//>`
 }
