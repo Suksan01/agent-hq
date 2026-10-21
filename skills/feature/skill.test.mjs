@@ -38,7 +38,7 @@ test('the spec and the plan are files in the repo that members brief from', () =
   assert.match(section('Build'), /docs\/plans\/<feature>\.md/)
 })
 
-test('prototype variants are built in parallel by separate members, each on its own throwaway route', () => {
+test('prototype variants are built in parallel by separate members, each on its own boards or throwaway route', () => {
   const text = section('Prototype')
   assert.match(text, /in parallel/i)
   assert.match(text, /one variant/i)
@@ -102,7 +102,7 @@ test('the gate takes a mix the person drew on the canvas', () => {
   assert.match(gate, /connections/i)
 })
 
-test('prototypes use HeroUI by default, set up once, with the project\'s own library as the alternative', () => {
+test('the in-app path uses HeroUI, set up once, with the project\'s own library as the alternative', () => {
   const text = section('Prototype')
   assert.match(text, /HeroUI/)
   assert.match(text, /@heroui\/react/)
@@ -114,7 +114,6 @@ test('prototypes use HeroUI by default, set up once, with the project\'s own lib
   assert.match(text, /setup task/i) // one member installs it before the variants start, so package.json has one writer
   assert.match(text, /project's own (stack|UI library)/i)
   assert.match(text, /theme tokens/i)
-  assert.match(text, /raw HTML/i)
   assert.match(text, /screenshot/i)
   assert.match(text, /"image"/)
   assert.match(text, /port/i) // the gate asks whether to port the chosen variant or adopt HeroUI
@@ -225,12 +224,12 @@ test('UI work calls the HeroUI MCP: set up before the prototypes, and every UI b
 })
 
 test('UI work also loads the official HeroUI skills, installed with the person\'s yes, and names them on each UI role', () => {
-  assert.match(skill, /npx skills add heroui-inc\/heroui/)
-  assert.match(skill, /HEROUI_SKILL_SCOPE=project/)
+  assert.match(skill, /npx skills add heroui-inc\/heroui --skill heroui-react -a claude-code/) // the Claude skill only
+  assert.doesNotMatch(skill, /heroui\.com\/install/) // its install script installs into every AI tool it finds
   assert.match(skill, /`heroui-react`/)
   assert.match(skill, /`heroui-native`/)
   assert.match(section('Prototype'), /heroui-react/) // each variant brief loads the skill
-  assert.match(skill, /ask the person/i) // installing a skill or an MCP server changes their setup
+  assert.match(section('Prototype'), /Ask the person before installing/) // installing a skill or an MCP server changes their setup
 })
 
 // ---------- fixes from the review of #3 ----------
@@ -307,4 +306,126 @@ test('the scope check runs as each member reports and holds every running member
   const step = section('Build').match(/4\. \*\*Review\*\*[\s\S]*?(?=\n5\. )/)[0]
   assert.match(step, /as soon as (it|a member) reports/i)
   assert.match(step, /every member running/i)
+})
+
+// ---------- fixes from the 0.4.1 live test ----------
+
+test('phase 3 prototypes on the Design canvas by default, with HeroUI in the app as an opt-in', () => {
+  const text = section('Prototype')
+  assert.match(text, /Design canvas \(the default\)/)
+  assert.match(text, /Artifact tool/)
+  assert.match(text, /Design type/)
+  assert.match(text, /project\/canvas\.json/)
+  assert.match(text, /HeroUI \(opt-in\)/)
+  assert.doesNotMatch(text, /HeroUI by default/i)
+  assert.ok(text.indexOf('Design canvas') < text.indexOf('HeroUI'), 'the default comes first')
+})
+
+test('phase 3 starts with one question: where, how many variants, and whether to check every board renders', () => {
+  const text = section('Prototype')
+  const start = text.slice(0, text.indexOf('**Choose and rank'))
+  assert.match(start, /once/i)
+  assert.match(start, /AskUserQuestion/)
+  assert.match(start, /how many variants/i)
+  assert.match(start, /renders/i)
+  assert.match(text, /foreground tab/i) // a background tab freezes CSS transitions
+  assert.match(text.split('**Gate:**')[1], /not checked/i)
+})
+
+test('the lead lays out every board before the builders start, and publishes the index with the entry board', () => {
+  const text = section('Prototype')
+  assert.match(text, /one row per variant/i)
+  assert.match(text, /every state the spec's acceptance criteria name/i)
+  assert.match(text, /Main\.dc\.html/)
+  assert.match(text, /together with the entry board/i)
+  assert.match(text, /promise no click-through/i) // links between boards were not proven in Play mode
+})
+
+test('Design canvas builders write only their own boards directly, then read and publish all of them in one call a turn later', () => {
+  const text = section('Prototype')
+  assert.match(text, /only its own/i)
+  assert.match(text, /no generator scripts/i)
+  assert.match(text, /shared scratch/i)
+  assert.match(text, /separate turns/i)
+  assert.match(text, /all its boards in one publish call/i)
+  assert.match(text, /haven't viewed the latest version/)
+  assert.match(text, /reads again/i)
+})
+
+test('the in-app path: the lead runs one dev server per app, and setup is done only on a real render', () => {
+  const text = section('Prototype')
+  assert.match(text, /one dev server per app/i)
+  assert.match(text, /HTTP 200/)
+  assert.match(text, /error overlay/i)
+  assert.match(text, /lint and tsc/i) // passing them is not enough
+})
+
+test('the setup task checks legacy-peer-deps, installs HeroUI\'s peers itself, and pins versions', () => {
+  const text = section('Prototype')
+  assert.match(text, /legacy-peer-deps/)
+  assert.match(text, /\.npmrc/)
+  assert.match(text, /peer dependencies explicitly/i)
+  assert.match(text, /newest exact versions at least two weeks old/i) // the same rule as @xyflow/react
+})
+
+test('the HeroUI tools: ToolSearch before a restart, and a SKILL.md path for members', () => {
+  const text = section('Prototype')
+  assert.match(text, /ToolSearch/)
+  assert.match(text, /Unknown skill/)
+  assert.match(text, /SKILL\.md/)
+})
+
+test('in-app prototype routes stay out of i18n middleware and the app shell; the canvas reads a manifest', () => {
+  const text = section('Prototype')
+  assert.match(text, /i18n middleware/i)
+  assert.match(text, /own root layout/i)
+  assert.match(text, /matcher exclusion/i)
+  assert.match(text, /flows\/index\.json/)
+  assert.match(text, /flow schema/i) // the canvas member gets it
+})
+
+test('the review role checks the prototypes against the spec before the variant gate', () => {
+  const beforeGate = section('Prototype').split('**Gate:**')[0]
+  assert.match(beforeGate, /hq_review/)
+  assert.match(beforeGate, /against the spec/i)
+})
+
+test('phase 6 cleans up only what the in-app path left, and restores the lockfile byte for byte', () => {
+  const finish = section('Finish')
+  assert.match(finish, /Design canvas/)
+  assert.match(finish, /byte for byte/i)
+})
+
+test('the spec and plan go in the project\'s own folders, docs/specs and docs/plans only when it has none', () => {
+  const before = skill.slice(0, skill.indexOf('## 1. Brainstorm'))
+  assert.match(before, /docs\/superpowers\/specs/)
+  assert.match(before, /only when it has none/i)
+  // the Team Assistant's guard allows only docs/specs/** and docs/plans/**, so other folders need the lead or a guard change
+  const bullet = before.match(/- \*\*Find the spec and plan folders\*\*[\s\S]*?(?=\n- \*\*)/)[0]
+  assert.match(bullet, /guard/i)
+  assert.match(bullet, /yourself/i)
+  assert.match(bullet, /\/agent-hq:team/)
+})
+
+test('every brief tells the member to close its own plan-progress bars when it finishes, when that mod is installed', () => {
+  assert.match(skill, /close its own plan-progress bars/i)
+  assert.match(skill, /when the plan-progress mod is installed/i)
+})
+
+// ---------- fixes from the skill review ----------
+
+test('Design canvas builders get no files scope: their boards live outside the repo, and a tools list needs Artifact', () => {
+  const text = section('Prototype')
+  assert.match(text, /no `files`/) // hq_assign scopes only relative globs inside the project
+  assert.match(text, /<scratchpad>\/boards\/<variant>\//)
+  assert.match(text, /outside the repo/i)
+  assert.match(text, /`Artifact`[^.]*\/agent-hq:team/) // a UI role with a tools list cannot publish without it
+})
+
+test('the i18n middleware file is in the setup task\'s files and in the clean-up\'s, restored byte for byte', () => {
+  const setup = section('Prototype').match(/\*\*First, one setup task\*\*[\s\S]*?(?=\n- \*\*)/)[0]
+  assert.match(setup, /`files`: package\.json, the lockfile[^.]*middleware/)
+  const cleanup = section('Finish').match(/\*\*Clean up\*\*[\s\S]*?(?=\n- )/)[0]
+  assert.match(cleanup, /middleware/)
+  assert.match(cleanup, /byte for byte/)
 })
