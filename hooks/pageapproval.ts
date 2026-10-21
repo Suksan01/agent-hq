@@ -13,7 +13,8 @@ export const APPROVALS_RELEASED = false
 /**
  * Test-only seam: a test session with exactly this id runs as if released, so the 0.8.0 wiring tests keep running. The
  * engine mints every real session id as a UUID (`--session-id` takes only a UUID), so no session, agent, option, env
- * or store can reach it; the test file's own copy of this module is not the one the engine loads, so a flag would not.
+ * or store can reach it (another plugin answering session.id could, but it can already answer tool.check itself, and
+ * the hub still answers 404 without AGENT_HQ_APPROVALS); the test file's own copy of this module is not the one the engine loads, so a flag would not.
  */
 export const APPROVALS_TEST_SESSION = 'agent-hq-0.8.0-approvals-test'
 
