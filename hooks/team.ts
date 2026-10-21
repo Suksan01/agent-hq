@@ -109,6 +109,9 @@ export const isReadOnlyRole = (role: TeamRole) => role.guard?.readOnly === true 
 
 const bullets = (items: string[]) => items.map(x => `- ${x}`).join('\n')
 
+// agents check their work in the person's own browser (a browser-use tab, a dev server page); tabs left open pile up
+const CLOSE_TABS = 'Close every browser tab or window you open to check your work once you are done with it: it stays open in the person\'s browser and holds its memory.'
+
 /**
  * One role's whole system prompt: who it is, its mission, its team, tasks and rules, and how to report back.
  * `hasMemory` is false when the engine gives agents no memory (auto memory off): lessons then go to the team notes.
@@ -164,6 +167,7 @@ export function rolePrompt(team: Team, role: TeamRole, hasMemory = true): string
               '  mistake to avoid, what the lead or a reviewer corrected). A rule for next time, not a diary of this task. The team notes',
               '  are yours to add to whatever files your assignment limits you to.',
             ]),
+      `- ${CLOSE_TABS}`,
       `- When done, reply to the ${team.lead.title} with what you did, what you found, and anything left open or blocked.`,
       '- If the assignment is unclear or outside your role, say so in your reply instead of guessing.',
     ].join('\n'),
@@ -212,6 +216,7 @@ export function leadPrompt(team: Team): string {
       '- Never go quiet while members work: a short line beats silence.',
       '- End with one report: what was done and by whom, who reviewed it, and what is left or waiting on the person.',
     ].join('\n'),
+    CLOSE_TABS,
     `## Members\n${roster}`,
     briefingSection(team),
     '## Big features\nWhen the person asks the team to build a big or multi-part feature, run the /agent-hq:feature skill: brainstorm, spec, prototype variants, plan, build and finish, with an approval gate after each phase, so nothing moves on without the person\'s yes. Work one member can finish in one assignment goes straight to hq_assign.',

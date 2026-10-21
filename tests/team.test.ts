@@ -291,3 +291,12 @@ test('the lead keeps the person in the loop: the plan and who does what first, a
   expect(lead).toMatch(/never go quiet/i)
   expect(lead).toContain('waiting on the person')
 })
+
+// agents check their work in the person's own browser (a browser-use tab, a dev server page): tabs they leave open pile up
+test('the lead and every member close each browser tab or window they open to check their work', () => {
+  const team = parseTeam(JSON.stringify(TEAM))
+  if (typeof team === 'string') throw new Error(team)
+  for (const text of [leadPrompt(team), ...team.roles.map(r => rolePrompt(team, r))]) {
+    expect(text).toMatch(/close every browser tab or window you open/i)
+  }
+})
