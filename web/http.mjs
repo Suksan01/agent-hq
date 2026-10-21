@@ -26,8 +26,8 @@ export const hostIsLocal = req => {
   return host === '127.0.0.1' || host === 'localhost'
 }
 
-/** Calls the callback with the parsed JSON body, or answers 415 / 400 itself. */
-export function readJson(req, res, handler) {
+/** Calls the callback with the parsed JSON body, or answers 415 / 400 itself. `limit` is the largest body taken, in characters. */
+export function readJson(req, res, handler, limit = MAX_BODY) {
   if (!/^application\/json\s*(;|$)/i.test(req.headers['content-type'] ?? '')) {
     req.resume()
     json(res, 415, { error: 'content-type must be application/json' })
@@ -39,7 +39,7 @@ export function readJson(req, res, handler) {
   req.on('data', chunk => {
     if (refused) return // the rest of an oversized body is read and dropped
     body += chunk
-    if (body.length > MAX_BODY) {
+    if (body.length > limit) {
       // answer the refusal and let the client finish sending, rather than cutting the connection with no answer
       refused = true
       body = ''

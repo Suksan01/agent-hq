@@ -7,7 +7,7 @@ import { join } from 'node:path'
 
 // <session>.json, plus what hangs on it: .queue.jsonl, the old .actions.jsonl, and the .tmp of each
 const SESSION_FILE = /^([A-Za-z0-9][A-Za-z0-9_.@:-]*?)\.json(?:\.(?:queue\.jsonl|actions\.jsonl))?(?:\.tmp)?$/
-const HUB_FILES = /^hub\.(?:json|lock)(?:\.tmp)?$/
+const HUB_FILES = /^(?:hub\.(?:json|lock)|pages\.json)(?:\.tmp)?$/ // pages.json: the hub's count of open pages, not a session named "pages"
 
 /**
  * Deletes the files of sessions that are not registered and have not been written for `olderThanMs`. Returns the names

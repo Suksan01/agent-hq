@@ -46,6 +46,11 @@ export const STRINGS = {
     'badge.bug_squasher': 'Bug Squasher', 'badge.reviewer_eagle': 'Reviewer Eagle', 'badge.speedy': 'Speedy', 'badge.comeback': 'Comeback',
     'talk.lead': 'Lead', 'talk.to': 'to {who}', 'talk.from': 'from {who}',
     'next.title': 'Next steps', 'next.list': 'Suggested by the lead', 'next.use': 'Draft in Message lead: {text}', 'next.notNow': 'Not now',
+    'approval.title': 'Needs your approval', 'approval.wants': '{agent} wants to use {tool}', 'approval.input': 'The exact input',
+    'approval.hidden': 'Hidden characters are shown as ⟦U+…⟧', 'approval.left': '{n}s left', 'approval.allow': 'Allow', 'approval.deny': 'Deny',
+    'approval.terminal': 'Ask in terminal now', 'approval.gone': 'That approval was already answered or withdrawn',
+    'approval.failed': 'Could not send your answer: try again, or answer in the terminal',
+    'approval.because': 'Claude Code asks because: {reason}', 'approval.setting': 'setting {name}', 'approval.hook': 'hook {name}',
     'unit.s': '{n}s', 'unit.m': '{n}m', 'unit.h': '{n}h',
   },
   th: {
@@ -89,6 +94,11 @@ export const STRINGS = {
     'badge.bug_squasher': 'นักปราบบั๊ก', 'badge.reviewer_eagle': 'ตาเหยี่ยวรีวิว', 'badge.speedy': 'ไวสุด', 'badge.comeback': 'กลับมาได้',
     'talk.lead': 'หัวหน้า', 'talk.to': 'ถึง {who}', 'talk.from': 'จาก {who}',
     'next.title': 'ขั้นตอนถัดไป', 'next.list': 'หัวหน้าแนะนำ', 'next.use': 'ร่างในช่องคุยกับหัวหน้า: {text}', 'next.notNow': 'ไว้ทีหลัง',
+    'approval.title': 'รออนุมัติ', 'approval.wants': '{agent} ขอใช้ {tool}', 'approval.input': 'อินพุตทั้งหมดตามจริง',
+    'approval.hidden': 'อักขระที่มองไม่เห็นแสดงเป็น ⟦U+…⟧', 'approval.left': 'เหลือ {n} วิ', 'approval.allow': 'อนุญาต', 'approval.deny': 'ไม่อนุญาต',
+    'approval.terminal': 'ถามในเทอร์มินัลเลย', 'approval.gone': 'คำขอนี้ตอบไปแล้วหรือถูกถอนแล้ว',
+    'approval.failed': 'ส่งคำตอบไม่ได้ ลองอีกครั้งหรือตอบในเทอร์มินัล',
+    'approval.because': 'Claude Code ถามเพราะ: {reason}', 'approval.setting': 'การตั้งค่า {name}', 'approval.hook': 'ฮุก {name}',
     'unit.s': '{n} วิ', 'unit.m': '{n} นาที', 'unit.h': '{n} ชม.',
   },
 }
