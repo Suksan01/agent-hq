@@ -74,6 +74,11 @@ the text you trusted:
   version first runs is trusted once, as it stands. After that a change made outside the session (an editor, a
   script, an agent) is not used until you run `/hq trust`; a toast says `your team file changed outside this
   session - run /hq trust to use it`.
+- While a file waits for trust, `/hq` alone (as an app's command menu runs it, before `trust` can be typed) asks in a
+  dialog, `Trust the team "<name>" from <path>?` ("No" first); "Yes, trust it" does what `/hq trust` does, and after a
+  "No" plain `/hq` does not ask about that text again this session. `/hq trust` trusts at once only when the engine
+  attests the run as yours (typed, Remote Control, the SDK, a Slack ping); an unstamped run gets the dialog instead,
+  and a plugin's, scheduled or relayed run is refused.
 - Trust is remembered per file path and the file's content. **Edit a file and Agent HQ asks again.**
 - A team file that the **main session** writes itself during the session, with Write, Edit or `hq_hire`, is trusted
   from that moment. A write by a subagent never is: the team stops being used until you trust the new text.
@@ -88,7 +93,9 @@ The lead (the main session) gets four tools, offered as `mcp__agent-hq__hq_assig
 - **`hq_assign`**: start a member on a scoped job. Input: `role`, `task`, and optionally `files` (globs the member may
   change), `done` (what finished means), `limits` (what to leave alone) and `name`. The member receives a brief with
   Goal / Files / Done when / Do not touch sections, the job goes on the task board with the member as owner, and the
-  files scope is handed to the rule guard.
+  files scope is handed to the rule guard. If the session refuses the mod's start (auto mode does, as a plugin's start
+  carries no request from you), the board task and scope stay set and the tool answers with the exact Agent call
+  (`subagent_type`, `name`, `description`, `prompt`) for the lead to make itself; `hq_review` does the same.
 - **`hq_status`**: where the team stands in at most 40 lines: each agent with what it does now and next, counts of
   running, done and failed agents, the board, and blocked tasks.
 - **`hq_hire`**: take on more staff. The number beside a role in `team.json` is its **current staffing**, not a ceiling.
@@ -105,7 +112,8 @@ Only the lead can use them; a subagent that calls one gets an error. The `/agent
 brief, `/agent-hq:standup` collects a three-line status from every running member, and `/agent-hq:retro` turns a
 finished task into proposed edits to the team's rules (applied only after you approve each). `/agent-hq:feature`
 runs a big feature in six phases (brainstorm, spec, parallel UI prototype variants, plan, build one reviewed task at
-a time, finish), each ending at a gate you approve; the spec and plan are saved to `docs/specs/` and `docs/plans/`.
+a time, finish), each ending at a gate you approve; the spec and plan are saved to the project's own spec and plan
+folders (`docs/specs/` and `docs/plans/` when it has none).
 
 ## Rule guard
 

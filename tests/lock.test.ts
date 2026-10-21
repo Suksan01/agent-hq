@@ -54,7 +54,6 @@ function setup(spawnHangs = false) {
     now: async () => 1,
     assignmentOf: async name => assignments[name],
     recordAssignment: async (name, assignment) => void (assignments[name] = assignment),
-    dropAssignment: async name => void delete assignments[name],
     resultOf: async () => undefined,
     record: async () => {},
     readTeamFile: async () => null,

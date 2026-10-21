@@ -35,8 +35,8 @@ function note(input: Record<string, unknown>, key: 'done' | 'limits'): { text?: 
   return text.length > MAX_NOTE ? { error: `"${key}" is too long (at most ${MAX_NOTE} characters)` } : text ? { text } : {}
 }
 
-/** Validates hq_assign's input `{ role, task, files?, done?, limits?, name? }` and writes the structured brief. */
-export function parseAssign(input: unknown, team: HqTeam | null, agents: Record<string, HqAgent>): AssignResult {
+/** Validates hq_assign's input `{ role, task, files?, done?, limits?, name? }` and writes the structured brief. `reserved` names are taken like a listed agent's. */
+export function parseAssign(input: unknown, team: HqTeam | null, agents: Record<string, HqAgent>, reserved: readonly string[] = []): AssignResult {
   if (!isRecord(input)) return { ok: false, error: 'hq_assign needs an object like { role, task }' }
   const roles = team ? team.roles : [GENERAL]
   if (typeof input.role !== 'string' || input.role === '') return { ok: false, error: `give the "role" to assign (${roles.map(r => r.id).join(', ')})` }
@@ -68,10 +68,10 @@ export function parseAssign(input: unknown, team: HqTeam | null, agents: Record<
   let name = `${role.id}-1`
   if (input.name !== undefined && input.name !== null) {
     if (typeof input.name !== 'string' || !NAME.test(input.name)) return { ok: false, error: 'the "name" must be letters, digits, _ or - (up to 48)' }
-    if (everyone.some(a => a.name === input.name)) return { ok: false, error: `the name "${input.name}" is taken` }
+    if (everyone.some(a => a.name === input.name) || reserved.includes(input.name)) return { ok: false, error: `the name "${input.name}" is taken` }
     name = input.name
   } else {
-    const taken = new Set(everyone.map(a => a.name))
+    const taken = new Set([...everyone.map(a => a.name), ...reserved])
     for (let n = 1; taken.has(name); n++) name = `${role.id}-${n + 1}`
   }
 

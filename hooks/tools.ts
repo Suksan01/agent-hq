@@ -30,7 +30,7 @@ export const TOOL_SPECS: ToolSpec[] = [
   {
     name: 'hq_assign',
     description:
-      'Start a team member on a scoped job and put it on the task board. Give the role, the task, and optionally the files it may change (relative globs, e.g. "app/search/**"), what "done" means, and what it must not touch. The brief the agent receives has those sections. Prefer this over the Agent tool for team work: it keeps the board, the live page and the rule guard in step.',
+      'Start a team member on a scoped job and put it on the task board. Give the role, the task, and optionally the files it may change (relative globs, e.g. "app/search/**"), what "done" means, and what it must not touch. The brief the agent receives has those sections. Prefer this over the Agent tool for team work: it keeps the board, the live page and the rule guard in step. If the session refuses its start, it answers with the exact Agent call: make that call yourself.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -74,7 +74,7 @@ export const TOOL_SPECS: ToolSpec[] = [
   {
     name: 'hq_review',
     description:
-      'Send a finished team member\'s work to the team\'s review role with a structured brief (what it was asked, what it reported, what to check). Starts a reviewer, or messages a running one when the role is full.',
+      'Send a finished team member\'s work to the team\'s review role with a structured brief (what it was asked, what it reported, what to check). Starts a reviewer, or messages a running one when the role is full. If the session refuses the start, it answers with the exact Agent call: make that call yourself.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -90,7 +90,7 @@ export const TOOL_SPECS: ToolSpec[] = [
 /** Added to the lead's system prompt while a team exists. */
 export const LEAD_TOOLS_NOTE = [
   'Tools for running the team:',
-  `- ${ASSIGN_TOOL}: start a team member on a scoped job (role, task, files, done, limits); it goes on the task board.`,
+  `- ${ASSIGN_TOOL}: start a team member on a scoped job (role, task, files, done, limits); it goes on the task board. If it (or ${REVIEW_TOOL}) answers with an Agent call, make that call.`,
   `- ${STATUS_TOOL}: where the team stands, in at most 40 lines.`,
   `- ${REVIEW_TOOL}: send a finished member's work to the review role.`,
   `- ${HIRE_TOOL}: add staff (raise a role's headcount, or create a role) when the person asks or the work needs more people.`,
@@ -106,7 +106,6 @@ export type ToolDeps = {
   /** Assignments are kept by agent name (known before the agent starts, unique among agents), so the guard can scope it from its first call. */
   assignmentOf: (name: string) => Promise<HqAssignment | undefined>
   recordAssignment: (name: string, assignment: HqAssignment) => Promise<void>
-  dropAssignment: (name: string) => Promise<void>
   resultOf: (agentId: string) => Promise<string | undefined>
   record: (event: NewEvent) => Promise<void>
   /** The team file the team in force came from, as text; null when there is no team in force. */
@@ -122,42 +121,64 @@ type Created = { result?: { task?: { id?: string } } }
 // the typed `$.tool.call` is too deep for the compiler once more than one tool's input is checked against it; the board calls are untyped, their answer read as untrusted
 type BoardCall = (call: { tool: 'TaskCreate' | 'TaskUpdate'; [field: string]: unknown }) => Promise<Created>
 
-/** The board task for an assignment: created, then owned by the agent and marked in progress. Returns its id, or null. */
-async function linkBoardTask($: EngineInterface, name: string, task: string): Promise<string | null> {
+/** A text's first line, trimmed and cut to `max`: a task's subject or description, with nothing of the lines below. */
+const firstLine = (text: string, max: number) => text.split('\n')[0]?.trim().slice(0, max) ?? ''
+
+/** The board task for an assignment: created, then owned by the agent and, once it runs, marked in progress. Returns its id, or null. */
+async function linkBoardTask($: EngineInterface, name: string, task: string, isRunning: boolean): Promise<string | null> {
   try {
-    const subject = task.split('\n')[0]?.trim().slice(0, SUBJECT_MAX) || `Work for ${name}`
+    const subject = firstLine(task, SUBJECT_MAX) || `Work for ${name}`
     // the session's own task tools, so the board (and the plugin's hook that mirrors it) see them like Claude's own calls
     const created = await ($.tool.call as unknown as BoardCall)({ tool: 'TaskCreate', subject, description: task, activeForm: `${name}: ${subject}` })
     const id = created.result?.task?.id
     if (!id) return null
-    await ($.tool.call as unknown as BoardCall)({ tool: 'TaskUpdate', taskId: id, owner: name, status: 'in_progress' })
+    await ($.tool.call as unknown as BoardCall)({ tool: 'TaskUpdate', taskId: id, owner: name, ...(isRunning ? { status: 'in_progress' } : {}) })
     return id
   } catch {
     return null // the board is a convenience: a failure here never undoes a started agent
   }
 }
 
-type Started = { ok: true; role: string; name: string; task: string; files: string[]; agentId?: string; team: HqTeam | null } | { ok: false; error: string }
+type SpawnSpec = { subagentType: string; name: string; prompt: string; description: string }
+type Started =
+  | { ok: true; role: string; name: string; task: string; files: string[]; agentId?: string; team: HqTeam | null; refused?: { spec: SpawnSpec; reason: string } }
+  | { ok: false; error: string }
+
+/**
+ * The answer when the session refused the mod's own start (auto mode wants the person's request behind an Agent call, and
+ * `$.agent.spawn` cannot carry it): the exact Agent call for the lead to make. The name must match: the guard finds the
+ * assignment by the agent's name.
+ */
+function leadStarts(spec: SpawnSpec, reason: string, kept: string, board?: string | null): string {
+  return [
+    // as one JSON string: a refusal text with line breaks cannot add lines that read like the call's own
+    `${spec.name} has NOT started yet: the session refused Agent HQ's start (${JSON.stringify(reason)}).`,
+    `Unless the person refused this start, make this Agent call now${kept ? `; ${kept}` : ''}.`,
+    ...(board ? [`After the call, set board task #${board} to in_progress.`, `If you do not make this call, delete board task #${board}.`] : []),
+    `subagent_type: ${spec.subagentType}`,
+    `name: ${spec.name} (exactly this)`,
+    `description: ${spec.description}`,
+    fenceUntrusted('prompt (the text inside the fence, verbatim)', spec.prompt),
+  ].join('\n')
+}
+
+/** Names with a recorded assignment: a start handed to the lead is not listed until the lead makes the call, and its name is not free. */
+const assignedNames = (data: HqData) => Object.keys(data.assignments ?? {})
 
 /** The part of hq_assign that reads the roster and changes it: name, count, assignment record, spawn, listing. Run under the lock. */
 async function startAssigned($: EngineInterface, input: unknown, deps: ToolDeps): Promise<Started> {
   const data = await deps.readData()
-  const parsed = parseAssign(input, data.team, data.agents)
+  const parsed = parseAssign(input, data.team, data.agents, assignedNames(data))
   if (!parsed.ok) return { ok: false, error: parsed.error }
   // recorded before the agent starts: its first tool call may come before spawn returns, and the guard must already know its scope
   await deps.recordAssignment(parsed.name, { role: parsed.role, name: parsed.name, task: parsed.task, ...(parsed.files.length > 0 ? { paths: parsed.files } : {}), at: await deps.now() })
-  const started = await spawnAgent($, {
-    subagentType: data.team ? `agent-hq:${parsed.role}` : parsed.role,
-    name: parsed.name,
-    prompt: parsed.prompt,
-    description: parsed.task.slice(0, 60),
-  })
-  if (!started.ok) {
-    await deps.dropAssignment(parsed.name)
-    return { ok: false, error: `could not start ${parsed.name}: ${started.error}` }
-  }
+  const spec = { subagentType: data.team ? `agent-hq:${parsed.role}` : parsed.role, name: parsed.name, prompt: parsed.prompt, description: firstLine(parsed.task, 60) }
+  const started = await spawnAgent($, spec)
+  const assigned = { ok: true as const, role: parsed.role, name: parsed.name, task: parsed.task, files: parsed.files, team: data.team }
+  // refused: the assignment stays, so the guard scopes the agent the lead starts under this name
+  if (!started.ok) return { ...assigned, refused: { spec, reason: started.error } }
   await deps.syncAgents() // listed before the lock is let go, so the next run sees the name and the count
-  return { ok: true, role: parsed.role, name: parsed.name, task: parsed.task, files: parsed.files, agentId: started.agentId, team: data.team }
+  return { ...assigned, agentId: started.agentId }
 }
 
 /** hq_assign: check the input, start the agent, remember its scope for the guard, and put it on the board. */
@@ -171,7 +192,12 @@ export async function hqAssign($: EngineInterface, input: unknown, deps: ToolDep
     throw error
   }
   if (!started.ok) return fail(`hq_assign: ${started.error}`)
-  const board = await linkBoardTask($, started.name, started.task)
+  const board = await linkBoardTask($, started.name, started.task, !started.refused)
+  if (started.refused) {
+    await deps.record({ agent: started.name, kind: 'action', text: `assigned ${started.name}: ${started.task} (not started: handed to the lead)` })
+    const kept = [...(board ? [`board task #${board}`] : []), ...(started.files.length > 0 ? ['the file scope'] : [])]
+    return { text: leadStarts(started.refused.spec, started.refused.reason, kept.length > 0 ? `${kept.join(' and ')} ${kept.length > 1 ? 'are' : 'is'} already set` : '', board) }
+  }
   const listed = Object.values((await deps.readData()).agents).find(a => a.name === started.name) // now listed, with its nickname
   const called = listed ? who(listed) : started.name
   await deps.record({ agent: started.agentId ?? started.name, kind: 'action', text: `assigned ${called}: ${started.task}` })
@@ -240,6 +266,7 @@ export async function hqReview($: EngineInterface, input: unknown, deps: ToolDep
     { role: reviewerId, task: brief, done: 'End with APPROVED or CHANGES REQUESTED, then a numbered list of findings (file, line, why).', limits: 'Do not edit code; report only.' },
     data.team,
     data.agents,
+    assignedNames(data),
   )
   if (!parsed.ok) {
     const running = Object.values(data.agents).find(a => a.role === `agent-hq:${reviewerId}` && !isFinished(a.status))
@@ -248,10 +275,11 @@ export async function hqReview($: EngineInterface, input: unknown, deps: ToolDep
     return sent.isDelivered ? { text: `Sent ${who(subject)}'s work to ${who(running)}, who is already reviewing.` } : fail(`hq_review: ${who(running)} did not get it: ${sent.reason}`)
   }
   await deps.recordAssignment(parsed.name, { role: parsed.role, name: parsed.name, task: parsed.task, at: await deps.now() })
-  const started = await spawnAgent($, { subagentType: `agent-hq:${parsed.role}`, name: parsed.name, prompt: parsed.prompt, description: `Review ${subject.name}`.slice(0, 60) })
+  const spec = { subagentType: `agent-hq:${parsed.role}`, name: parsed.name, prompt: parsed.prompt, description: `Review ${subject.name}`.slice(0, 60) }
+  const started = await spawnAgent($, spec)
   if (!started.ok) {
-    await deps.dropAssignment(parsed.name)
-    return fail(`hq_review: could not start ${parsed.name}: ${started.error}`)
+    await deps.record({ agent: parsed.name, kind: 'action', text: `review of ${who(subject)} handed to ${parsed.name} (not started: handed to the lead)` })
+    return { text: leadStarts(spec, started.error, 'the review assignment is already recorded') }
   }
   await deps.syncAgents()
   await deps.record({ agent: started.agentId ?? parsed.name, kind: 'action', text: `review of ${who(subject)} handed to ${parsed.name}` })

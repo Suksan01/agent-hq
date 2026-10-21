@@ -114,7 +114,8 @@ async function spawnFromPage($: EngineInterface, roleId: string, task: string, d
     if (!role) return { ok: false as const, text: `no role "${roleId}" in the team` }
     if (!task.trim()) return { ok: false as const, text: 'the request had no task' }
     if (role.active >= role.count) return { ok: false as const, text: `${role.title} is fully staffed (${role.active} of ${role.count} at work) — ask the lead to hire another` }
-    const taken = new Set(Object.values(data.agents).map(a => a.name))
+    // a recorded assignment's name is taken too: a start handed to the lead is not listed until the lead makes the call
+    const taken = new Set([...Object.values(data.agents).map(a => a.name), ...Object.keys(data.assignments ?? {})])
     let n = 1
     while (taken.has(`${roleId}-${n}`)) n++
     const name = `${roleId}-${n}`

@@ -65,6 +65,16 @@ test('handlePageAction spawn names the agent after its role and passes the team 
   expect(s.calls.synced).toBe(1)
 })
 
+test('handlePageAction spawn skips a name whose start is pending with the lead (recorded, not listed yet)', async () => {
+  const s = setup()
+  const deps: ActionDeps = { ...s.deps, readData: async () => ({ ...(await s.deps.readData()), assignments: { 'dev-1': { role: 'dev', name: 'dev-1', task: 'the lead\'s job', at: 1 } } }) }
+
+  const result = await handlePageAction(s.$, { type: 'spawn', role: 'dev', task: 'Build it' }, deps)
+
+  expect(result).toEqual({ ok: true, text: 'started dev-2 as Developer' })
+  expect(s.calls.spawn[0]).toMatchObject({ name: 'dev-2' })
+})
+
 test('handlePageAction spawn refuses a denied or failed start and an unknown role', async () => {
   const s = setup()
 

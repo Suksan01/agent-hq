@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
+import type { EngineInterface, PromptOrigin, Register } from 'claude-code'
 
 import { MAIN, barIdsIn, clearFinished, countTool, createTask, mergeAgents, mergeTodos, overallProgress, planSteps, updateTask, who, workingCount } from './model'
 import type { HqTeam, HqTodo } from '../types'
@@ -92,7 +92,8 @@ async function migrateHomeTrust($: EngineInterface) {
  * write is never trusted). Your own file in the home folder is held to the same rule, so a change made outside the
  * session, or by an agent, is not used until you trust it. A project's file says so in a toast on every load.
  */
-async function loadTeam($: EngineInterface, options: { approve?: boolean; expect?: string } = {}): Promise<HqTeam | null> {
+async function loadTeam($: EngineInterface, options: { approve?: boolean; expect?: string; isQuiet?: boolean } = {}): Promise<HqTeam | null> {
+  const toast = (text: string) => void (options.isQuiet ? undefined : $.ui.toast(text)) // quiet: a reload that only refreshes what is known
   const file = await findTeamFile($)
   if (!file) {
     // the last trusted team stays in force (a deleted file must not switch the guard off); only the pointer to a file goes
@@ -104,7 +105,7 @@ async function loadTeam($: EngineInterface, options: { approve?: boolean; expect
   const parsed = parseTeam(source)
   if (typeof parsed === 'string') {
     await update($, teamSource, () => ({ path, error: parsed }))
-    $.ui.toast(`Agent HQ: team file ignored, ${parsed} (${path})`)
+    toast(`Agent HQ: team file ignored, ${parsed} (${path})`)
     return await read($, team)
   }
   const approved = await $.store.get(APPROVED_TEAMS)
@@ -114,7 +115,7 @@ async function loadTeam($: EngineInterface, options: { approve?: boolean; expect
   else if (!isApproved(approved, path, source)) {
     // the last trusted team stays in force (its guard and lead section) until the person trusts this text
     await update($, teamSource, () => ({ path, error: 'not trusted yet, run /hq trust to use it', needsApproval: true }))
-    $.ui.toast(
+    toast(
       hasOldRecord(approved, path)
         ? `Agent HQ: trust records from an older version were reset for ${path} — run /hq trust to use it`
         : file.isProject
@@ -141,7 +142,7 @@ async function loadTeam($: EngineInterface, options: { approve?: boolean; expect
   }
   await update($, team, () => parsed)
   await update($, teamSource, () => ({ path }))
-  if (file.isProject && !options.approve) $.ui.toast(`Agent HQ: using project team ${parsed.name} from ${path}`)
+  if (file.isProject && !options.approve) toast(`Agent HQ: using project team ${parsed.name} from ${path}`)
   await warnLeadModel($, parsed).catch(() => {}) // advice only: a session whose model cannot be read is not warned
   return parsed
 }
@@ -340,7 +341,6 @@ const toolDeps = ($: EngineInterface): ToolDeps => ({
   now: () => $.clock.now(),
   assignmentOf: async name => (await read($, assignments))[name],
   recordAssignment: async (name, assignment) => void (await update($, assignments, all => ({ ...all, [name]: assignment }))),
-  dropAssignment: async name => void (await update($, assignments, all => Object.fromEntries(Object.entries(all).filter(([key]) => key !== name)))),
   resultOf: async id => (await read($, results))[id],
   record: event => recordEvents($, [event]),
   readTeamFile: async () => {
@@ -548,13 +548,60 @@ async function runReport($: EngineInterface): Promise<{ text: string }> {
   }
 }
 
-/** `/hq trust`: use the project team file that was waiting for the person's say-so (a changed file asks again). */
-async function approveTeam($: EngineInterface): Promise<{ text: string }> {
+/**
+ * `/hq trust`: use the project team file that was waiting for the person's say-so (a changed file asks again). `expect`
+ * is the text the person was shown: a file that changed since is not trusted by their yes.
+ */
+async function approveTeam($: EngineInterface, expect?: string): Promise<{ text: string }> {
   const source = await read($, teamSource)
   if (!source?.needsApproval) return { text: 'Agent HQ: no project team file is waiting to be trusted.' }
-  const loaded = await loadTeam($, { approve: true })
+  const loaded = await loadTeam($, { approve: true, expect })
   await syncAgents($)
-  return { text: loaded ? `Agent HQ: trusted. Team "${loaded.name}" is loaded, ${loaded.roles.length} roles.` : `Agent HQ: could not use ${source.path} (${(await read($, teamSource))?.error ?? 'error'}).` }
+  const now = await read($, teamSource)
+  // still waiting, or unreadable: what `loaded` holds then is the last trusted team, not this file
+  if (!loaded || now?.needsApproval || now?.error) return { text: `Agent HQ: could not use ${source.path} (${now?.error ?? 'error'}).` }
+  return { text: `Agent HQ: trusted. Team "${loaded.name}" is loaded, ${loaded.roles.length} roles.` }
+}
+
+// runs the engine attests as the person's own: they may trust a team file at once
+const PERSON_ORIGINS: ReadonlySet<PromptOrigin['kind']> = new Set(['composer', 'bridge', 'sdk', 'slack-ping'])
+// runs it cannot attest (unstamped, or made by a program): they may trust only through the dialog the person answers.
+// Every other run (a plugin's `$.command.run`, a scheduled prompt a model can set up, a message another session or agent
+// wrote) may not trust at all
+const ASKING_ORIGINS: ReadonlySet<PromptOrigin['kind']> = new Set(['unclassified', 'auto-continuation'])
+const notYours = (origin: PromptOrigin) => ({ text: `Agent HQ: only you can trust a team file; type /hq trust yourself (this run came from ${origin.kind === 'plugin' ? 'a plugin' : origin.kind}).` })
+const TRUST_YES = 'Yes, trust it'
+const TRUST_NO = 'No'
+/** The team file text the person answered No to in this session, by path: plain `/hq` does not ask about it again. */
+const declinedTrust = new Map<string, string>()
+
+/**
+ * Asks the person, in the engine's own dialog, to trust the team file waiting for it: an app's command menu runs `/hq`
+ * before `trust` can be typed. The question names the team as the file parses. The answer after a yes; null when nothing
+ * was asked (nothing waits, or plain `/hq` already got a No for this text) or the answer was not yes (No, dismissed, or
+ * nobody to ask). `isExplicit` (`/hq trust`) asks even after a No.
+ */
+async function askTrust($: EngineInterface, isExplicit: boolean): Promise<{ text: string } | null> {
+  await loadTeam($, { isQuiet: true }).catch(() => null) // a file changed mid-session is asked about on the first /hq
+  const source = await read($, teamSource)
+  if (!source?.needsApproval) return null
+  const text = await $.fs.read(source.path).catch(() => null)
+  const parsed = text === null ? 'unreadable' : parseTeam(text)
+  if (text === null || typeof parsed === 'string') return null
+  if (!isExplicit && declinedTrust.get(source.path) === text) return null
+  const roles = `${parsed.roles.length === 1 ? '1 role' : `${parsed.roles.length} roles`}: ${parsed.roles.map(r => r.id).join(', ')}`
+  const question = `Trust the team ${JSON.stringify(parsed.name)} from ${source.path}? It decides which agents run and what they are told (${roles}).`
+  // "No" first: a stray Enter must not trust
+  const answer = await $.ui.ask(question, { options: [TRUST_NO, TRUST_YES], header: 'Team file' }).catch(() => null)
+  if (answer === TRUST_NO) declinedTrust.set(source.path, text)
+  return answer === TRUST_YES ? approveTeam($, text) : null
+}
+
+/** `/hq trust`: at once from the person's own run, through the dialog from a run the engine cannot attest, never otherwise. */
+async function trustCommand($: EngineInterface, origin: PromptOrigin): Promise<{ text: string }> {
+  if (PERSON_ORIGINS.has(origin.kind)) return approveTeam($)
+  if (!ASKING_ORIGINS.has(origin.kind)) return notYours(origin)
+  return (await askTrust($, true)) ?? { text: (await read($, teamSource))?.needsApproval ? 'Agent HQ: the team file was not trusted.' : 'Agent HQ: no project team file is waiting to be trusted.' }
 }
 
 /** Everything waiting on the person right now (see ./inbox). */
@@ -629,7 +676,7 @@ export const register: Register = (on, options) => {
 
   on('command.run', { command: 'hq' }, async ($, e) => {
     if (e.args.trim().toLowerCase() === 'report') return runReport($)
-    if (e.args.trim().toLowerCase() === 'trust') return approveTeam($)
+    if (e.args.trim().toLowerCase() === 'trust') return trustCommand($, e.origin)
     if (e.args.trim().toLowerCase() === 'web') {
       await loadTeam($).catch(() => null)
       await syncAgents($)
@@ -653,6 +700,13 @@ export const register: Register = (on, options) => {
       }
     }
     const arg = e.args.trim().toLowerCase()
+    const canAsk = PERSON_ORIGINS.has(e.origin.kind) || ASKING_ORIGINS.has(e.origin.kind)
+    const trusted = (arg === '' || arg === 'open') && canAsk ? await askTrust($, false) : null
+    if (trusted) {
+      await update($, isBandHidden, () => false)
+      await openSidebar($)
+      return trusted
+    }
     // `/hq` alone toggles; `close` and `open` say which
     if (arg === 'close' || (arg === '' && (await isSidebarOpen($)))) return closeSidebar($)
     await update($, isBandHidden, () => false)
