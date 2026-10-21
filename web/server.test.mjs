@@ -1081,7 +1081,7 @@ test('--login prints a fresh one-time link for the running hub, and starts nothi
   const second = await runLogin(server.statePath)
 
   assert.equal(first.code, 0, first.stderr)
-  const link = /^AGENT_HQ_URL http:\/\/127\.0\.0\.1:(\d+)\/\?c=([0-9a-f]{32})\n$/.exec(first.stdout)
+  const link = /^AGENT_HQ_PAGES 0\nAGENT_HQ_URL http:\/\/127\.0\.0\.1:(\d+)\/\?c=([0-9a-f]{32})\n$/.exec(first.stdout)
   assert.ok(link, first.stdout)
   assert.equal(Number(link[1]), server.port)
   assert.notEqual(link[2], server.code)
@@ -1089,6 +1089,22 @@ test('--login prints a fresh one-time link for the running hub, and starts nothi
   assert.equal((await redeem(server, link[2])).status, 302, 'a browser with no cookie gets in')
   assert.equal((await redeem(server, link[2])).status, 403, 'and it works once')
   assert.equal((await sessionsOf(server)).length, before, 'no session was registered by the one-shot')
+})
+
+test('--login says how many pages are open, so /hq web opens no second tab', async t => {
+  const server = await startServer(t)
+  const pagesOf = async () => Number(/^AGENT_HQ_PAGES (\d+)$/m.exec((await runLogin(server.statePath)).stdout)?.[1])
+  assert.equal(await pagesOf(), 0)
+
+  const one = openEvents(server)
+  const two = openEvents(server)
+  t.after(() => (one.close(), two.close()))
+  await one.waitFor(1)
+  await two.waitFor(1)
+  assert.equal(await pagesOf(), 2)
+
+  one.close()
+  await until(async () => (await pagesOf()) === 1, 5000, 'a closed page to stop counting')
 })
 
 test('--login says why when there is no hub running, and prints no link', async t => {

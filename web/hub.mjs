@@ -175,13 +175,14 @@ export function createHub({ liveDir, webDir, secret, config }) {
     return site === undefined || site === 'same-origin' || site === 'none'
   }
 
-  /** Session servers only: ping, register (also their heartbeat), and a login code for the page. */
+  /** Session servers only: ping, register (also their heartbeat), and a login code for the page with the open page count. */
   function hubRoute(req, res, pathname) {
     if (!same(req.headers['x-hq-secret'], secret)) return plain(res, 403, 'forbidden')
     if (pathname === '/hub/ping' && req.method === 'GET') return json(res, 200, { pid: process.pid })
     if (pathname === '/hub/code' && req.method === 'POST') {
       req.resume()
-      return json(res, 200, { code: mintCode() })
+      // with the open page count: /hq web opens no tab while one shows the page (it shows every session)
+      return json(res, 200, { code: mintCode(), pages: clients.size })
     }
     if (pathname === '/hub/register' && req.method === 'POST') {
       return readJson(req, res, info => {

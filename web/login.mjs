@@ -1,6 +1,6 @@
-// `node server.mjs --login --state <file>`: asks the running hub for a fresh one-time login link and prints it as
-// `AGENT_HQ_URL <url>`. The mod uses it when /hq web is run again in a session whose page is already up (the link
-// printed at the start has been used). Exits 0 with the line, or 1 with the reason on stderr. No dependencies.
+// `node server.mjs --login --state <file>`: asks the running hub for a fresh one-time login link and prints how many
+// pages are open (`AGENT_HQ_PAGES <n>`), then the link (`AGENT_HQ_URL <url>`). The mod uses it on every /hq web: it
+// opens a tab only when no page is open. Exits 0 with the lines, or 1 with the reason on stderr. No dependencies.
 
 import { dirname } from 'node:path'
 import { localRequest } from './http.mjs'
@@ -17,6 +17,7 @@ export async function printLoginUrl(statePath) {
     console.error('agent-hq web: the hub did not give a login code')
     return 1
   }
+  if (Number.isInteger(answer.json.pages)) console.log(`AGENT_HQ_PAGES ${answer.json.pages}`)
   console.log(`AGENT_HQ_URL http://127.0.0.1:${info.port}/?c=${answer.json.code}`)
   return 0
 }

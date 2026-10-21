@@ -36,6 +36,8 @@ type Options = {
   noUrl?: boolean
   /** `server.mjs --login` fails */
   loginFails?: boolean
+  /** how many pages the hub says are open (`AGENT_HQ_PAGES`); none printed when absent */
+  pages?: number
   submitThrows?: string
   /** each prompt.submit takes this long on the mock clock */
   submitDelayMs?: number
@@ -126,7 +128,8 @@ async function liveSession($: Engine, on: On, options: Options = {}) {
     // `server.mjs --login` prints a fresh one-time link (or fails, when the test says so)
     if (e.argv.includes('--login')) {
       const failed = options.loginFails === true
-      return { value: { exitCode: failed ? 1 : 0, stdout: failed ? '' : `AGENT_HQ_URL http://127.0.0.1:4321/?c=fresh${commands.length}\n`, stderr: failed ? 'agent-hq web: no page is running\n' : '', isStdoutTruncated: false, isStderrTruncated: false } }
+      const pages = options.pages === undefined ? '' : `AGENT_HQ_PAGES ${options.pages}\n`
+      return { value: { exitCode: failed ? 1 : 0, stdout: failed ? '' : `${pages}AGENT_HQ_URL http://127.0.0.1:4321/?c=fresh${commands.length}\n`, stderr: failed ? 'agent-hq web: no page is running\n' : '', isStdoutTruncated: false, isStderrTruncated: false } }
     }
     return { value: { exitCode: 0, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
   })
@@ -681,7 +684,7 @@ test('/hq web run again opens a fresh one-time link (the first is spent), asked 
   const third = await run()
 
   const logins = s.commands.filter(argv => argv.includes('--login'))
-  expect(logins).toHaveLength(2)
+  expect(logins).toHaveLength(3) // the first run asks the hub too: how many pages are open, with a link
   expect(logins[0]).toEqual(['node', expect.stringMatching(/web\/server\.mjs$/), '--login', '--state', '/home/me/.claude/agent-hq/live/sess.json'])
   expect(again.text).toMatch(/^Agent HQ live page opened: http:\/\/127\.0\.0\.1:4321\/\?c=fresh\d+$/)
   expect(third.text).not.toBe(again.text) // every run mints its own
@@ -696,7 +699,29 @@ test('/hq web run again says so when the hub cannot give a new link, instead of 
 
   expect(again.text).toContain('could not start its live page')
   expect(again.text).toContain('no page is running')
-  expect(s.commands.filter(argv => argv[0] === 'open')).toHaveLength(1) // only the first run opened a page
+  expect(s.commands.filter(argv => argv[0] === 'open')).toHaveLength(1) // only the first run opened a page: the link its server printed
+  s.finish()
+})
+
+// one page shows every session (the hub's), so a tab already open shows this one too: another tab only costs memory
+test('/hq web opens no tab while a page is open, first run or not: it says so and gives a link for another browser', async ($, on) => {
+  const s = await liveSession($, on, { team: true, pages: 1 })
+  const first = await s.opened
+  const again = (await $.command.run({ command: 'hq', args: 'web', origin: { kind: 'composer' }, presentation: {} } as never)) as { text: string }
+
+  expect(s.commands.filter(argv => argv[0] === 'open')).toHaveLength(0)
+  for (const answer of [first, again]) {
+    expect(answer.text).toContain('already open in your browser')
+    expect(answer.text).toMatch(/http:\/\/127\.0\.0\.1:4321\/\?c=fresh\d+$/)
+  }
+  s.finish()
+})
+
+test('/hq web opens the page when the hub says no page is open', async ($, on) => {
+  const s = await liveSession($, on, { team: true, pages: 0 })
+
+  expect((await s.opened).text).toMatch(/^Agent HQ live page opened: http:\/\/127\.0\.0\.1:4321\/\?c=fresh\d+$/)
+  expect(s.commands.filter(argv => argv[0] === 'open')).toHaveLength(1)
   s.finish()
 })
 
