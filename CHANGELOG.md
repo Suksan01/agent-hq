@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 (2026-10-21)
 
 ### Changed
 - **Prototypes on Claude's Design canvas.** `/agent-hq:feature` builds phase 3's variants on Claude's Design canvas by
