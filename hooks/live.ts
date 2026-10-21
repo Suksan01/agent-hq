@@ -11,7 +11,7 @@ import { MAIN, isFinished, progressOf } from './model'
 import { currentActivity } from './activity'
 import { sayingOf } from './says'
 import type { Progress } from './model'
-import type { HqAgent, HqBubble } from '../types'
+import type { HqAgent, HqBubble, HqSuggestions } from '../types'
 import type { HqData } from './view'
 import { TONE_OF, fallbackOf, labelOf, mascotTone, nowLine, teamProgress, treeRows } from './view'
 import type { BarFallback } from './view'
@@ -74,6 +74,8 @@ export type LiveSnapshot = {
   folded: { done: number; failed: number }
   /** The talk bubbles showing now (hooks/talk.ts): on `agent`'s card, to or from `other` (`main` for the lead); the page draws exactly these. */
   bubbles: HqBubble[]
+  /** What the person could send the lead next (hooks/suggest.ts), drafted after its last answered turn; null when none. */
+  suggestions: HqSuggestions | null
 }
 
 /** What the snapshot carries beyond the agents and tasks: the acknowledged request id and the activity feed. */
@@ -84,6 +86,7 @@ export type LiveExtras = {
   usage?: Readonly<Record<string, AgentUsage>>
   /** Since when each held or idle agent waits (see ./inbox trackWaiting): an idle one past IDLE_LIMIT_MS leaves the page. */
   waitingSince?: Readonly<Record<string, number>>
+  suggestions?: HqSuggestions | null
 }
 
 /** A finished member stays on the page this long after it ended, then leaves it and is only counted. */
@@ -175,5 +178,6 @@ export function buildSnapshot(data: HqData, at: number, notice: LiveSnapshot['no
     inbox: [...(extras.inbox ?? [])],
     folded: { done: gone.filter(a => a.status === 'completed').length, failed: gone.filter(a => a.status === 'failed' || a.status === 'killed').length },
     bubbles: [...(data.bubbles ?? [])],
+    suggestions: extras.suggestions ?? null,
   }
 }
