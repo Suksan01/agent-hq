@@ -173,11 +173,23 @@ export async function launchBrowser(world, { width = 1400, height = 900, webgl =
   const flags = webgl ? ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] : ['--disable-3d-apis', '--disable-gpu']
   const chrome = spawn(CHROME, ['--headless=new', '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', '--disable-extensions', '--disable-background-networking', ...flags, `--window-size=${width},${height}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'ignore'] })
   children.add(chrome)
+  let ws = null
+  const stop = async () => {
+    try {
+      ws?.close()
+    } catch {}
+    const gone = new Promise(resolve => chrome.once('exit', resolve))
+    chrome.kill('SIGKILL')
+    await Promise.race([gone, sleep(3000)])
+    await sleep(300) // Chrome's helper processes close their profile files a moment after it
+    children.delete(chrome)
+  }
+  world.browsers.push({ stop }) // closed with its test even when the launch below fails
   const portFile = join(profile, 'DevToolsActivePort')
   await until(() => existsSync(portFile), 20_000, 'Chrome debugging port')
   await sleep(100)
   const [port, path] = readFileSync(portFile, 'utf8').trim().split('\n')
-  const ws = new WebSocket(`ws://127.0.0.1:${port}${path}`)
+  ws = new WebSocket(`ws://127.0.0.1:${port}${path}`)
   await new Promise((resolve, reject) => {
     ws.addEventListener('open', resolve, { once: true })
     ws.addEventListener('error', () => reject(new Error('could not connect to Chrome')), { once: true })
@@ -284,17 +296,7 @@ export async function launchBrowser(world, { width = 1400, height = 900, webgl =
     async shot(path) {
       writeFileSync(path, Buffer.from((await send('Page.captureScreenshot', { format: 'png' }, sessionId)).data, 'base64'))
     },
-    async stop() {
-      try {
-        ws.close()
-      } catch {}
-      const gone = new Promise(resolve => chrome.once('exit', resolve))
-      chrome.kill('SIGKILL')
-      await Promise.race([gone, sleep(3000)])
-      await sleep(300) // Chrome's helper processes close their profile files a moment after it
-      children.delete(chrome)
-    },
+    stop,
   }
-  world.browsers.push(browser)
   return browser
 }
