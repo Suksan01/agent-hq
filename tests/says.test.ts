@@ -192,15 +192,20 @@ test('every member may call hq_doing: it is a coordination tool, kept in a tools
   expect(guardToolCall({ team, role: 'reviewer', subagent: true, tool: DOING_TOOL, input: { text: 'Reviewing' } } as never)).toBeNull()
 })
 
-test('the lead and every member are told to say what they do with hq_doing, in both languages', () => {
+test('the lead says what it does with hq_doing at each step; a member only when its step title would not say it', () => {
   const team = parseTeam(JSON.stringify({ name: 'T', lead: { title: 'Lead' }, roles: [{ id: 'dev', title: 'Dev', count: 1, mission: 'Build.' }] }))
   if (typeof team === 'string') throw new Error(team)
   const role = team.roles[0]
   if (!role) throw new Error('no role')
   for (const prompt of [rolePrompt(team, role), rolePrompt(team, role, true, 'th'), leadPrompt(team)]) {
     expect(prompt).toContain(DOING_TOOL)
-    expect(prompt).toMatch(/at the start of each step/i)
     expect(prompt).toMatch(/in the person's language/)
+  }
+  expect(leadPrompt(team)).toMatch(/at the start of each step/i)
+  // a member's step in progress already shows (says.ts falls back to it), so a call per step is a tool call wasted
+  for (const prompt of [rolePrompt(team, role), rolePrompt(team, role, true, 'th')]) {
+    expect(prompt).not.toMatch(/at the start of each step/i)
+    expect(prompt).toContain(`call ${DOING_TOOL} only when a step's title would not say what you are doing`)
   }
 })
 
