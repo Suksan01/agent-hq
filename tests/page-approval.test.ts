@@ -5,7 +5,7 @@ import { expect, test } from 'claude-code/testing'
 import { APPROVAL_MS, INPUT_MAX_BYTES, answerOf, approvalRequest, canHold, isShowable } from '../hooks/pageapproval'
 import type { HoldFacts } from '../hooks/pageapproval'
 
-const FACTS: HoldFacts = { decision: 'ask', isOn: true, pages: 1, toolUseId: 'u1', tool: 'Bash', mode: 'default', input: { command: 'rm -rf build' } }
+const FACTS: HoldFacts = { decision: 'ask', approver: 'person', isOn: true, pages: 1, toolUseId: 'u1', tool: 'Bash', mode: 'default', input: { command: 'rm -rf build' } }
 
 test('held only when every condition holds', () => {
   expect(canHold(FACTS)).toBe(true)
@@ -13,6 +13,7 @@ test('held only when every condition holds', () => {
   const refused: Partial<HoldFacts>[] = [
     { decision: 'allow' },
     { decision: 'deny' },
+    { approver: undefined }, // nobody can answer it: the engine denies it
     { approver: 'host' }, // an SDK or -p host's permission callback, or a served call's own session, answers it
     { isOn: false },
     { pages: 0 },

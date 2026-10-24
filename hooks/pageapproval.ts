@@ -36,7 +36,7 @@ const PERSON_TOOLS: ReadonlySet<string> = new Set(['AskUserQuestion', 'ExitPlanM
 /** What decides whether an ask is held: the verdict, the setting, open pages, the call, its loop's mode, its input. */
 export type HoldFacts = {
   decision: string
-  /** Who answers the ask, as the engine's tool.check event says: `host` is an SDK or -p permission callback or a served call. */
+  /** Who answers the ask, as the engine's tool.check event says: `person` is their dialog here; `host` (an SDK or -p callback, a served call) and none are never held. */
   approver?: string
   isOn: boolean
   /** Pages open on the hub; 0 when this session's page server is not running. */
@@ -55,7 +55,7 @@ export type HoldFacts = {
 export function canHold(f: HoldFacts): boolean {
   return (
     f.decision === 'ask' &&
-    f.approver !== 'host' &&
+    f.approver === 'person' &&
     f.isOn &&
     f.pages > 0 &&
     Boolean(f.toolUseId) &&

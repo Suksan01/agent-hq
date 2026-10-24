@@ -105,7 +105,7 @@ async function boot($: Engine, on: On, options: Boot = {}) {
   if (options.mode !== null) await prompt(options.mode ?? 'default')
   await clock.settle()
   const check = (input: Record<string, unknown> = {}) =>
-    $.tool.check({ tool: 'Bash', input: { command: 'rm -rf build' }, tool_use_id: 'u1', ...input } as never) as Promise<Verdict & Record<string, unknown>>
+    $.tool.check({ tool: 'Bash', input: { command: 'rm -rf build' }, tool_use_id: 'u1', approver: 'person', ...input } as never) as Promise<Verdict & Record<string, unknown>>
   return { asked, box, check, clock, command, logs, prompt, runs, stored, toasts, toastTimes }
 }
 
@@ -139,6 +139,12 @@ test('the card says why the engine asked: the reason, masked, and the setting or
 test('an ask a host answers (approver host: an SDK or -p permission callback, a served call) is never held', async ($, on) => {
   const s = await boot($, on)
   expect(await s.check({ approver: 'host' })).toEqual(ASKED)
+  expect(s.runs).toEqual([])
+})
+
+test('an ask with no approver (nobody can answer it) is never held', async ($, on) => {
+  const s = await boot($, on)
+  expect(await s.check({ approver: undefined })).toEqual(ASKED)
   expect(s.runs).toEqual([])
 })
 
