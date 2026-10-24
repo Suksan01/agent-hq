@@ -442,7 +442,7 @@ test('the spec and plan are written in the chosen language, while the slug, bran
 })
 
 test('SKILL.md stays small: phase details sit in references/ that it points to by a path that exists', () => {
-  assert.ok(Buffer.byteLength(main) < 16_500, `SKILL.md is ${Buffer.byteLength(main)} bytes`) // it was 26.7 KB before the split
+  assert.ok(Buffer.byteLength(main) < 17_000, `SKILL.md is ${Buffer.byteLength(main)} bytes`) // it was 26.7 KB before the split
   const pointers = [...main.matchAll(POINTER)].map(m => m[1])
   assert.deepEqual(pointers, ['references/prototypes.md'])
   for (const path of pointers) assert.ok(existsSync(new URL(`./${path}`, import.meta.url)), path)
@@ -455,4 +455,13 @@ test('briefs point to the spec and plan files instead of pasting them, and the l
   assert.match(section('Build'), /task <n> in `docs\/plans\/<feature>\.md`; read that task, not the\n   whole plan/)
   assert.match(section('Build'), /never paste the plan or earlier\n   members' replies/)
   assert.match(section('Build'), /`BLOCKED` or `NEEDS_CONTEXT`/)
+})
+
+test('the fix loop stops after three rounds: a fresh member or the person decides, and minor findings become follow-ups', () => {
+  const build = section('Build')
+  assert.match(build, /at most three rounds/)
+  assert.match(build, /`focus` on the fix and the open findings only/)
+  assert.match(build, /After a third failed review, stop the loop/)
+  assert.match(build, /header "Stuck"/)
+  assert.match(build, /Minor findings that break no acceptance criterion become\n   follow-up lines in the plan/)
 })

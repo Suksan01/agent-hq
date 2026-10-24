@@ -167,8 +167,11 @@ For each task that is ready (its dependencies done):
    and keep parallel tasks few so this stays rare. Then hq_review to the review role, with `focus` on the review checklist (the project rules
    for this task and the spec's edge cases and states). Have the QA role run the task's tests. Do not accept the task
    until both pass.
-5. **Fix**: findings go back to the same member with SendMessage, or a new hq_assign with the findings, then review
-   again.
+5. **Fix**, at most three rounds: findings go back to the same member with SendMessage (it keeps its context), then
+   hq_review again with `focus` on the fix and the open findings only. After a third failed review, stop the loop: give
+   the task and every open finding to a fresh member with hq_assign (a stronger `model` when one fits), or ask the person
+   with AskUserQuestion, header "Stuck", whether to re-plan. Minor findings that break no acceptance criterion become
+   follow-up lines in the plan, not more rounds.
 6. **Commit and tick**: commit the accepted task on the feature branch (one commit per task, in the project's commit
    style), tick it in the plan (`- [x]`) and give the person one line: the task, who did it, the review result.
 
