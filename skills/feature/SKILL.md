@@ -44,7 +44,8 @@ phase you are in at the start of each one ("Phase 3 of 6: prototypes").
   what the skip costs in one line, then add `Skipped: <phase> (<their reason>)` under the spec's `Status:` line and go
   on. A feature with no user interface skips phase 3 by itself.
 - **Share at any gate**: when the person wants someone else to review a phase, share the spec, the plan or the canvas as
-  a page they can send on: publish it as an Artifact when the session can, else give the file path or the canvas URL.
+  a page they can send on: with `superset:page` in Superset (comments, versions), else as an Artifact when the session
+  can, else give the file path or the canvas URL.
 - **Small work skips this skill**: a change one member can finish in one assignment goes straight to hq_assign.
 
 ## 1. Brainstorm
@@ -185,7 +186,7 @@ Set `Status: finish (draft)`, then:
 - **Full checks**: the QA role runs the full unit and end-to-end suites and the build command the project's rules name;
   the review role reads the whole diff against the spec and the review checklist; any risk review from the spec runs
   again on the finished diff.
-- **In a real browser**: the QA role opens the built feature (the in-app browser, or the project's end-to-end tool) at
+- **In a real browser**: the QA role opens the built feature (the in-app browser, with the `superset:browser` skill in Superset, or the project's end-to-end tool) at
   desktop and mobile width, walks every acceptance criterion and state, and compares it with the chosen variant (its
   boards or its prototype routes). Differences the person did not ask for go back to phase 5 as tasks.
 - **Clean up** the in-app prototypes, after the browser check (the Design canvas leaves nothing in the repo): one

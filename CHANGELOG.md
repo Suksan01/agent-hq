@@ -8,6 +8,11 @@
   subagent-driven-development, executing-plans or dispatching-parallel-agents, whose plain subagents skip the board,
   the guard and the live page. Its other skills stay available, and roles may list them (`superpowers:<skill>`) to
   load on demand.
+- **Works alongside Superset.** The lead uses superset:orchestrate only when the person asks for separate workspaces
+  or hosts; the feature skill shares a phase with `superset:page` and checks screens with `superset:browser` when
+  they are installed; the standup skill says when superset:standup fits instead.
+- **Skills match 0.7.1.** A skill-creator audit fixed self-evaluation's description (nothing is preloaded now),
+  handoff's report field and status handling, and the feature skill's trigger wording.
 
 ## 0.7.1 (2026-10-24)
 

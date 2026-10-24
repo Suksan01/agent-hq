@@ -1,6 +1,6 @@
 ---
 name: standup
-description: Run a team standup for Agent HQ - the lead asks every running member for a three-line status (done, doing, blocked) with SendMessage, collects the answers and posts one summary with what needs the person. Use when the person asks for a standup, status or "where are we", or runs /agent-hq:standup.
+description: Run a team standup for Agent HQ - the lead asks every running member for a three-line status (done, doing, blocked) with SendMessage, collects the answers and posts one summary with what needs the person. Use when the person asks for a standup, status or "where are we", or runs /agent-hq:standup. For what Superset workspaces and agent terminals did while the person was away, superset:standup fits instead.
 ---
 
 # Team standup

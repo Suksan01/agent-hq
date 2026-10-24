@@ -162,6 +162,9 @@ test('members work with each other directly and keep their replies to the lead s
   expect(lead).toContain('## Other workflow plugins')
   for (const skill of ['subagent-driven-development', 'executing-plans', 'dispatching-parallel-agents']) expect(lead, skill).toContain(`superpowers:${skill}`)
   expect(lead).toContain('use /agent-hq:feature, hq_assign and hq_review')
+  // Superset's own coordinator likewise, unless the person wants separate workspaces
+  expect(lead).toContain('Use superset:orchestrate only when the person asks for separate workspaces or hosts')
+  expect(lead).toContain("Superset's page to share a spec or report")
   expect(lead).toContain('On `Status: BLOCKED` or `NEEDS_CONTEXT` answer it with SendMessage')
   // a team without other roles has no one to work with
   const solo = parseTeam(JSON.stringify({ ...TEAM, roles: [TEAM.roles[0]] }))
