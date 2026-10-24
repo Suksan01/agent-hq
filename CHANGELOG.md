@@ -20,6 +20,12 @@
 - **Fix loops end.** The feature build allows three review-fix rounds; then a fresh member or the person decides.
 - **Lighter routine.** Small assignments may shorten the Self-check line, and members update their memory only when
   a run taught them something.
+- **Fixes from a measured run.** hq_review takes idle teammates; a failed board update says why; members name the
+  team's files by absolute path (a member working in another repo wrote them there); hq_assign takes `skills`, loaded
+  first, because members did not load skills on their own; members call hq_doing only when their step does not say it.
+- **Cheaper members and lead.** The team interview gives roles that need no MCP tools a tools list (about 38k tokens a
+  member in a session with many MCP servers), and the lead suggests a fresh session for a feature when the
+  conversation is already long.
 
 ## 0.7.1 (2026-10-24)
 

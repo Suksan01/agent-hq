@@ -318,6 +318,9 @@ safer · asks before adding a dep
 - **skills**: installed skills that fit, by their exact names as this session lists them (for example `tdd`,
   `code-review`, `security-review`). Only list skills that exist in the session's skill list.
 - **tools** (optional): leave out for full access; for review-only roles use `["Read", "Grep", "Glob", "Bash"]`.
+  A role that needs no MCP tools gets a list too, such as `["Read", "Edit", "Write", "Bash", "Grep", "Glob"]`
+  (add any MCP tool it does need by its full name): without one, every member carries the definitions of every
+  connected MCP server's tools, which measured about 38k tokens a member in a session with many servers.
 - **model**: the one picked in "Pick the models" (step 4): `haiku` for quick, narrow work; `sonnet` for most roles;
   `opus` for architecture or hard debugging; `inherit` to match the session.
 

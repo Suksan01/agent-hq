@@ -163,6 +163,7 @@ test('members work with each other directly and keep their replies to the lead s
   expect(lead).toContain('Never paste earlier members\' replies or a whole plan')
   expect(lead).toContain(`never commit \`${REPORTS_DIR}/\``)
   expect(lead).toContain("Name in hq_assign's `skills` the one or two of the role's skills the task needs")
+  expect(lead).toContain('suggest starting the feature in a fresh session first') // the lead's own context was most of the measured cost
   // with Superpowers enabled, its own subagent workflow would bypass the board, the guard and the live page
   expect(lead).toContain('## Other workflow plugins')
   for (const skill of ['subagent-driven-development', 'executing-plans', 'dispatching-parallel-agents']) expect(lead, skill).toContain(`superpowers:${skill}`)
