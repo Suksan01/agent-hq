@@ -32,8 +32,10 @@ Do not touch
   the backend, config, pushing or merging).
 
 Report format
-  What to send back: changed files, test and lint results, what is left,
-  anything found outside the assignment.
+  Only what you need beyond the default: hq_assign already tells a member
+  that can edit files to write its full report to a file and reply in at
+  most 15 lines with a Status (DONE, DONE_WITH_CONCERNS, BLOCKED,
+  NEEDS_CONTEXT). Leave this out when the default is enough.
 ```
 
 Rules for a good brief:
@@ -62,7 +64,7 @@ Do not touch
   Anything in backend/**. Other pages. Never push or merge.
 
 Report format
-  Changed files, test + lint output, open questions.
+  (default: status reply and report file)
 ```
 
 ## Sending it
@@ -78,6 +80,8 @@ Report format
 
 ## When the member comes back
 
+- **`Status: BLOCKED` or `NEEDS_CONTEXT`:** answer with SendMessage (the missing context or a ruling), or split the
+  task; read its report file only when the status block is not enough.
 - **Report matches "Done when":** send it to the team's review role if there is one, then accept it.
 - **Report is missing a check, or the work strays outside "Files":** reply to the same member with SendMessage naming
   the exact gap; do not start a new member for it.

@@ -1,6 +1,6 @@
 ---
 name: feature
-description: Build a big feature with the Agent HQ team in six phases - brainstorm, spec, parallel UI prototype variants on a canvas, implementation plan, subagent-driven build and finish - with an approval gate after each phase that only the person can pass. Use when the person asks the team to build or implement a large or multi-part feature, or runs /agent-hq:feature.
+description: Build a big feature with the Agent HQ team in six phases - brainstorm, spec, parallel UI prototype variants on a canvas, implementation plan, subagent-driven build and finish - with an approval gate after each phase that only the person can pass. Use whenever the person asks the team to build, design or implement a feature that spans several files, screens or members (a new flow, page, API with its UI, or "plan and build X with the team"), even without saying "feature", or runs /agent-hq:feature. Not for a change one member can finish in one assignment: that goes straight to hq_assign.
 ---
 
 # Build a feature with the team

@@ -1,6 +1,6 @@
 ---
 name: self-evaluation
-description: Score your own finished work before you report it - five axes (accuracy, completeness, clarity, actionability, conciseness), 1 to 5 with evidence for each, fix the gaps you can close quickly, put a one-line scorecard in your reply and keep the lessons. Every Agent HQ team member carries it; use it before the final reply on any non-trivial assignment. Adapted from ECC's agent-self-evaluation.
+description: Score your own finished work before you report it - five axes (accuracy, completeness, clarity, actionability, conciseness), 1 to 5 with evidence for each, fix the gaps you can close quickly, put a one-line scorecard in your reply and keep the lessons. Agent HQ members load it on demand: use it before the final reply on any non-trivial assignment, or whenever unsure how to score the Self-check line. Adapted from ECC's agent-self-evaluation.
 ---
 
 # Self-evaluation
