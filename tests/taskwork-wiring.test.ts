@@ -265,7 +265,7 @@ test('a member\'s turn and an hq_assign link made at the same time both land in 
 
   expect(answer.isError).toBeFalsy()
   expect(taskOf(s.list(), 2)?.work['dev-1']?.workMs).toBe(2000)
-  expect(taskOf(s.list(), 3)?.events.some(event => event.kind === 'start')).toBe(true)
+  expect(taskOf(s.list(), 3)?.events.some((event: { kind: string }) => event.kind === 'start')).toBe(true)
 })
 
 // ---- more ways in

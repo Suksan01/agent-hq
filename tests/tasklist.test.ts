@@ -339,10 +339,10 @@ test('readList says unreadable, not invalid, when the list is broken and its bac
   d.files.set(d.path, '{ cut')
   d.files.set(`${d.path}.bak`, JSON.stringify(listOf([task(1)])))
   const read = d.$.fs.read.bind(d.$.fs)
-  d.$.fs.read = async (path: string) => {
+  d.$.fs.read = (async (path: string) => {
     if (path.endsWith('.bak')) throw new Error('EACCES: permission denied')
     return read(path)
-  }
+  }) as unknown as typeof d.$.fs.read // the fake reads text; the engine's type is FsBytes
 
   const out = await readList(d.$, d.path)
 

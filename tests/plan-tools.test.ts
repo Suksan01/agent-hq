@@ -329,6 +329,7 @@ test('hq_review with a plan_task and no list is refused, and a bad plan_task typ
 
 // ---- review round: the lock, a read error, a failing write, reopening a done task
 
+const { setTimeout } = globalThis as unknown as { setTimeout: (fn: () => void, ms: number) => void } // the test types have no DOM or node globals
 const tick = () => new Promise<void>(resolve => setTimeout(resolve, 0))
 
 test('two hq_assign with a plan_task at once both land in the list, however slow the file is', async () => {

@@ -55,7 +55,7 @@ export function TaskTableA(els: Els, data: HqData, tasks: ProtoTask[]): RenderEl
 
   const line = (key: string, cells: Cell[]) => (
     <Box key={`a-row-${key}`}>
-      {cells.map((c, i) => <Text key={i} color={c.color} dimColor={c.dim}>{c.text}</Text>)}
+      {cells.map((c, i) => <Text key={`cell-${i}`} color={c.color} dimColor={c.dim}>{c.text}</Text>)}
     </Box>
   )
   const body = (glyph: Cell, n: string, task: string, who: string, min: string, usd: string, dim = false): Cell[] => [

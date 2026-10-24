@@ -339,8 +339,9 @@ async function updateList($: EngineInterface, deps: ToolDeps, change: (list: Tas
   try {
     await withListLock(async () => {
       const { list } = (await deps.readList?.()) ?? { list: null }
-      const next = list && change(list, await deps.now())
-      if (list && next !== list) await deps.writeList?.(next)
+      if (!list) return // no list: nothing to link, nothing written
+      const next = change(list, await deps.now())
+      if (next !== list) await deps.writeList?.(next)
     })
   } catch (error) {
     // the list is a convenience for the sidebar: the member is already running
