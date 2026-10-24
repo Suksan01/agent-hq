@@ -4,6 +4,7 @@
 
 import type { HqAgent, HqStatus, HqTeam, HqTeamRole } from '../types'
 import { MAIN, agentWork, isFinished } from './model'
+import type { TaskList } from './tasklist'
 import { REPLY_LINES, isReadOnlyRole, reportPathOf } from './team'
 import { labelOf, nowLine } from './view'
 import type { HqData } from './view'
@@ -151,4 +152,36 @@ export function statusSummary(data: HqData): string {
   const shown = ordered.length > room ? ordered.slice(0, Math.max(0, room - 1)) : ordered
   const more = ordered.length - shown.length
   return [...lead.map(r => r.line), ...shown.map(r => r.line), ...(more > 0 ? [`+${more} more agents (${ordered.slice(shown.length).filter(r => isFinished(r.agent.status)).length} finished)`] : []), ...closing].join('\n')
+}
+
+// ---------- plan_task: a member's work linked to a task of the plan list (docs/specs/task-sidebar.md) ----------
+
+/** The `plan_task` of hq_assign / hq_review: undefined when not given, else a whole number of 1 or more, or the reason it is not. */
+export function planTaskOf(input: unknown): { n?: number } | { error: string } {
+  const value = isRecord(input) ? input.plan_task : undefined
+  if (value === undefined) return {}
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1 ? { n: value } : { error: '"plan_task" must be a whole number of 1 or more' }
+}
+
+/** Why task `n` cannot be used, naming the list's numbers; undefined when it is in the list. */
+export function missingTask(list: TaskList, n: number): string | undefined {
+  if (list.tasks.some(x => x.n === n)) return undefined
+  return `plan_task ${n} is not in the plan list (tasks: ${list.tasks.map(x => x.n).join(', ') || 'none'})`
+}
+
+/** `list` with task `n` set to `status`, `who` (of `role`) given a work row in `step` if it has none, and one event at `at`; the list is not changed. */
+export function linkMember(list: TaskList, n: number, link: { status: 'working' | 'review'; who: string; role: string; step: string; kind: 'start' | 'review'; at: number }): TaskList {
+  const tasks = list.tasks.map(x => {
+    if (x.n !== n) return x
+    const row = (Object.hasOwn(x.work, link.who) ? x.work[link.who] : undefined) ?? { role: link.role, step: link.step, workMs: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, model: null }
+    // a done task given work again is open again
+    return { ...x, status: link.status, ...(x.status === 'done' ? { doneAt: null, doneBy: null } : {}), startedAt: x.startedAt ?? link.at, work: { ...x.work, [link.who]: row }, events: [...x.events, { at: link.at, kind: link.kind, who: link.who }] }
+  })
+  return { ...list, tasks }
+}
+
+/** The task a member is on: the one it has a work row in and that is not done, the newest working one first; undefined when none. */
+export function taskOfMember(list: TaskList, who: string): number | undefined {
+  const mine = list.tasks.filter(x => Object.hasOwn(x.work, who) && x.status !== 'done')
+  return (mine.find(x => x.status === 'working') ?? mine.at(-1))?.n
 }

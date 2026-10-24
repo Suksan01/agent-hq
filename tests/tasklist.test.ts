@@ -151,7 +151,7 @@ test('readList says there is no list, and no reason, when the file is missing: t
   const d = disk()
     const out = await readList(d.$, d.path)
 
-    expect(out).toEqual({ list: null })
+    expect(out).toEqual({ list: null, kind: 'missing' })
 })
 
 test('readList does not throw when the read itself fails with something that is not an Error (AC12)', async () => {
@@ -159,6 +159,7 @@ test('readList does not throw when the read itself fails with something that is 
     const out = await readList(d.$, d.path)
 
     expect(out.list).toBeNull()
+    expect(out.kind).toBe('unreadable')
     expect(out.reason).toBeTruthy()
 })
 
@@ -187,6 +188,7 @@ test('readList says no list, with a reason, for every kind of invalid file (AC12
       const out = await readList(d.$, d.path)
 
       expect(out.list, label).toBeNull()
+      expect(out.kind, label).toBe('invalid')
       expect(out.reason, label).toBeTruthy()
     }
 })
@@ -311,4 +313,38 @@ test('writeList does not replace a good backup with a broken file', async () => 
   await writeList(d.$, d.path, listOf([task(7)]))
 
   expect(JSON.parse(d.files.get(`${d.path}.bak`) ?? 'null').tasks).toHaveLength(1)
+})
+
+test('readList keeps kind invalid, with its reason, when it shows the backup instead', async () => {
+  const d = disk()
+  await writeList(d.$, d.path, listOf([task(1)]))
+  await writeList(d.$, d.path, listOf([task(1), task(2)]))
+  d.files.set(d.path, '{ cut')
+
+  const out = await readList(d.$, d.path)
+
+  expect(out).toMatchObject({ kind: 'invalid', reason: expect.stringMatching(/backup/) })
+  expect(out.list).not.toBeNull()
+})
+
+test('readList has no kind for a good list', async () => {
+  const d = disk()
+  d.files.set(d.path, JSON.stringify(listOf([task(1)])))
+
+  expect((await readList(d.$, d.path)).kind).toBeUndefined()
+})
+
+test('readList says unreadable, not invalid, when the list is broken and its backup is there but cannot be read', async () => {
+  const d = disk()
+  d.files.set(d.path, '{ cut')
+  d.files.set(`${d.path}.bak`, JSON.stringify(listOf([task(1)])))
+  const read = d.$.fs.read.bind(d.$.fs)
+  d.$.fs.read = async (path: string) => {
+    if (path.endsWith('.bak')) throw new Error('EACCES: permission denied')
+    return read(path)
+  }
+
+  const out = await readList(d.$, d.path)
+
+  expect(out).toMatchObject({ list: null, kind: 'unreadable', reason: expect.stringMatching(/EACCES/) })
 })

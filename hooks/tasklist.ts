@@ -161,21 +161,26 @@ async function readFile($: EngineInterface, path: string): Promise<string | null
   }
 }
 
+/** Why there is no list: no file yet (the normal state), a file that is not a list, or a file that could not be read. */
+export type ReadKind = 'missing' | 'invalid' | 'unreadable'
+export type ReadResult = { list: TaskList | null; kind?: ReadKind; reason?: string }
+
 /**
- * The saved list; `{ list: null }` with no reason when there is no file yet, `{ list: null, reason }` for an unreadable or
- * invalid one, never a throw. An invalid file falls back to the backup the last write left, said in the reason.
+ * The saved list. No list comes with its `kind`: `missing` (no reason), `invalid` (with a reason; the backup the last write
+ * left is shown instead when it is good, with the same kind and reason) or `unreadable` (with a reason). Never throws.
  */
-export async function readList($: EngineInterface, path: string): Promise<{ list: TaskList | null; reason?: string }> {
+export async function readList($: EngineInterface, path: string): Promise<ReadResult> {
   try {
     const text = await readFile($, path)
-    if (text === null) return { list: null }
+    if (text === null) return { list: null, kind: 'missing' }
     const read = parseList(text)
     if (read.list) return read
-    const backup = await readFile($, backupOf(path)).catch(() => null)
+    const backup = await readFile($, backupOf(path)) // a backup that is there but unreadable throws: unreadable, so nothing rewrites over its totals
     const saved = backup === null ? null : parseList(backup).list
-    return saved ? { list: saved, reason: `${read.reason}; showing the backup of the last good list` } : read
+    const reason = saved ? `${read.reason}; showing the backup of the last good list` : read.reason
+    return { list: saved, kind: 'invalid', reason }
   } catch (error) {
-    return { list: null, reason: `could not read ${path}: ${error instanceof Error ? error.message : String(error)}` }
+    return { list: null, kind: 'unreadable', reason: `could not read ${path}: ${error instanceof Error ? error.message : String(error)}` }
   }
 }
 

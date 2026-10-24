@@ -80,7 +80,7 @@ async function boot($: Engine, on: On) {
 test('the team tools and hq_doing are offered at session start and named in the lead prompt', async ($, on) => {
   const s = await boot($, on)
 
-  expect(s.registered.map(t => t.name)).toEqual(['hq_assign', 'hq_status', 'hq_hire', 'hq_review', 'hq_doing'])
+  expect(s.registered.map(t => t.name)).toEqual(['hq_assign', 'hq_status', 'hq_hire', 'hq_review', 'hq_plan', 'hq_doing'])
   const lead = (await s.compose()).sections.find(x => x.id === 'agent-hq:team')?.text ?? ''
   for (const tool of ['mcp__agent-hq__hq_assign', 'mcp__agent-hq__hq_status', 'mcp__agent-hq__hq_review', 'mcp__agent-hq__hq_hire', 'mcp__agent-hq__hq_doing']) expect(lead).toContain(tool)
 })

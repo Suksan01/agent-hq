@@ -34,7 +34,7 @@ then the review role reviews and QA runs the tests. One commit per accepted task
   - Done: tests pass; existing guard tests unchanged and passing.
   - Depends on: none. Parallel with 1 and 2.
 
-- [ ] 4. **hq_plan and plan_task** - owner: senior-dev
+- [x] 4. **hq_plan and plan_task** - owner: senior-dev
   - Files: `hooks/tools.ts`, `hooks/assign.ts`. Tests (QA): `tests/plan-tools.test.ts`.
   - Meets: AC1, AC2, AC4, AC5, AC7, AC20. New tool `hq_plan { plan }` (path inside the project, `.md` only, else
     refused); `plan_task` (integer) on `hq_assign` and `hq_review`; a number not in the list is refused before any
