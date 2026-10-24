@@ -4,7 +4,7 @@ import type { EngineInterface, PromptOrigin, Register } from 'claude-code'
 import { DOING_TOOL, MAIN, barIdsIn, clearFinished, countTool, createTask, mergeAgents, mergeTodos, overallProgress, planSteps, updateTask, who, workingCount } from './model'
 import { cleanSaying, currentStep, maskedWork, pruneSays } from './says'
 import type { HqTeam, HqTodo } from '../types'
-import { MEMORY_SCOPE, NO_TEAM_PROMPT, TEAM_FILE, languageSection, leadModelWarning, leadPrompt, parseTeam, rolePrompt } from './team'
+import { BRIEFS_DIR, MEMORY_SCOPE, NO_TEAM_PROMPT, TEAM_FILE, languageSection, leadModelWarning, leadPrompt, parseTeam, rolePrompt } from './team'
 import { LANGUAGE_CHOICES, LANGUAGE_HEADER, LANGUAGE_OPTION, LANGUAGE_QUESTION, langOf, languageOfAnswer, t } from './i18n'
 import type { Key, Lang } from './i18n'
 import { PERSON_FRAME, personStarts, runFreshActions } from './actions'
@@ -28,7 +28,7 @@ import { addTurn } from './usage'
 import { describeCall, endActivity, hasRunningCall, liveActivities, startActivity } from './activity'
 import { addAsk, buildInbox, describeAsk, dropAsksOf, removeAsk, statusText, trackWaiting } from './inbox'
 import { announceXp, createLedger, creditActivity, creditTestRun, xpStoreOf, xpSummaries } from './xpstore'
-import { ASSIGN_TOOL, HIRE_TOOL, LEAD_TOOLS_NOTE, REVIEW_TOOL, STATUS_TOOL, TOOL_SPECS, hqAssign, hqHire, hqReview, hqStatus, keepResult, textOfContent } from './tools'
+import { ASSIGN_TOOL, HIRE_TOOL, LEAD_TOOLS_NOTE, REVIEW_TOOL, STATUS_TOOL, TOOL_SPECS, hqAssign, hqHire, hqReview, hqStatus, keepResult, readBriefFile, textOfContent } from './tools'
 import type { ToolAnswer, ToolDeps } from './tools'
 import { BandView, SidebarView, bandRasters, bandTrackWidth, folderOf, hasBand, labelOf, sidebarRasters, textTrack, withAside } from './view'
 import type { BandActions, HqActions, HqData, Raster } from './view'
@@ -405,7 +405,8 @@ const toolDeps = ($: EngineInterface): ToolDeps => ({
   recordAssignment: async (name, assignment) => void (await update($, assignments, all => ({ ...all, [name]: assignment }))),
   resultOf: async id => (await read($, results))[id],
   record: event => recordEvents($, [event]),
-  readBrief: async path => $.fs.read(await pathOf($, path)).catch(() => null),
+  // the engine allows $.fs only as calls on $, so the reader gets two functions rather than $.fs itself
+  readBrief: async path => readBriefFile({ stat: (p, options) => $.fs.stat(p, options), read: p => $.fs.read(p) }, await pathOf($, path), await pathOf($, BRIEFS_DIR)),
   readTeamFile: async () => {
     const source = await read($, teamSource)
     if (!source || source.error || source.needsApproval || !(await read($, team))) return null

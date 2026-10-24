@@ -74,6 +74,12 @@ test('only the team assistant writes briefs, whatever its paths: a brief becomes
   expect(call('assistant', 'Write', { file_path: '.claude/agent-hq/briefsx/3.md' }, { team })).not.toBeNull() // a sibling sharing the prefix
   expect(call('scoped', 'Write', { file_path: brief }, { team })).not.toBeNull() // a developer may not
   expect(call('coord', 'Write', { file_path: brief }, { team })).not.toBeNull() // nor a read-only coordinator
+  // denied, not just not allowed: an unscoped developer could otherwise write one too
+  expect(call('dev', 'Write', { file_path: brief }, { team })?.deny).toContain('only the team assistant writes briefs')
+  expect(call('dev', 'Write', { file_path: 'src/a.ts' }, { team })).toBeNull() // its other writes are untouched
+  // the assistant is its id: a title any hire can carry ("QA Coordinator") is not enough
+  const hired: HqTeam = { ...team, roles: [...team.roles, { id: 'qa-coord', title: 'QA Coordinator', count: 1, mission: 'm', tasks: [], rules: [], skills: [] }] }
+  expect(call('qa-coord', 'Write', { file_path: brief }, { team: hired })?.deny).toContain('only the team assistant writes briefs')
 })
 
 test('coordination tools (SendMessage, progress and task tools) are always allowed, for every role, whatever its tools list, read-only flag or path guard', () => {

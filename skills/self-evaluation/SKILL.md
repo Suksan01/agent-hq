@@ -48,6 +48,8 @@ just name it.
    ```
 
    The number is the plain average to one decimal. `Open` lists what you did not fix, most important first, or "none".
+   A small assignment (one or two steps, no code changed) may shorten the first line to the average and the weakest
+   axis, as the role prompt allows: `Self-check 4.6: clarity 4 (the second step is buried)`.
 5. Keep the lesson. For each axis at 3 or below, and for anything the lead or a reviewer corrected, write one general
    rule for next time where your role prompt says lessons go (your agent memory, or your reply when you cannot edit
    files). A lesson is a rule ("run the guard tests after changing guard.ts"), not a diary of this task.

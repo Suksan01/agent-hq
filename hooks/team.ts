@@ -232,9 +232,8 @@ export function rolePrompt(team: Team, role: TeamRole, hasMemory = true, lang: L
 export const NO_TEAM_PROMPT =
   'Agent HQ is installed but this project has no agent team yet. When the person asks for a team of agents, or for work that clearly needs several agents in parallel, offer to set one up with /agent-hq:team (one short line; do not push it otherwise).'
 
-const ASSISTANT_TITLE = /assistant|coordinator/i
-/** The team's assistant, which writes the briefs: by id, or by a title such as "Team Assistant" or "Coordinator". */
-export const isAssistantRole = (role: TeamRole) => role.id === 'assistant' || ASSISTANT_TITLE.test(role.title)
+/** The team's assistant, which writes the briefs: by its id only, since a title is free text any hire can carry. */
+export const isAssistantRole = (role: TeamRole) => role.id === 'assistant'
 
 /** How the lead briefs members, who see none of the conversation; a team's assistant, when it has one, writes the briefs. */
 function briefingSection(team: Team): string {

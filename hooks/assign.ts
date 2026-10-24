@@ -38,16 +38,17 @@ function note(input: Record<string, unknown>, key: 'done' | 'limits'): { text?: 
 }
 
 /** Validates hq_assign's input `{ role, task, files?, done?, limits?, name? }` and writes the structured brief. `reserved` names are taken like a listed agent's. */
-export function parseAssign(input: unknown, team: HqTeam | null, agents: Record<string, HqAgent>, reserved: readonly string[] = [], options: { report?: boolean } = {}): AssignResult {
+export function parseAssign(input: unknown, team: HqTeam | null, agents: Record<string, HqAgent>, reserved: readonly string[] = [], options: { report?: boolean; maxTask?: number } = {}): AssignResult {
   if (!isRecord(input)) return { ok: false, error: 'hq_assign needs an object like { role, task }' }
   const roles = team ? team.roles : [GENERAL]
   if (typeof input.role !== 'string' || input.role === '') return { ok: false, error: `give the "role" to assign (${roles.map(r => r.id).join(', ')})` }
   const role = roles.find(r => r.id === input.role)
   if (!role) return { ok: false, error: `no role "${input.role}" in the team (${roles.map(r => r.id).join(', ')})` }
 
-  if (typeof input.task !== 'string' || input.task.trim() === '') return { ok: false, error: 'give the "task": what the agent is to do' }
+  if (typeof input.task !== 'string' || input.task.trim() === '') return { ok: false, error: 'give the "task": what the agent is to do (or a "brief_file" the team assistant wrote)' }
   const task = input.task.trim()
-  if (task.length > MAX_TASK) return { ok: false, error: `"task" is too long (at most ${MAX_TASK} characters)` }
+  const maxTask = options.maxTask ?? MAX_TASK
+  if (task.length > maxTask) return { ok: false, error: `"task" is too long (at most ${maxTask} characters)` }
 
   const done = note(input, 'done')
   if ('error' in done) return { ok: false, error: done.error }

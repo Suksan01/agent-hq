@@ -69,14 +69,16 @@ Report format
 
 ## Sending it
 
-1. **If the `hq_assign` tool is available** (it appears in your tool list when Agent HQ provides it), use it: it
+1. **If the team assistant wrote the brief** to `.claude/agent-hq/briefs/`, read the file to check it, then pass its
+   path as hq_assign's `brief_file` instead of pasting it.
+2. **If the `hq_assign` tool is available** (it appears in your tool list when Agent HQ provides it), use it: it
    records the assignment on the team board so the sidebar and the live page show who owns what. Pass the role, the
    task title and the filled template as the brief, and the Files globs as `files` (at most 50, project-relative) so
    the guard keeps the member inside them.
-2. **Otherwise** use the Agent tool: `subagent_type: "agent-hq:<role id>"`, `name: "<role id>-<n>"` (for example
+3. **Otherwise** use the Agent tool: `subagent_type: "agent-hq:<role id>"`, `name: "<role id>-<n>"` (for example
    `senior-dev-1`), the filled template as the prompt. Run independent handoffs in the background in parallel, and
    never more of a role than its count in the roster.
-3. Track each handoff in your plan (a plan-progress bar or TodoWrite), one step per assignment.
+4. Track each handoff in your plan (a plan-progress bar or TodoWrite), one step per assignment.
 
 ## When the member comes back
 

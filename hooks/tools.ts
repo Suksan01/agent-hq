@@ -186,9 +186,9 @@ function leadStarts(spec: SpawnSpec, reason: string, kept: string, board?: strin
 const assignedNames = (data: HqData) => Object.keys(data.assignments ?? {})
 
 /** The part of hq_assign that reads the roster and changes it: name, count, assignment record, spawn, listing. Run under the lock. */
-async function startAssigned($: EngineInterface, input: unknown, deps: ToolDeps): Promise<Started> {
+async function startAssigned($: EngineInterface, input: unknown, deps: ToolDeps, maxTask?: number): Promise<Started> {
   const data = await deps.readData()
-  const parsed = parseAssign(input, data.team, data.agents, assignedNames(data))
+  const parsed = parseAssign(input, data.team, data.agents, assignedNames(data), maxTask ? { maxTask } : {})
   if (!parsed.ok) return { ok: false, error: parsed.error }
   // recorded before the agent starts: its first tool call may come before spawn returns, and the guard must already know its scope
   await deps.recordAssignment(parsed.name, { role: parsed.role, name: parsed.name, task: parsed.task, ...(parsed.files.length > 0 ? { paths: parsed.files } : {}), at: await deps.now() })
@@ -204,15 +204,36 @@ async function startAssigned($: EngineInterface, input: unknown, deps: ToolDeps)
 /** A brief_file hq_assign may read: one plain relative .md path inside the briefs folder, going nowhere above it. */
 const isBriefPath = (path: string) => path.startsWith(`${BRIEFS_DIR}/`) && path.endsWith('.md') && !/[\r\n\\]/.test(path) && !path.split('/').includes('..')
 
+/** A brief and its task line may be longer than a typed task: the brief carries the member's whole context. */
+export const MAX_BRIEF_TASK = 12000
+const MAX_BRIEF_BYTES = 64 * 1024
+
+type BriefFs = { stat: (path: string, options: { resolve: true }) => Promise<{ kind: string; size: number; realPath?: string }>; read: (path: string) => Promise<string> }
+
+/**
+ * A brief's text, only when the file really lies inside the briefs folder: both are resolved with every link followed
+ * (the engine's realPath), so a symlink named like a brief cannot hand over a file from anywhere else. Else null.
+ */
+export async function readBriefFile(fs: BriefFs, file: string, root: string): Promise<string | null> {
+  try {
+    const [found, dir] = await Promise.all([fs.stat(file, { resolve: true }), fs.stat(root, { resolve: true })])
+    if (!found.realPath || !dir.realPath || found.kind !== 'file' || found.size > MAX_BRIEF_BYTES || !found.realPath.startsWith(`${dir.realPath}/`)) return null
+    return await fs.read(found.realPath)
+  } catch {
+    return null
+  }
+}
+
 /** The input with a brief_file's text joined into its task, or the reason it is refused; input without one as it is. */
-async function withBrief(input: unknown, deps: ToolDeps): Promise<{ input: unknown } | { error: string }> {
+async function withBrief(input: unknown, deps: ToolDeps): Promise<{ input: unknown; maxTask?: number } | { error: string }> {
   if (!isRecord(input) || input.brief_file === undefined || input.brief_file === null) return { input }
   const path = input.brief_file
   if (typeof path !== 'string' || !isBriefPath(path.trim())) return { error: `"brief_file" must be a .md file under ${BRIEFS_DIR}/, relative to the project` }
   const text = ((await deps.readBrief?.(path.trim())) ?? '').trim()
-  if (!text) return { error: `could not read ${path.trim()}, or it is empty` }
+  if (!text) return { error: `could not read ${path.trim()} inside ${BRIEFS_DIR}/, or it is empty` }
   const task = typeof input.task === 'string' && input.task.trim() ? `${input.task.trim()}\n\n${text}` : text
-  return { input: { ...input, task } }
+  if (task.length > MAX_BRIEF_TASK) return { error: `the task with its brief_file is ${task.length} characters (at most ${MAX_BRIEF_TASK}): shorten ${path.trim()}` }
+  return { input: { ...input, task }, maxTask: MAX_BRIEF_TASK }
 }
 
 /** hq_assign: check the input, start the agent, remember its scope for the guard, and put it on the board. */
@@ -223,7 +244,7 @@ export async function hqAssign($: EngineInterface, given: unknown, deps: ToolDep
   const asked = isRecord(input) ? (typeof input.name === 'string' && input.name ? input.name : typeof input.role === 'string' ? input.role : '') : ''
   let started: Started
   try {
-    started = await withLock(() => startAssigned($, input, deps), { label: `starting ${asked || 'the agent'}` })
+    started = await withLock(() => startAssigned($, input, deps, briefed.maxTask), { label: `starting ${asked || 'the agent'}` })
   } catch (error) {
     if (error instanceof LockTimeout) return fail(error.message)
     throw error

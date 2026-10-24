@@ -148,7 +148,10 @@ function guardRole(role: HqTeamRole, call: GuardCall): { deny: string } | null {
   // memory and notes are plain files: only a role that may write files at all keeps them, whatever its paths
   if (MEMORY_TOOLS.includes(call.tool) && !readOnly && (!role.tools || role.tools.includes(call.tool)) && isTeamMemory(role.id, call.input.file_path, call.cwd)) return null
   // only the assistant writes briefs: a brief becomes another member's instructions once the lead hands it over
-  if (MEMORY_TOOLS.includes(call.tool) && !readOnly && (!role.tools || role.tools.includes(call.tool)) && isAssistantRole(role) && isUnder(BRIEFS_DIR, call.input.file_path, call.cwd)) return null
+  if (WRITE_TOOLS.includes(call.tool) && isUnder(BRIEFS_DIR, named, call.cwd)) {
+    if (!isAssistantRole(role)) return deny(`only the team assistant writes briefs in ${BRIEFS_DIR}/`)
+    if (MEMORY_TOOLS.includes(call.tool) && !readOnly && (!role.tools || role.tools.includes(call.tool))) return null
+  }
 
   if (role.tools && !role.tools.includes(call.tool)) return deny(`${call.tool} is not one of this role's tools`)
 

@@ -4,7 +4,7 @@ import { expect, test } from 'claude-code/testing'
 import type { HqAgent, HqAssignment, HqTeam } from '../types'
 import { MAIN } from '../hooks/model'
 import { parseTeam } from '../hooks/team'
-import { fenceUntrusted, hqAssign, hqHire, hqReview, hqStatus, keepResult, textOfContent } from '../hooks/tools'
+import { MAX_BRIEF_TASK, fenceUntrusted, hqAssign, hqHire, hqReview, hqStatus, keepResult, readBriefFile, textOfContent } from '../hooks/tools'
 import type { ToolDeps } from '../hooks/tools'
 
 const TEAM_SOURCE = JSON.stringify({
@@ -93,6 +93,30 @@ test('hq_assign starts the agent as the team role, remembers its files for the g
   expect(answer.text).toContain('Board task #7')
   expect(answer.text).toContain('app/search/**')
   expect(s.memory.events).toEqual([{ agent: 'new1', kind: 'action', text: 'assigned frontend-dev-1: Build the search page' }])
+})
+
+test('a brief is read only when its real path lies inside the briefs folder, and a brief with its task may be long', async () => {
+  const root = '/work/app/.claude/agent-hq/briefs'
+  const files: Record<string, { kind: string; size: number; realPath?: string; text?: string }> = {
+    [root]: { kind: 'dir', size: 0, realPath: root },
+    [`${root}/ok.md`]: { kind: 'file', size: 9, realPath: `${root}/ok.md`, text: 'the brief' },
+    [`${root}/link.md`]: { kind: 'file', size: 9, realPath: '/home/me/.ssh/id_rsa', text: 'secret' }, // a symlink out
+    [`${root}/big.md`]: { kind: 'file', size: 70_000, realPath: `${root}/big.md`, text: 'x' },
+    [`${root}/dir.md`]: { kind: 'dir', size: 0, realPath: `${root}/dir.md` },
+  }
+  const fs = {
+    stat: async (path: string) => files[path] ?? Promise.reject(new Error('ENOENT')),
+    read: async (path: string) => Object.values(files).find(f => f.realPath === path)?.text ?? '',
+  }
+  expect(await readBriefFile(fs, `${root}/ok.md`, root)).toBe('the brief')
+  for (const name of ['link.md', 'big.md', 'dir.md', 'gone.md']) expect(await readBriefFile(fs, `${root}/${name}`, root), name).toBeNull()
+
+  const s = setup()
+  const long = 'b'.repeat(MAX_BRIEF_TASK - 100)
+  const deps = { ...s.deps, readBrief: async (path: string) => (path.endsWith('long.md') ? long : 'c'.repeat(MAX_BRIEF_TASK + 1)) }
+  expect((await hqAssign(s.$, { role: 'frontend-dev', task: 'Task 4', brief_file: '.claude/agent-hq/briefs/long.md' }, deps)).isError).toBeUndefined() // past a typed task's 4000
+  const tooLong = await hqAssign(s.$, { role: 'frontend-dev', brief_file: '.claude/agent-hq/briefs/huge.md' }, deps)
+  expect(tooLong.text).toContain('with its brief_file is 12001 characters (at most 12000): shorten .claude/agent-hq/briefs/huge.md')
 })
 
 test('hq_assign runs one task on another model when asked, and on the role\'s own model otherwise', async () => {
