@@ -940,7 +940,6 @@ async function readData($: EngineInterface, columns: number, isForPerson = true)
     bubbles: await read($, bubbles),
     lang,
     taskList: (await loadTaskList($)).list,
-    proto: (await $.env.get('AGENT_HQ_PROTO').catch(() => undefined)) || undefined, // prototype only, removed in phase 6
   }
 }
 

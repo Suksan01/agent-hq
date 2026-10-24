@@ -15,9 +15,6 @@ import { t } from './i18n'
 import type { Lang } from './i18n'
 import { TaskTable, taskSpinners } from './tasktable'
 import type { TaskList } from './tasklist'
-import { protoTasksFor } from './proto/mock'
-import { TaskTableA } from './proto/tasks-a'
-import { TaskTableB } from './proto/tasks-b'
 
 type Els = Pick<Elements['terminal'], 'Box' | 'Text' | 'Button'>
 type DrawRaster = (key: string) => RenderElement | null
@@ -52,8 +49,6 @@ export type HqData = {
   bubbles?: HqBubble[]
   /** The saved plan list (tasks.json); none when there is no plan, or the file is invalid. */
   taskList?: TaskList | null
-  /** Prototype only (task sidebar, phase 3): `AGENT_HQ_PROTO`, e.g. "a" or "b:empty". Removed in phase 6. */
-  proto?: string
 }
 
 // the section's own spacing around its title: a space each side and the dot and aside between
@@ -753,14 +748,6 @@ function TaskBoard({ Box, Text, Button }: Els, data: HqData, actions: HqActions)
   )
 }
 
-/** Prototype only: the variant `data.proto` names, with the mock list its state picks. Removed in phase 6. */
-function ProtoTable(els: Els, data: HqData): RenderElement | null {
-  const [variant, state] = (data.proto ?? '').split(':')
-  const tasks = protoTasksFor(state)
-  if (!tasks) return null
-  return variant === 'a' ? TaskTableA(els, data, tasks) : variant === 'b' ? TaskTableB(els, data, tasks) : null
-}
-
 export function SidebarView(els: Els, data: HqData, actions: HqActions, draw: DrawRaster): RenderElement {
   const { Box, Text, Button } = els
   const lang = data.lang ?? 'en'
@@ -803,7 +790,6 @@ export function SidebarView(els: Els, data: HqData, actions: HqActions, draw: Dr
       {rows.map(row => TreeLine(els, data, actions, row, draw))}
       {team.length === 0 && <Text dimColor>{t(lang, 'sidebar.noAgents')}</Text>}
       {hiddenAgents > 0 && <Text dimColor>{t(lang, 'sidebar.hiddenAgents', { n: hiddenAgents })}</Text>}
-      {ProtoTable(els, data)}
       {TaskTable(els, data, draw)}
       {taskP.total > 0 && !hasTable && Section(els, data, t(lang, 'sidebar.taskBoard'), `${taskP.done}/${taskP.total}`)}
       {taskP.total > 0 && !hasTable && TaskBoard(els, data, actions)}
