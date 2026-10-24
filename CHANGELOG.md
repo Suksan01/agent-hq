@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- **Works alongside Superpowers.** With Superpowers (or another workflow plugin) enabled, the lead is told that
+  Agent HQ runs the team's work: `/agent-hq:feature`, hq_assign and hq_review, not Superpowers'
+  subagent-driven-development, executing-plans or dispatching-parallel-agents, whose plain subagents skip the board,
+  the guard and the live page. Its other skills stay available, and roles may list them (`superpowers:<skill>`) to
+  load on demand.
+
 ## 0.7.1 (2026-10-24)
 
 ### Changed
