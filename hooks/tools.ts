@@ -43,7 +43,7 @@ export const TOOL_SPECS: ToolSpec[] = [
         done: { type: 'string', description: 'How the agent knows it is finished.' },
         limits: { type: 'string', description: 'What the agent must leave alone.' },
         name: { type: 'string', description: 'A name for the agent; default is the next free "<role>-<n>".' },
-        skills: { type: 'array', items: { type: 'string' }, description: 'The skills this task needs, loaded before it starts (at most 5), e.g. ["tdd"] for a code change: members rarely load them on their own. Pick from the role\'s skills.' },
+        skills: { type: 'array', items: { type: 'string' }, description: 'The skills this task needs, loaded before it starts (at most 5), e.g. ["tdd"] for a code change: members rarely load them on their own. Usually one of the role\'s skills; an unknown name only fails the member\'s Skill call.' },
         model: { type: 'string', description: 'A model for this one task, overriding the role\'s: "haiku" for mechanical work its brief fully specifies, a stronger one for a task a member got stuck on. Leave out to use the role\'s model.' },
       },
       required: ['role'],
@@ -273,7 +273,7 @@ export async function hqAssign($: EngineInterface, given: unknown, deps: ToolDep
   const title = roleTitle(started.team, started.team ? `agent-hq:${started.role}` : started.role)
   return {
     text: [
-      `Started ${called} as ${title}.${'id' in linked ? ` Board task #${linked.id}.` : ` (The task board could not be updated: ${linked.reason}.)`}`,
+      `Started ${called} as ${title}.${'id' in linked ? ` Board task #${linked.id}.` : ` (The task board could not be updated: ${linked.reason.replace(/\.$/, '')}.)`}`,
       started.files.length > 0 ? `It may change only: ${started.files.join(', ')}.` : 'No file scope was set.',
       'Its result arrives when it finishes; hq_status shows where it stands.',
     ].join(' '),
