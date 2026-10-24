@@ -36,7 +36,7 @@ const q = (m: number) => Math.round(Math.max(0, Math.min(1, m)) * 8) / 8
 // A Raster cell must be exactly one column wide or the engine refuses the whole tree.
 // shortcut: anything outside ASCII, Latin and the glyphs drawn here becomes '·' (CJK/emoji names show as dots); port plan-progress's width table if that matters.
 // The half block the sprites draw with was checked against plan-progress's width table (the engine's own measure): one column.
-const SAFE_GLYPHS = new Set([...'●↳…✓✕·│?!▀✦'])
+const SAFE_GLYPHS = new Set([...'●↳…✓✕·│?!▀✦≈◑○─—'])
 const cellChar = (ch: string) => {
   const cp = ch.codePointAt(0) ?? 63
   const isPlain = (cp >= 0x20 && cp <= 0x7e) || (cp >= 0xa0 && cp <= 0x2ff) || (cp >= 0x2800 && cp <= 0x28ff)
@@ -127,6 +127,16 @@ class Grid {
     this.cells.forEach((c, i) => words.set(c, i * 3))
     return (new Uint8Array(words.buffer) as Uint8Array & { toBase64: () => string }).toBase64()
   }
+}
+
+/** The columns an agent's real name keeps in the sidebar before it is dropped: the name is how the person addresses an agent, so it stays readable down to here. */
+export const MIN_NAME = 6
+
+/** One cell holding `ch` in `color` on `base` (hex colours): a Raster a text glyph cannot stand in for, because only Rasters move on the animation tick. */
+export function glyphCells(ch: string, color: string, base: string): string {
+  const g = new Grid(1, 1)
+  g.set(0, 0, ch, pack(hex(color)), pack(hex(base)))
+  return g.encode()
 }
 
 /** `sweep`: no share is known, so a band of dots drifts along the track and the pill waits at the left (no percentage is implied). */

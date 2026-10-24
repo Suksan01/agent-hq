@@ -2,7 +2,7 @@ import type { Elements, RenderElement } from 'claude-code'
 
 import type { HqActivity, HqAgent, HqAssignment, HqBubble, HqSays, HqStatus, HqTask, HqTaskStatus, HqTeam, HqTodo } from '../types'
 import { roleTitle } from './team'
-import { LEAD_COLOR, TONE_GLYPH, TRACK_PX, fitText, hasThai, spriteCells, textWidth, tonesFor, trackCells, trackSvg } from './cells'
+import { LEAD_COLOR, MIN_NAME, TONE_GLYPH, TRACK_PX, fitText, hasThai, spriteCells, textWidth, tonesFor, trackCells, trackSvg } from './cells'
 import { SMALL_H, SMALL_W, SPRITE_H, SPRITE_W, paletteOf, speciesOf, spriteFrames } from './sprites'
 import type { Tone, TrackSpec } from './cells'
 import { MAIN, agentWork, elapsed, isFinished, isWorking, overallProgress, progressOf, teamTree, workingCount } from './model'
@@ -13,6 +13,8 @@ import type { AgentWork, Progress } from './model'
 import type { XpSummary } from './xpstore'
 import { t } from './i18n'
 import type { Lang } from './i18n'
+import { TaskTable, taskSpinners } from './tasktable'
+import type { TaskList } from './tasklist'
 import { protoTasksFor } from './proto/mock'
 import { TaskTableA } from './proto/tasks-a'
 import { TaskTableB } from './proto/tasks-b'
@@ -48,6 +50,8 @@ export type HqData = {
   says?: Record<string, HqSays>
   /** The talk bubbles showing now, one per agent at most (hooks/talk.ts). */
   bubbles?: HqBubble[]
+  /** The saved plan list (tasks.json); none when there is no plan, or the file is invalid. */
+  taskList?: TaskList | null
   /** Prototype only (task sidebar, phase 3): `AGENT_HQ_PROTO`, e.g. "a" or "b:empty". Removed in phase 6. */
   proto?: string
 }
@@ -75,7 +79,6 @@ export function labelOf(agent: HqAgent, team: HqTeam | null, lang: Lang = 'en'):
   return team ? { name: team.lead.title, role: t(lang, 'role.lead') } : { name: agent.name, role: agent.role }
 }
 
-const MIN_NAME = 6 // the real name is how the person addresses an agent: it stays readable down to this many columns
 const MIN_ROLE = 4
 const width = textWidth
 
@@ -366,6 +369,10 @@ function fallbackSpec(f: BarFallback, agent: HqAgent, lang: Lang): TrackSpec {
 export function sidebarRasters(data: HqData, at: number): Raster[] {
   const lang = data.lang ?? 'en'
   const base = panelBg(data.isLight)
+  return [...treeRasters(data, at, lang, base), ...taskSpinners(data, at, base)]
+}
+
+function treeRasters(data: HqData, at: number, lang: Lang, base: string): Raster[] {
   return treeRows(data).flatMap(({ agent, prefix, work }) => {
     if (isCompact(agent, data)) return [] // one-line rows draw no bot
     const mood = mascotTone(agent, data)
@@ -699,7 +706,7 @@ function AgentNode(els: Els, data: HqData, actions: HqActions, row: TreeRow, dra
   )
 }
 
-function TaskList({ Box, Text, Button }: Els, data: HqData, actions: HqActions) {
+function TaskBoard({ Box, Text, Button }: Els, data: HqData, actions: HqActions) {
   const lang = data.lang ?? 'en'
   const ORDER: HqTaskStatus[] = ['in_progress', 'pending', 'completed']
   const TONE_COLOR = tonesFor(data.isLight)
@@ -760,6 +767,7 @@ export function SidebarView(els: Els, data: HqData, actions: HqActions, draw: Dr
   const team = teamOf(data)
   const rows = walkTree(data, data.isTreeExpanded ? Infinity : MAX_COMPACT)
   const taskP = progressOf(Object.values(data.tasks))
+  const hasTable = (data.taskList?.tasks.length ?? 0) > 0 // an empty list draws no table, so the board stays
   const hiddenAgents = team.filter(a => data.hideFinished && isFinished(a.status)).length
   const agentCount = t(lang, team.length === 1 ? 'sidebar.agent' : 'sidebar.agents', { n: team.length })
   // data.columns is the width inside the padding, as the caller measured it for the Rasters
@@ -796,8 +804,9 @@ export function SidebarView(els: Els, data: HqData, actions: HqActions, draw: Dr
       {team.length === 0 && <Text dimColor>{t(lang, 'sidebar.noAgents')}</Text>}
       {hiddenAgents > 0 && <Text dimColor>{t(lang, 'sidebar.hiddenAgents', { n: hiddenAgents })}</Text>}
       {ProtoTable(els, data)}
-      {taskP.total > 0 && Section(els, data, t(lang, 'sidebar.taskBoard'), `${taskP.done}/${taskP.total}`)}
-      {taskP.total > 0 && TaskList(els, data, actions)}
+      {TaskTable(els, data, draw)}
+      {taskP.total > 0 && !hasTable && Section(els, data, t(lang, 'sidebar.taskBoard'), `${taskP.done}/${taskP.total}`)}
+      {taskP.total > 0 && !hasTable && TaskBoard(els, data, actions)}
     </Box>
   )
 }

@@ -55,7 +55,7 @@ then the review role reviews and QA runs the tests. One commit per accepted task
   - Done: tests pass; the existing usage and wiring tests pass unchanged.
   - Depends on: 1, 2, 4 (owns `register.tsx`: never at the same time as 4, 6 or 7).
 
-- [ ] 6. **Sidebar table** - owner: senior-dev
+- [x] 6. **Sidebar table** - owner: senior-dev
   - Files: `hooks/tasktable.tsx` (new), `hooks/view.tsx`, `hooks/cells.ts`, `hooks/i18n.ts`. Tests (QA):
     `tests/tasktable.test.ts`.
   - Meets: AC14, AC15, AC16, AC19. Variant A as built in `hooks/proto/tasks-a.tsx` (reference, do not import it),
