@@ -1,6 +1,6 @@
 # Task sidebar
 
-Status: spec (approved)
+Status: plan (approved)
 
 ## Request
 
@@ -236,6 +236,32 @@ A table under the team, in place of the single Tasks track when a plan list exis
   role on the web panel and on `hq_plan`'s path handling (inside the project only, `.md` only).
 - **Guard**: members must not write `tasks.json` (AC13), or a member could fake its own task's status.
 - **Price drift**: list prices change; the table carries its date and the footnote says it is an estimate.
+
+## Prototype (chosen): variant A "Ledger"
+
+Built in the real mod, behind `AGENT_HQ_PROTO` (terminal) and `web/proto/tasks-a.html` (live page), with mock data;
+both are reference only and are removed in phase 6.
+
+- **Chosen: A "Ledger"** (senior-dev-1): every task in plan order in one table, total row; on the live page a click
+  or Enter expands the row in place (per-member work lines and the timeline). Library: the mod's own (terminal
+  elements, `web/spacekit.js` on the live page), no new dependency.
+- Not chosen: B "Focus" (Now group first, Done and Waiting folded; live page filter chips and a side drawer).
+- Prototype files: `hooks/proto/tasks-a.tsx`, `web/proto/tasks-a.js`, `web/proto/tasks-a.html`, `tests/proto-a.test.ts`
+  (variant B's beside them), mock data in `hooks/proto/mock.ts` and `web/proto/mock.js`, wiring in `hooks/view.tsx`
+  (`ProtoTable`) and `hooks/register.tsx` (`proto`).
+
+### Notes for the real build (from the prototype review)
+
+- **Smooth spinner**: the 125 ms tick only re-blits Rasters; a text glyph moves only on the 1 s poll re-render. Draw
+  the working spinner as a Raster (like the mascots), or AC14 is not met.
+- **Rows on the live page**: a real `<button>` in the title cell (or a disclosure pattern), not `role="button"` on a
+  `<tr>`, so the table keeps its semantics.
+- **Names**: shorten names the way the sidebar shortens them now.
+- **Glyphs**: `fitText` and Button labels turn `≈ ▸ ○` into `·`; add the glyphs the table uses to the safe set
+  instead of splitting Text elements.
+- **Every string in `en` and `th`**: the prototypes are English only.
+- **Mock data**: the terminal tests also use a title with markup (the live page mock already does).
+- **Phone width**: the live page table stays within 375 px; the Who column is the first to narrow.
 
 ## Out of scope
 
