@@ -605,6 +605,59 @@
 @keyframes sk-bubble { 0% { opacity: 0; } 4% { opacity: 1; } 85% { opacity: 1; } 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .sk-bubble { animation: none; } }
 
+/* ---------- the Tasks panel (tasks.js): the approved plan's list as a ledger ---------- */
+.tk-panel { padding: 18px 14px 14px; overflow: hidden; }
+.tk-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+.tk-count, .tk-num, .tk-c-num, .tk-c-n { font-family: var(--sk-font-mono); font-variant-numeric: tabular-nums; }
+.tk-count { font-size: 12px; color: var(--sk-text-2); }
+.tk-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.tk-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 13px; }
+.tk-table th { font: 400 10px var(--sk-font-mono); text-transform: uppercase; letter-spacing: .06em; color: var(--sk-text-3); text-align: left; padding: 0 4px 6px; border-bottom: 1px solid var(--sk-line); }
+.tk-table th:first-child, .tk-c-mark { width: 24px; padding-left: 0; padding-right: 0; text-align: center; }
+.tk-table th:nth-child(2), .tk-c-n { width: 24px; color: var(--sk-text-3); }
+.tk-table .tk-c-who { width: 62px; color: var(--sk-text-2); overflow-wrap: anywhere; font-size: 12px; }
+.tk-table .tk-c-num { width: 44px; text-align: right; }
+.tk-table td { padding: 7px 4px; vertical-align: top; }
+.tk-c-title { overflow-wrap: anywhere; }
+.tk-row { border-bottom: 1px solid var(--sk-line); transition: background .2s; }
+.tk-row:hover, .tk-row:focus-within { background: rgba(255, 255, 255, .05); }
+.tk-row { cursor: pointer; }
+.tk-title { all: unset; box-sizing: border-box; display: block; width: 100%; cursor: pointer; overflow-wrap: anywhere; }
+.tk-title:focus-visible { outline: 1.5px solid var(--st-lead); outline-offset: 2px; border-radius: 4px; }
+.tk-task--waiting .tk-row { color: var(--sk-text-3); }
+.tk-task--done .tk-c-title { color: var(--sk-text-2); }
+.tk-mark { display: inline-flex; width: 16px; height: 16px; align-items: center; justify-content: center; font-size: 15px; line-height: 1; }
+.tk-mark--done { color: var(--st-done); }
+.tk-mark--review { color: var(--st-waiting); }
+.tk-mark--working { color: var(--st-working); }
+.tk-spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid color-mix(in srgb, currentColor 25%, transparent); border-top-color: currentColor; animation: tk-spin .8s linear infinite; }
+.tk-mark.is-still .tk-spin { animation: none; border-top-color: color-mix(in srgb, currentColor 25%, transparent); }
+@keyframes tk-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .tk-spin { animation: none; border-top-color: currentColor; border-right-color: currentColor; } }
+.tk-detail td { padding: 4px 4px 12px 28px; background: rgba(255, 255, 255, .03); border-bottom: 1px solid var(--sk-line); }
+.tk-work, .tk-events { list-style: none; margin: 0; padding: 0; font-size: 12px; }
+.tk-work li { display: flex; flex-wrap: wrap; gap: 2px 10px; padding: 3px 0; overflow-wrap: anywhere; }
+.tk-w-who { min-width: 70px; }
+.tk-w-role, .tk-w-step { color: var(--sk-text-2); }
+.tk-num { color: var(--sk-text-2); font-size: 11px; }
+.tk-events { display: grid; gap: 2px; margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--sk-line); color: var(--sk-text-2); overflow-wrap: anywhere; }
+.tk-events time { font-family: var(--sk-font-mono); color: var(--sk-text-3); margin-right: 4px; }
+.tk-none { margin: 0; color: var(--sk-text-3); font-size: 12px; }
+.tk-table tfoot td { padding-top: 10px; font-weight: 600; border-top: 1px solid var(--sk-line); }
+.tk-foot { margin: 10px 0 0; font-size: 11px; color: var(--sk-text-3); }
+.tk-note, .tk-offline { margin: 4px 0 10px; color: var(--sk-text-2); font-size: 13px; }
+.tk-offline { padding: 6px 10px; border-radius: 12px; background: color-mix(in srgb, var(--st-waiting) 14%, transparent); color: var(--st-waiting); }
+.hq-left .tk-panel { width: 100%; min-width: 0; box-sizing: border-box; }
+/* floating over the diagram (below the wide layout) nothing may read through the panel: the tile's glow on a solid base */
+@media (max-width: 1099px) {
+  .hq-left .tk-panel {
+    background:
+      radial-gradient(130% 92% at var(--gx) var(--gy), color-mix(in srgb, var(--hue) calc(86% * var(--glow)), #fff 0%) 0%, color-mix(in srgb, var(--hue) calc(42% * var(--glow)), #050507) 34%, color-mix(in srgb, var(--hue) calc(12% * var(--glow)), #050507) 58%, transparent 78%),
+      linear-gradient(180deg, rgb(15, 15, 24), rgb(5, 5, 10));
+  }
+}
+html[lang='th'] :is(.tk-table th, .tk-foot, .tk-note, .tk-offline) { letter-spacing: 0; line-height: 1.5; }
+
 /* ---------- Thai (html lang="th"): room for the marks above and below, no tracking, long runs may break ---------- */
 html[lang='th'] .sk-label { letter-spacing: 0; }
 html[lang='th'] :is(.sk-hud__title, .sk-title, .sk-modal__title, .lc-name) { line-height: 1.4; }

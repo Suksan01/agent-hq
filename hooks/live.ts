@@ -17,6 +17,9 @@ import { TONE_OF, fallbackOf, labelOf, mascotTone, nowLine, teamProgress, treeRo
 import type { BarFallback } from './view'
 import { BADGES } from './xp'
 import type { XpSummary } from './xpstore'
+import { costOf } from './prices'
+import { isCounted } from './tasklist'
+import type { ListTask, TaskList } from './tasklist'
 import { t } from './i18n'
 import type { Lang } from './i18n'
 
@@ -50,6 +53,30 @@ export type LiveAgent = {
   xp: { level: number; xp: number; badges: { id: string; title: string; hint: string }[] } | null
 }
 
+/** One member's work on a task, for the page's detail; `costUsd` is null where its model has no price. */
+export type LiveTaskWork = { who: string; role: string; step: string; workMs: number; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; costUsd: number | null }
+export type LiveTaskRow = {
+  n: number
+  title: string
+  status: string
+  /** The member on a working or review task, the finisher on a done one, nobody on a waiting one. */
+  who: string | null
+  doneBy: string | null
+  startedAt: number | null
+  doneAt: number | null
+  workMs: number
+  costUsd: number | null
+  isPartial: boolean
+  work: LiveTaskWork[]
+  events: { at: number; kind: string; who: string | null }[]
+}
+/** The approved plan's task list as the page's Tasks panel draws it; `total` adds the work of tasks dropped by a re-plan (`removed`), as the sidebar's does; titles are the plan's text, drawn as text, never escaped here. */
+export type LiveTaskList = {
+  rows: LiveTaskRow[]
+  total: { done: number; count: number; workMs: number; costUsd: number | null; isPartial: boolean }
+  removed: TaskList['removed']
+}
+
 export type LiveSnapshot = {
   v: 1
   at: number
@@ -60,6 +87,8 @@ export type LiveSnapshot = {
   tasksProgress: Progress
   agents: LiveAgent[]
   tasks: { id: string; subject: string; status: string; owner: string | null; blockedBy: string[] }[]
+  /** The saved task list of the approved plan with time and estimated cost per task; null when there is none. */
+  taskList: LiveTaskList | null
   // what the page's "+" can add: the team's roles with how many run now, or a general agent without a team
   roles: { id: string; title: string; count: number; active: number }[]
   notice: { seq: number; ok: boolean; text: string } | null
@@ -118,6 +147,42 @@ function activityOf(data: HqData, id: string): LiveAgent['activity'] {
   return a ? { text: a.text, since: a.since } : null
 }
 
+const sumCosts = (costs: (number | null)[]) => (costs.every(c => c === null) ? null : costs.reduce<number>((s, c) => s + (c ?? 0), 0))
+
+function taskRow(task: ListTask): LiveTaskRow {
+  const events = [...task.events].sort((a, b) => a.at - b.at)
+  const work = Object.entries(task.work).map(([who, w]): LiveTaskWork => ({ who, role: w.role, step: w.step, workMs: w.workMs, inputTokens: w.inputTokens, outputTokens: w.outputTokens, cacheReadTokens: w.cacheReadTokens, cacheWriteTokens: w.cacheWriteTokens, costUsd: costOf({ ...w, model: w.model ?? undefined }) }))
+  const holder = events.at(-1)?.who ?? work.at(-1)?.who ?? null
+  const who = task.status === 'done' ? task.doneBy : task.status === 'waiting' ? null : holder
+  return {
+    n: task.n,
+    title: task.title,
+    status: task.status,
+    who,
+    doneBy: task.status === 'done' ? task.doneBy : null,
+    startedAt: task.startedAt,
+    doneAt: task.doneAt,
+    workMs: work.reduce((s, w) => s + w.workMs, 0),
+    costUsd: sumCosts(work.map(w => w.costUsd)),
+    isPartial: work.some(w => w.costUsd === null && isCounted(w)), // a member just linked, with nothing counted yet, is not an unpriced one
+    work,
+    events,
+  }
+}
+
+function taskListOf(list: TaskList | null | undefined): LiveTaskList | null {
+  if (!list) return null
+  const rows = list.tasks.map(taskRow)
+  const total = {
+    done: rows.filter(r => r.status === 'done').length,
+    count: rows.length,
+    workMs: rows.reduce((s, r) => s + r.workMs, 0) + list.removed.workMs,
+    costUsd: sumCosts([...rows.map(r => r.costUsd), list.removed.costUsd]),
+    isPartial: list.removed.isPartial === true || rows.some(r => r.isPartial),
+  }
+  return { rows, total, removed: list.removed }
+}
+
 export function buildSnapshot(data: HqData, at: number, notice: LiveSnapshot['notice'] = null, extras: LiveExtras = {}): LiveSnapshot {
   const lang = data.lang ?? 'en'
   const gone = Object.values(data.agents).filter(a => isFolded(a, at, extras.waitingSince ?? {}))
@@ -170,6 +235,7 @@ export function buildSnapshot(data: HqData, at: number, notice: LiveSnapshot['no
     tasksProgress: progressOf(Object.values(data.tasks)),
     agents,
     tasks: Object.values(data.tasks).map(t => ({ id: t.id, subject: t.subject, status: t.status, owner: t.owner ?? null, blockedBy: t.blockedBy })),
+    taskList: taskListOf((data as HqData & { taskList?: TaskList | null }).taskList),
     roles: rolesOf(data),
     notice,
     hideFinished: data.hideFinished,

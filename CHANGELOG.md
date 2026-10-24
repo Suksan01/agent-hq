@@ -2,7 +2,19 @@
 
 ## Unreleased
 
+### Added
+- **A task table for the approved plan.** After the plan gate the lead calls the new `hq_plan` tool, and the sidebar
+  and the live page list every task: status (✓ done, a moving spinner on working, ◑ review, ○ waiting), who is on it
+  or finished it, working minutes and an estimated cost (`≈ $`, from list prices, not your bill). `hq_assign` and
+  `hq_review` take `plan_task` to link work to a task; every turn adds its time and tokens, ticking the plan marks a
+  task done, and the list is kept in `.claude/agent-hq/tasks.json` for the next session. The guard refuses a member's
+  write to the list and the approved plan file by path; a glob over the plan's name is not caught. Click a task on the
+  live page for each member's work and a timeline.
+
 ### Changed
+- **Page approvals hold only asks a person answers.** Claude Code now says who answers a permission ask. The live page
+  holds an ask only when a person would answer it; an ask a host answers (an SDK or -p permission callback, a served
+  call) or one nobody can answer is never held, so the engine's own decision stands.
 - **Self-evaluation states the evidence rule.** The skill now says a 5 cites its proof and what counts as proof per axis, as the role prompt does, and every axis in its examples carries a gap or a proof.
 - **Works alongside Superpowers.** With Superpowers (or another workflow plugin) enabled, the lead is told that
   Agent HQ runs the team's work: `/agent-hq:feature`, hq_assign and hq_review, not Superpowers'

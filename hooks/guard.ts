@@ -5,7 +5,8 @@
 // read, and what it cannot see, is in command.ts.
 
 import type { HqTeam, HqTeamRole } from '../types'
-import { changesTeamFile, commandsOf, pushes, writes } from './command'
+import { changesPlanFile, changesTaskList, changesTeamFile, commandsOf, pushes, writes } from './command'
+import type { Cmd } from './command'
 import { COORDINATION_TOOLS } from './model'
 import { AGENT_PREFIX, BRIEFS_DIR, REPORTS_DIR, TEAM_FILE, TEAM_NOTES, isAssistantRole, isReadOnlyRole, memoryDirOf } from './team'
 
@@ -23,6 +24,8 @@ export type GuardCall = {
   input: Record<string, unknown>
   /** What the lead scoped this run to (hq_assign's `files`); narrows the role's own guard.paths. */
   assignment?: { paths?: string[] } | null
+  /** The approved plan's project-relative path (tasks.json's `plan`); set, only the lead changes that file. */
+  planFile?: string
   /** The project folder the globs are relative to when `input` holds absolute paths; absent, paths are compared as given. */
   cwd?: string
 }
@@ -38,7 +41,9 @@ const CO_LISTED = String.raw`(?:(?:edit|write|commit|deploy|release|rebase|delet
 const NO_PUSH_RULE = new RegExp(String.raw`\b${NEGATION}${FILLER}\s+${CO_LISTED}(?:push|merge|publish)`, 'i')
 const SHOWN_MAX = 40
 const TEAM_FILE_REASON = 'the team file may only be changed by the person'
-const TEAM_FILE_DENIED = `Agent HQ: ${TEAM_FILE_REASON}`
+const TASK_LIST_FILE = '.claude/agent-hq/tasks.json'
+const TASK_LIST_REASON = 'the task list may only be changed by the lead'
+const PLAN_FILE_REASON = 'the approved plan may only be changed by the lead'
 
 /**
  * The team role ids of an agent and of those that started it, nearest first, from the roster's rows; `unknown` when the
@@ -117,12 +122,31 @@ function isTeamFile(given: unknown): boolean {
   return parts !== null && parts.join('/').endsWith(TEAM_FILE)
 }
 
-/** Whether the call writes a team.json: Write, Edit or NotebookEdit on it, or a command that changes it (by name or by glob). */
-function changesTeamFileBy(call: GuardCall): boolean {
-  if (WRITE_TOOLS.includes(call.tool)) return isTeamFile(call.tool === 'NotebookEdit' ? call.input.notebook_path : call.input.file_path)
-  if (call.tool !== 'Bash') return false
+/** A tasks.json (or its .bak backup) beside the team file, which only the lead changes: a member could fake its own task's status. */
+function isTaskList(given: unknown): boolean {
+  const parts = typeof given === 'string' ? resolveParts(given) : null
+  return parts !== null && [TASK_LIST_FILE, `${TASK_LIST_FILE}.bak`].some(file => parts.join('/').endsWith(file))
+}
+
+/** The approved plan file, given as the call names it: a path that ends in the plan's own, however it is spelled. */
+function isPlanFile(given: unknown, planFile: string | undefined): boolean {
+  const parts = typeof given === 'string' ? resolveParts(given) : null
+  const plan = planFile === undefined ? null : resolveParts(planFile)
+  return parts !== null && plan !== null && plan.length > 0 && plan.every((part, i) => parts.at(i - plan.length) === part)
+}
+
+/** Why the call may not change a protected file: Write, Edit or NotebookEdit on a team.json or tasks.json, or a command that changes one (by name or by glob). Null when it does not. */
+function protectedFileReason(call: GuardCall, parsed?: Cmd[]): string | null {
+  if (WRITE_TOOLS.includes(call.tool)) {
+    const named = call.tool === 'NotebookEdit' ? call.input.notebook_path : call.input.file_path
+    return isTeamFile(named) ? TEAM_FILE_REASON : isTaskList(named) ? TASK_LIST_REASON : isPlanFile(named, call.planFile) ? PLAN_FILE_REASON : null
+  }
+  if (call.tool !== 'Bash') return null
   const source = typeof call.input.command === 'string' ? call.input.command : ''
-  return changesTeamFile(commandsOf(source), source)
+  const commands = parsed ?? commandsOf(source)
+  if (changesTeamFile(commands, source)) return TEAM_FILE_REASON
+  if (changesTaskList(commands, source)) return TASK_LIST_REASON
+  return call.planFile !== undefined && changesPlanFile(commands, call.planFile) ? PLAN_FILE_REASON : null
 }
 
 const isNoPush = (role: HqTeamRole) => role.guard?.noPush === true || role.rules.some(rule => NO_PUSH_RULE.test(rule))
@@ -135,7 +159,8 @@ export function guardToolCall(call: GuardCall): { deny: string } | null {
     if (verdict) return verdict
   }
   // a sub-agent that is no team member (a general agent, one the roster does not list) has no role guard, but the team file is closed to it too
-  return call.subagent && changesTeamFileBy(call) ? { deny: TEAM_FILE_DENIED } : null
+  const reason = call.subagent ? protectedFileReason(call) : null
+  return reason ? { deny: `Agent HQ: ${reason}` } : null
 }
 
 function guardRole(role: HqTeamRole, call: GuardCall): { deny: string } | null {
@@ -144,7 +169,8 @@ function guardRole(role: HqTeamRole, call: GuardCall): { deny: string } | null {
   const readOnly = isReadOnlyRole(role)
   const named = call.tool === 'NotebookEdit' ? call.input.notebook_path : call.input.file_path
 
-  if (WRITE_TOOLS.includes(call.tool) && isTeamFile(named)) return deny(TEAM_FILE_REASON)
+  const protectedWrite = WRITE_TOOLS.includes(call.tool) ? protectedFileReason(call) : null
+  if (protectedWrite) return deny(protectedWrite)
   // memory and notes are plain files: only a role that may write files at all keeps them, whatever its paths
   if (MEMORY_TOOLS.includes(call.tool) && !readOnly && (!role.tools || role.tools.includes(call.tool)) && isTeamMemory(role.id, call.input.file_path, call.cwd)) return null
   // only the assistant writes briefs: a brief becomes another member's instructions once the lead hands it over
@@ -163,7 +189,8 @@ function guardRole(role: HqTeamRole, call: GuardCall): { deny: string } | null {
   if (call.tool === 'Bash') {
     const source = typeof call.input.command === 'string' ? call.input.command : ''
     const commands = commandsOf(source)
-    if (changesTeamFile(commands, source)) return deny(TEAM_FILE_REASON)
+    const protectedCommand = protectedFileReason(call, commands)
+    if (protectedCommand) return deny(protectedCommand)
     if (isNoPush(role) && commands.some(pushes)) return deny('pushing, merging or publishing is not allowed')
     if (readOnly && commands.some(writes)) return deny('this command writes files and the role is read-only')
     return null

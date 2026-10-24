@@ -1,6 +1,6 @@
 // What each agent has used, from what the engine reports at the end of every turn (`turn.complete`: the turn's token
-// counts and how long it took). Tokens and working time only: the engine reports no price, and a made-up price table
-// would be a guess, so there is no cost figure.
+// counts and how long it took). Tokens and working time only: the engine reports no price. The task list's cost is an
+// estimate from list prices (./prices, ./taskwork), not a figure from here.
 
 export type AgentUsage = {
   turns: number

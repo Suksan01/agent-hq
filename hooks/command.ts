@@ -5,7 +5,9 @@
 // handed to `bash -c`, `eval`, `su -c`, `ssh host …`, `watch`, `env -S`, a here-string and `find -exec`. A script piped
 // into a shell is refused outright (it cannot be read). Substitutions inside double quotes, a script file, a shell
 // function or alias hiding a push, and obfuscation ($'\x67it', variables) are not looked into. Move to a real shell
-// parser if the guard ever has to stand against a determined agent rather than a careless one.
+// parser if the guard ever has to stand against a determined agent rather than a careless one. The shell's directory
+// is not known across calls (a `cd .claude/agent-hq` in one, `rm tasks.json` in the next), so a bare tasks.json is refused;
+// a bare glob (`rm task*.json`) after such a `cd` is not seen, as `tea*.json` is not for team.json.
 
 /**
  * One command of a script: its words (the command's basename first, wrappers and VAR=value prefixes gone), the files it
@@ -412,16 +414,43 @@ function partGlob(glob: string): RegExp | null {
   }
 }
 
+/** A path with `//`, `/./` and `x/..` folded away; null when a `..` climbs out of what the word names. */
+function normalisedParts(path: string): string[] | null {
+  const parts: string[] = []
+  for (const part of path.split('/')) {
+    if (part === '' || part === '.') continue
+    if (part !== '..') parts.push(part)
+    else if (parts.pop() === undefined) return null
+  }
+  return parts
+}
+
 /**
- * Whether a word names the team file: the literal `team.json`, or a glob that matches it (`tea*.json`, `.claude/agent-hq/t?am.json`)
+ * A common name (VS Code's tasks.json) is open to commands only in a directory that is not agent-hq (`.vscode/tasks.json`).
+ * Bare, `./`-led, expanded (`$PWD/`, `~/`, `$(pwd)/`) and agent-hq paths are refused, since the shell's directory is not
+ * known: a `cd` in an earlier call leaves a bare name pointing into agent-hq. A word may hold a script, so each occurrence counts.
+ */
+function isLiteralInFolder(word: string, name: string): boolean {
+  for (let at = word.indexOf(name); at >= 0; at = word.indexOf(name, at + 1)) {
+    const token = word.slice(0, at + name.length).split(/[\s'"=,;<>|&:]/).at(-1) ?? ''
+    const lead = token.slice(0, -name.length)
+    if (lead !== '' && !lead.endsWith('/')) continue // inside another name (mytasks.json)
+    const parts = /[$`~()]/.test(token) ? null : normalisedParts(token)
+    if (parts === null || parts.length < 2 || parts.at(-2) === 'agent-hq') return true
+  }
+  return false
+}
+
+/**
+ * Whether a word names a file of the agent-hq folder (the team file, the task list): the literal name, or a glob that matches it (`tea*.json`, `.claude/agent-hq/t?am.json`)
  * in a folder that can be agent-hq. A bare glob (no folder) counts only when the command line mentions agent-hq (a `cd` into it).
  */
-function namesTeamFile(word: string, mentionsFolder: boolean): boolean {
-  if (word.includes('team.json')) return true
+function namesAgentFile(word: string, mentionsFolder: boolean, name: string): boolean {
+  if (name === 'team.json' ? word.includes(name) : isLiteralInFolder(word, name)) return true
   if (!/[*?[]/.test(word)) return false
   const parts = word.split('/').filter(Boolean)
   const base = parts.at(-1) ?? ''
-  if (!partGlob(base)?.test('team.json')) return false
+  if (!partGlob(base)?.test(name)) return false
   const folder = parts.at(-2)
   return folder === undefined ? mentionsFolder : (partGlob(folder)?.test('agent-hq') ?? false)
 }
@@ -449,10 +478,46 @@ function expandBraces(word: string): string[] {
   return [word]
 }
 
-const namesTeamFileExpanded = (word: string, mentionsFolder: boolean) => expandBraces(word).some(w => namesTeamFile(w, mentionsFolder))
+const namesAgentFileExpanded = (word: string, mentionsFolder: boolean, name: string) => expandBraces(word).some(w => namesAgentFile(w, mentionsFolder, name))
 
-/** Whether a command of the script changes the team file (a redirect into it, or a writing command with it among its arguments). `source` is the whole command line. */
-export function changesTeamFile(commands: Cmd[], source: string): boolean {
+/** Whether a command of the script changes the agent-hq file `name` (a redirect into it, or a writing command with it among its arguments). `source` is the whole command line. */
+function changesAgentFile(commands: Cmd[], source: string, name: string): boolean {
   const mentionsFolder = source.includes('agent-hq')
-  return commands.some(cmd => cmd.targets.some(t => namesTeamFileExpanded(t, mentionsFolder)) || (writesByCommand(cmd) && cmd.words.slice(1).some(w => namesTeamFileExpanded(w, mentionsFolder))))
+  return writesWord(commands, name !== 'team.json', w => namesAgentFileExpanded(w, mentionsFolder, name))
 }
+
+/** Whether a redirect target, or an argument of a writing command, passes `test`. `splitOff` also tests the first word of any command once something on the line writes: `rm $(pwd)/tasks.json` is split at the parentheses, leaving `/tasks.json` there. */
+function writesWord(commands: Cmd[], splitOff: boolean, test: (word: string) => boolean): boolean {
+  const isSplit = splitOff && commands.some(writes)
+  const checked = (cmd: Cmd) => (writesByCommand(cmd) ? cmd.words.slice(1) : isSplit ? cmd.words.slice(0, 1) : [])
+  return commands.some(cmd => cmd.targets.some(test) || checked(cmd).some(test))
+}
+
+/**
+ * Whether a word names the approved plan file (`docs/plans/x.md`): a path ending in it, a bare name equal to its basename, or
+ * any path to that basename that has an expansion in it. `docs/x.md` or `x.md.bak` is another file.
+ */
+function namesPlanFile(word: string, plan: string[]): boolean {
+  const name = plan.at(-1) ?? ''
+  for (let at = word.indexOf(name); at >= 0; at = word.indexOf(name, at + 1)) {
+    const token = word.slice(0, at + name.length).split(/[\s'"=,;<>|&:]/).at(-1) ?? ''
+    const lead = token.slice(0, -name.length)
+    if (lead !== '' && !lead.endsWith('/')) continue
+    if (word[at + name.length] !== undefined && !/[\s'"=,;<>|&:)]/.test(word[at + name.length] ?? '')) continue // x.md.bak
+    const parts = /[$`~()]/.test(token) ? null : normalisedParts(token)
+    if (parts === null || parts.length === 1 || plan.every((part, i) => parts.at(i - plan.length) === part)) return true
+  }
+  return false
+}
+
+/** Whether a command of the script changes the approved plan file, given its project-relative path. */
+export function changesPlanFile(commands: Cmd[], planFile: string): boolean {
+  const plan = normalisedParts(planFile)
+  return plan !== null && plan.length > 0 && writesWord(commands, true, w => expandBraces(w).some(x => namesPlanFile(x, plan)))
+}
+
+/** Whether a command of the script changes the team file. */
+export const changesTeamFile = (commands: Cmd[], source: string) => changesAgentFile(commands, source, 'team.json')
+
+/** Whether a command of the script changes the task list (tasks.json) or its backup (tasks.json.bak). */
+export const changesTaskList = (commands: Cmd[], source: string) => ['tasks.json', 'tasks.json.bak'].some(name => changesAgentFile(commands, source, name))
