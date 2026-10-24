@@ -22,7 +22,7 @@ const TEAM = parsed
 
 const agent = (id: string, name: string, status: HqAgent['status'], role = 'agent-hq:frontend-dev'): HqAgent => ({ id, name, role, description: `job of ${name}`, status, startedAt: 0, tools: 0 })
 
-type Setup = { confirm?: 'yes' | 'no' | 'unavailable'; onConfirm?: (question: string) => void | Promise<void>; reload?: boolean; teamFile?: string | null; agents?: HqAgent[]; nickname?: string; team?: boolean; spawn?: unknown; send?: unknown; board?: 'ok' | 'throws' | 'no-id' }
+type Setup = { confirm?: 'yes' | 'no' | 'unavailable'; onConfirm?: (question: string) => void | Promise<void>; reload?: boolean; teamFile?: string | null; agents?: HqAgent[]; nickname?: string; team?: boolean; spawn?: unknown; send?: unknown; board?: 'ok' | 'throws' | 'no-id' | 'no-tool' }
 
 /** A `$` with just the calls the tools make, and deps over memory; every call is recorded. */
 function setup(options: Setup = {}) {
@@ -42,6 +42,7 @@ function setup(options: Setup = {}) {
       call: async (input: Record<string, unknown>) => {
         calls.tool.push(input)
         if (options.board === 'throws') throw new Error('no board')
+        if (options.board === 'no-tool') throw new Error('Unknown tool: TaskCreate')
         return input.tool === 'TaskCreate' && options.board !== 'no-id' ? { result: { task: { id: '7' } } } : { result: {} }
       },
     },
@@ -259,6 +260,50 @@ test('hq_assign still succeeds when the board cannot be updated, and says so', a
     expect(answer.text).toContain(`task board could not be updated: ${board === 'throws' ? 'no board' : 'TaskCreate returned no task id'}.`) // the reason, for the lead to read
     expect(s.calls.spawn).toHaveLength(1)
   }
+})
+
+test('hq_assign in a session without TaskCreate is not a failure: it says once that the sidebar and live page track the job', async () => {
+  const s = setup({ board: 'no-tool' })
+
+  const answer = await hqAssign(s.$, { role: 'frontend-dev', task: 'x' }, s.deps)
+
+  expect(answer.isError).toBeUndefined()
+  expect(answer.text).not.toContain('could not be updated')
+  expect(answer.text.match(/sidebar and live page/g)).toHaveLength(1)
+  expect(answer.text).toContain('status still updates there')
+  expect(s.calls.spawn).toHaveLength(1)
+  expect(s.memory.assignments['frontend-dev-1']).toBeDefined() // Agent HQ's own record
+})
+
+test('hq_assign with worktree: true hands the lead an Agent call with isolation worktree, and the brief says so', async () => {
+  const s = setup()
+
+  const answer = await hqAssign(s.$, { role: 'frontend-dev', task: 'Build it', worktree: true }, s.deps)
+
+  expect(s.calls.spawn).toHaveLength(0) // the mod's own start cannot carry isolation
+  expect(answer.text).toContain('frontend-dev-1 has NOT started yet')
+  expect(answer.text).toContain('isolation: worktree')
+  expect(answer.text).toContain('your own git worktree')
+  expect(answer.text).toContain('Commit your work there')
+  expect(s.memory.assignments['frontend-dev-1']).toBeDefined() // the guard still knows its scope
+})
+
+test('hq_assign without worktree starts the agent as before, with no isolation and no worktree text', async () => {
+  const s = setup()
+
+  const answer = await hqAssign(s.$, { role: 'frontend-dev', task: 'Build it', worktree: false }, s.deps)
+
+  expect(s.calls.spawn).toHaveLength(1)
+  expect(s.calls.spawn[0]).not.toHaveProperty('isolation')
+  expect(String(s.calls.spawn[0]?.prompt)).not.toContain('worktree')
+  expect(answer.text).toContain('Started frontend-dev-1')
+})
+
+test('hq_assign refuses a worktree that is not true or false', async () => {
+  const s = setup()
+  const answer = await hqAssign(s.$, { role: 'frontend-dev', task: 'x', worktree: 'yes' }, s.deps)
+  expect(answer.isError).toBe(true)
+  expect(answer.text).toContain('"worktree" must be true or false')
 })
 
 test('hq_status syncs the roster first and answers the summary', async () => {

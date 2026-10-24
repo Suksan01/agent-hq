@@ -238,11 +238,12 @@ test('UI work also loads the official HeroUI skills, installed with the person\'
 
 // ---------- fixes from the review of #3 ----------
 
-test('parallel members share this checkout: hq_assign has no worktree option, so no step merges member branches', () => {
+test('parallel members get their own worktree through hq_assign worktree: true, and the lead merges their branches', () => {
   const text = section('Build')
-  assert.match(text, /no worktree option/i)
-  assert.doesNotMatch(text, /merge its branch/i)
-  assert.doesNotMatch(text, /worktree isolation/i)
+  assert.match(text, /worktree: true/)
+  assert.match(text, /isolation: "worktree"/)
+  assert.match(text, /merge its branch/i)
+  assert.doesNotMatch(text, /no worktree option/i)
 })
 
 test('QA writes the failing tests in its own files, and they are committed before the developer starts', () => {
