@@ -167,7 +167,7 @@ A table under the team, in place of the single Tasks track when a plan list exis
 - New tool `hq_plan` (`{ plan: string }`): reads the plan, saves the list, answers with the count. A path outside the
   project or not a `.md` file is refused.
 - `skills/feature/SKILL.md`: phase 4's gate calls `hq_plan`; phase 5's hq_assign and hq_review pass `plan_task`.
-- Live snapshot (`hooks/live.ts`): a `tasks` field; the web page reads it.
+- Live snapshot (`hooks/live.ts`): a `taskList` field (`tasks` already holds the board); the web page reads it.
 
 ### Must not break
 
