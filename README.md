@@ -453,7 +453,8 @@ does not reach installed copies.
 From the mod folder:
 
 - `claude plugin test .` runs the mod's tests (`tests/`), `claude plugin validate .` lists every event it hooks and every
-  call it makes, and `tsc -p . --noUnusedLocals` type-checks it.
+  call it makes, and `tsc -p . --noUnusedLocals` type-checks it (without a global TypeScript:
+  `npx -p typescript@5.6.3 tsc -p . --noUnusedLocals`).
 - `node --test web/server.test.mjs web/build-design.test.mjs` tests the local server, the hub and the design build
   (real server processes on free ports, in temp folders).
 - `node --test skills/feature/skill.test.mjs skills/team/skill.test.mjs` checks the feature skill's six phases, their
