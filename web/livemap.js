@@ -14,7 +14,7 @@ export const statusOf = status => STATUS_OF[status] ?? (['working', 'waiting', '
 const LEAD_TONE = { running: 'working', needs_input: 'waiting', done: 'done', error: 'failed' }
 export const agentStatus = a => (a.isMain ? LEAD_TONE[a.tone] ?? 'working' : statusOf(a.status))
 
-export const BLANK = { at: 0, team: null, agents: [], tasks: [], roles: [], overall: { done: 0, active: 0, total: 0 }, tasksProgress: { done: 0, active: 0, total: 0 }, notice: null, hideFinished: false, events: [], folded: { done: 0, failed: 0 } }
+export const BLANK = { at: 0, team: null, agents: [], tasks: [], taskList: null, roles: [], overall: { done: 0, active: 0, total: 0 }, tasksProgress: { done: 0, active: 0, total: 0 }, notice: null, hideFinished: false, events: [], folded: { done: 0, failed: 0 } }
 
 /** /events and /state carry {v: 2, sessions: [{session, cwd, label, alive, snapshot}]}; an older single snapshot is one session. Stable order: name, then id. */
 export function sessionsOf(data) {

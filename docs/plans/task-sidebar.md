@@ -66,7 +66,7 @@ then the review role reviews and QA runs the tests. One commit per accepted task
   - Done: tests pass at widths 40, 60 and 100 with Thai titles; `tests/sidebar.test.ts` unchanged and passing.
   - Depends on: 1, 2, 5. Parallel with 7.
 
-- [ ] 7. **Live page tasks panel** - owner: senior-dev
+- [x] 7. **Live page tasks panel** - owner: senior-dev
   - Files: `hooks/live.ts`, `web/tasks.js` (new), `web/live.js`, `web/livemap.js`, `web/i18n.js`, `web/space.css`.
     Tests (QA): `web/tasks.test.mjs`, `tests/live-tasks.test.ts`.
   - Meets: AC11, AC17, AC18, AC19. Snapshot `taskList` field; panel as in `web/proto/tasks-a.js` (reference), a real

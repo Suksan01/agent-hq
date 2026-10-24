@@ -52,6 +52,12 @@ export const STRINGS = {
     'approval.failed': 'Could not send your answer: try again, or answer in the terminal',
     'approval.because': 'Claude Code asks because: {reason}', 'approval.setting': 'setting {name}', 'approval.hook': 'hook {name}',
     'unit.s': '{n}s', 'unit.m': '{n}m', 'unit.h': '{n}h',
+    'tasks.title': 'Tasks', 'tasks.loading': 'Loading tasks…', 'tasks.empty': 'The plan has no tasks yet.', 'tasks.offline': 'Offline: showing the tasks as last seen.',
+    'tasks.footnote': '≈ estimate from list prices, not your bill', 'tasks.colStatus': 'Status', 'tasks.colTask': 'Task', 'tasks.colWho': 'Who', 'tasks.colMin': 'Min', 'tasks.colCost': '≈ $',
+    'tasks.total': 'Total', 'tasks.done': '{done}/{count} done', 'tasks.noWork': 'Nobody has worked on this yet.', 'tasks.minutes': '{n} min', 'tasks.tokens': '{n} tokens',
+    'tasks.status.done': 'Done', 'tasks.status.working': 'Working', 'tasks.status.review': 'In review', 'tasks.status.waiting': 'Waiting',
+    'tasks.step.tests': 'tests', 'tasks.step.build': 'build', 'tasks.step.review': 'review', 'tasks.step.fix': 'fix',
+    'tasks.event.start': 'started', 'tasks.event.review': 'sent to review', 'tasks.event.done': 'done',
   },
   th: {
     'status.working': 'ทำงานอยู่', 'status.waiting': 'รอคุณ', 'status.done': 'เสร็จแล้ว', 'status.failed': 'ล้มเหลว', 'status.idle': 'ว่าง', 'status.stopped': 'หยุดแล้ว', 'status.lead': 'หัวหน้าทีม',
@@ -100,6 +106,12 @@ export const STRINGS = {
     'approval.failed': 'ส่งคำตอบไม่ได้ ลองอีกครั้งหรือตอบในเทอร์มินัล',
     'approval.because': 'Claude Code ถามเพราะ: {reason}', 'approval.setting': 'การตั้งค่า {name}', 'approval.hook': 'ฮุก {name}',
     'unit.s': '{n} วิ', 'unit.m': '{n} นาที', 'unit.h': '{n} ชม.',
+    'tasks.title': 'งาน', 'tasks.loading': 'กำลังโหลดงาน…', 'tasks.empty': 'แผนยังไม่มีงาน', 'tasks.offline': 'ออฟไลน์: แสดงงานตามที่เห็นล่าสุด',
+    'tasks.footnote': '≈ ประมาณการจากราคาตามรายการ ไม่ใช่ยอดที่เรียกเก็บจริง', 'tasks.colStatus': 'สถานะ', 'tasks.colTask': 'งาน', 'tasks.colWho': 'ใคร', 'tasks.colMin': 'นาที', 'tasks.colCost': 'ราคา ≈',
+    'tasks.total': 'รวม', 'tasks.done': 'เสร็จ {done}/{count}', 'tasks.noWork': 'ยังไม่มีใครทำงานนี้', 'tasks.minutes': '{n} นาที', 'tasks.tokens': '{n} โทเค็น',
+    'tasks.status.done': 'เสร็จ', 'tasks.status.working': 'กำลังทำ', 'tasks.status.review': 'กำลังตรวจ', 'tasks.status.waiting': 'รอ',
+    'tasks.step.tests': 'ทดสอบ', 'tasks.step.build': 'สร้าง', 'tasks.step.review': 'ตรวจ', 'tasks.step.fix': 'แก้',
+    'tasks.event.start': 'เริ่ม', 'tasks.event.review': 'ส่งตรวจ', 'tasks.event.done': 'เสร็จ',
   },
 }
 

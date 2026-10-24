@@ -11,6 +11,7 @@ import { useLazySpace } from './lazyspace.js'
 import { addRequest, attentionOf, boardSections, drawerOf, feedItems, groupsOf, hudOf, inboxItems, keyOf, pctOf } from './livemap.js'
 import { feedRows } from './feed.js'
 import { TaskBoardTile } from './panels.js'
+import { TasksPanel } from './tasks.js'
 import { ApprovalCard } from './approval.js'
 import { post, useLive, useStored } from './livestate.js'
 import { pauseOffscreen } from './motion.js'
@@ -176,6 +177,7 @@ function App() {
     </div>
     <div className="hq-left">
       <${Hud} hud=${hud} online=${live.online} loginLost=${live.loginLost} />
+      <${TasksPanel} snapshot=${sessions === null ? undefined : current?.snapshot} isOnline=${live.online} />
       ${boardOpen ? html`<${TaskBoardTile} sections=${boardSections(shown, names)} onClose=${() => setBoardOpen(false)} />` : null}
     </div>
     <div className=${`hq-right${drawer ? ' has-drawer' : ''}`}>
