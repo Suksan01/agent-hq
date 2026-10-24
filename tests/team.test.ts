@@ -123,6 +123,10 @@ test('members share the team context and get better between runs', () => {
     expect(text).not.toContain('a 5 must cite its proof (a test run or grep)') // one kind of proof does not fit every axis
   }
   expect(devPrompt).toContain('whatever files your assignment limits you to') // the brief's file limits never stop a lesson
+  // lighter on small work: a short self-check, and no memory write when nothing was learned
+  expect(devPrompt).toContain('A small assignment (one or two steps, no code changed) may shorten the first line')
+  expect(devPrompt).toContain('when this run taught you something')
+  expect(devPrompt).toContain('A run that taught nothing new leaves it as it is.')
 
   const lead = leadPrompt(team)
   expect(lead).toContain(`\`${TEAM_NOTES}\``)

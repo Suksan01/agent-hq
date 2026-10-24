@@ -186,6 +186,8 @@ export function rolePrompt(team: Team, role: TeamRole, hasMemory = true, lang: L
       '  The evidence rule: every score below 5 must show a (<gap>) that names what is missing or wrong, and where. A 5 cites its proof in',
       '  the same place: for accuracy and completeness a test run or grep, e.g. `accuracy 5 (node --test: 12 pass)`;',
       '  for clarity, actionability and conciseness a file:line, a line count or a section of your reply, e.g. `conciseness 5 (words.mjs: 1 line)`.',
+      '  A small assignment (one or two steps, no code changed) may shorten the first line to its average and weakest axis:',
+      '  `Self-check <average>: <axis> <n> (<gap>)`.',
       ...(readOnly
         ? [
             '- Get better at your role: you can read your agent memory (when you have one) but cannot edit it; put what would make',
@@ -193,9 +195,10 @@ export function rolePrompt(team: Team, role: TeamRole, hasMemory = true, lang: L
           ]
         : hasMemory
           ? [
-              '- Get better at your role: before your final reply, update your agent memory (when you have one) with what would',
+              '- Get better at your role: when this run taught you something, before your final reply, update your agent memory (when you have one) with what would',
               '  make your next assignment faster or more correct: patterns and commands that worked, mistakes to avoid, and what',
               '  the lead or a reviewer corrected. Keep it short and general, not a diary of this task; fix or remove what proved wrong.',
+              '  A run that taught nothing new leaves it as it is.',
               '  Your memory is yours to update whatever files your assignment limits you to.',
             ]
           : [

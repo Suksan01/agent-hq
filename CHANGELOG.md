@@ -13,6 +13,12 @@
   they are installed; the standup skill says when superset:standup fits instead.
 - **Skills match 0.7.1.** A skill-creator audit fixed self-evaluation's description (nothing is preloaded now),
   handoff's report field and status handling, and the feature skill's trigger wording.
+- **Briefs as files.** A Team Assistant writes each brief to `.claude/agent-hq/briefs/` (only that role may) and
+  hq_assign takes `brief_file`, so a brief no longer passes through the lead twice.
+- **A per-task model.** hq_assign's optional `model` runs one assignment on another model (haiku for mechanical work).
+- **Fix loops end.** The feature build allows three review-fix rounds; then a fresh member or the person decides.
+- **Lighter routine.** Small assignments may shorten the Self-check line, and members update their memory only when
+  a run taught them something.
 
 ## 0.7.1 (2026-10-24)
 
