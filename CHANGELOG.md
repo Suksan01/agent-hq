@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.7.2 (2026-10-24)
 
 ### Changed
 - **Self-evaluation states the evidence rule.** The skill now says a 5 cites its proof and what counts as proof per axis, as the role prompt does, and every axis in its examples carries a gap or a proof.
