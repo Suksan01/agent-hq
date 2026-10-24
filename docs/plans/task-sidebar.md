@@ -44,7 +44,7 @@ then the review role reviews and QA runs the tests. One commit per accepted task
   - Done: tests pass; every existing `tests/assign.test.ts` and `tests/tools.test.ts` test passes unchanged.
   - Depends on: 1.
 
-- [ ] 5. **Wiring: turns, plan ticks and data** - owner: senior-dev
+- [x] 5. **Wiring: turns, plan ticks and data** - owner: senior-dev
   - Files: `hooks/register.tsx`, `hooks/taskwork.ts` (new), `hooks/usage.ts` (header comment only). Tests (QA):
     `tests/taskwork.test.ts`, `tests/taskwork-wiring.test.ts`.
   - Meets: AC6, AC8, AC9, AC11, AC21 (passes the list's plan path to the guard). `turn.complete` adds the member's time and tokens (cache read and cache write apart)

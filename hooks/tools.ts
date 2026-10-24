@@ -8,7 +8,7 @@ import type { HqAssignment, HqTeam } from '../types'
 import { spawnAgent } from './actions'
 import { linkMember, missingTask, parseAssign, planTaskOf, statusSummary, taskOfMember } from './assign'
 import { planHire } from './hire'
-import { LockTimeout, withLock } from './lock'
+import { LockTimeout, withListLock, withLock } from './lock'
 import type { NewEvent } from './feed'
 import { MAIN, isFinished, who } from './model'
 import { costOf } from './prices'
@@ -337,7 +337,7 @@ async function planTaskCheck(input: unknown, deps: ToolDeps): Promise<{ n?: numb
 /** Reads the saved list fresh, applies `change`, writes it once, all under the lock (two links at once must both land); nothing when there is no list. A failure here never undoes a started agent. */
 async function updateList($: EngineInterface, deps: ToolDeps, change: (list: TaskList, at: number) => TaskList): Promise<void> {
   try {
-    await withLock(async () => {
+    await withListLock(async () => {
       const { list } = (await deps.readList?.()) ?? { list: null }
       const next = list && change(list, await deps.now())
       if (list && next !== list) await deps.writeList?.(next)
@@ -367,7 +367,7 @@ export async function hqPlan(input: unknown, deps: ToolDeps): Promise<ToolAnswer
   if (parsed.length === 0) return fail(`hq_plan: ${relative} has no task lines, so nothing was saved. ${PLAN_FORMAT}`)
   let refused: ToolAnswer | null
   try {
-    refused = await withLock(async () => {
+    refused = await withListLock(async () => {
       const { list: old, kind, reason } = (await deps.readList?.()) ?? { list: null }
       // a file that could not be read may still hold saved time and cost: only a missing or invalid one may be rewritten
       if (!old && kind === 'unreadable') return fail(`hq_plan: ${reason ?? 'the task list could not be read'}; nothing was saved`)
