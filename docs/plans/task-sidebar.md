@@ -27,7 +27,7 @@ then the review role reviews and QA runs the tests. One commit per accepted task
   - Done: tests pass for each listed model and for an unknown one.
   - Depends on: none. Parallel with 1 and 3.
 
-- [ ] 3. **Guard tasks.json** - owner: senior-dev
+- [x] 3. **Guard tasks.json** - owner: senior-dev
   - Files: `hooks/guard.ts`, `hooks/command.ts`. Tests (QA): `tests/guard-tasklist.test.ts`.
   - Meets: AC13, AC21 (the approved plan file, path passed in by task 5). A member's (or any sub-agent's) Write, Edit, NotebookEdit or shell command that changes
     `.claude/agent-hq/tasks.json` is refused, as `team.json` is now; the lead is not.
@@ -69,7 +69,7 @@ then the review role reviews and QA runs the tests. One commit per accepted task
 - [ ] 7. **Live page tasks panel** - owner: senior-dev
   - Files: `hooks/live.ts`, `web/tasks.js` (new), `web/live.js`, `web/livemap.js`, `web/i18n.js`, `web/space.css`.
     Tests (QA): `web/tasks.test.mjs`, `tests/live-tasks.test.ts`.
-  - Meets: AC11, AC17, AC18, AC19. Snapshot `tasks` field; panel as in `web/proto/tasks-a.js` (reference), a real
+  - Meets: AC11, AC17, AC18, AC19. Snapshot `taskList` field; panel as in `web/proto/tasks-a.js` (reference), a real
     `<button>` per row title for expand (click and Enter), loading, empty, error and offline states, footnote, every
     string in `en` and `th`, all text as text, spinner off under `prefers-reduced-motion`, no sideways scroll at
     375 px.
@@ -118,4 +118,8 @@ At most 3 members build at once, plus QA writing tests ahead of them.
 
 ## Follow-ups (not in this build)
 
+- Plan-file guard (AC21) does not catch a glob over the plan's name (`rm docs/plans/task-*.md`); reuse the glob
+  branch of `namesAgentFile` (reviewer-1, minor).
+- Plan-file guard allows a proper suffix of the plan path after an earlier `cd` (`plans/task-sidebar.md` after
+  `cd docs`); match a suffix in either direction (reviewer-1, minor).
 - The reviewer role cannot write its report file (no Write tool): a team setup change via `/agent-hq:team`.
