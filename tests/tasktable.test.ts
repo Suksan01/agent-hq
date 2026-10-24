@@ -159,6 +159,20 @@ test('the total row counts done over all, adds the minutes and the cost, and mar
   await ui.unmount()
 })
 
+test('a total under one minute says <1 like its row', async ($, on) => {
+  const ui = await mountTable($, on, listOf(task(1, { status: 'done', doneBy: 'dev-1', work: { 'dev-1': work(31 / 60) }, events: [ev('dev-1', 1)] })), 60)
+
+  expect(tail((await linesOf(ui)).find(l => l.key === 'tasks-total')?.text ?? '')[0]).toBe('<1')
+  await ui.unmount()
+})
+
+test('a total with nothing counted says 0', async ($, on) => {
+  const ui = await mountTable($, on, listOf(task(1)), 60)
+
+  expect(tail((await linesOf(ui)).find(l => l.key === 'tasks-total')?.text ?? '')[0]).toBe('0')
+  await ui.unmount()
+})
+
 test('a total with every cost priced has no +', async ($, on) => {
   const list = listOf(task(1, { status: 'done', doneBy: 'dev-1', work: { 'dev-1': work(2) }, events: [ev('dev-1', 1)] }), task(2))
   const ui = await mountTable($, on, list, 60)

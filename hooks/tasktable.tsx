@@ -42,6 +42,8 @@ function totalsOf(x: ListTask) {
 }
 
 const minutes = (ms: number, isCounted: boolean) => (!isCounted ? NONE : ms < MS_PER_MIN ? '<1' : String(Math.round(ms / MS_PER_MIN)))
+/** The total row's minutes: `<1` under a minute, else whole minutes, 0 where nothing is counted (the page's total follows the same rule). */
+const totalMinutes = (ms: number) => (ms > 0 && ms < MS_PER_MIN ? '<1' : String(Math.round(ms / MS_PER_MIN)))
 const money = (usd: number, isPartial: boolean) => `${usd.toFixed(2)}${isPartial ? '+' : ''}`
 
 /** The member on a working or review task (who holds its latest event), the finisher of a done one, nobody on a waiting one. */
@@ -76,7 +78,7 @@ export function TaskTable(els: Els, data: HqData, draw: (key: string) => RenderE
   const all = list.tasks.map(totalsOf)
   const removed = list.removed
   const total = {
-    min: String(Math.round((all.reduce((s, a) => s + a.ms, 0) + removed.workMs) / MS_PER_MIN)),
+    min: totalMinutes(all.reduce((s, a) => s + a.ms, 0) + removed.workMs),
     usd: money(all.reduce((s, a) => s + a.usd, 0) + removed.costUsd, removed.isPartial === true || all.some(a => a.isPartial)),
   }
   const heads = { task: t(lang, 'tasktable.task'), who: t(lang, 'tasktable.who'), min: t(lang, 'tasktable.min') }

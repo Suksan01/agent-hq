@@ -128,7 +128,8 @@ test('the whole row opens on a click, and aria-controls names the detail only wh
 
 test('the total row shows whole minutes and a cost even with no work counted, as the sidebar does', () => {
   assert.equal(totalMinText({ workMs: 0 }), '0')
-  assert.equal(totalMinText({ workMs: 20_000 }), '0')
+  assert.equal(totalMinText({ workMs: 20_000 }), '<1', 'under a minute is <1 in the total too, as in the row')
+  assert.equal(totalMinText({ workMs: 31_000 }), '<1')
   assert.equal(totalMinText({ workMs: 5.6 * MIN }), '6')
   assert.equal(costText({ costUsd: 0, isPartial: false }), '0.00')
 })

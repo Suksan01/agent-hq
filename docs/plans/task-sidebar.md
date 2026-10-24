@@ -84,7 +84,7 @@ then the review role reviews and QA runs the tests. One commit per accepted task
   - Done: skill tests pass.
   - Depends on: 4.
 
-- [ ] 9. **Full test run and browser check** - owner: qa
+- [x] 9. **Full test run and browser check** - owner: qa
   - Files: none changed.
   - Meets: all ACs. `claude plugin test .`, `node --test web/*.test.mjs`, `claude plugin validate .`; a real session
     with the mod from the repo (`claude --plugin-dir /Users/freshyboyz/agent-hq`), an approved test plan, one member
@@ -118,6 +118,9 @@ At most 3 members build at once, plus QA writing tests ahead of them.
 
 ## Follow-ups (not in this build)
 
+- Two browser-driven web tests time out now and then under the full `node --test web/*.test.mjs` load
+  (`web/nextsteps.test.mjs` "the next steps hide…", `web/browser.test.mjs` "a click the hub cannot deliver at
+  first…"); both pass alone and are untouched by this feature.
 - `hooks/view.tsx` is over the 800-line ceiling (831 with the table wiring, 809 before): split the tree and band
   drawing into their own modules (reviewer-1).
 - A working task's spinner shows a still frame while no agent is working (frames run only with live agents);

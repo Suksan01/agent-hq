@@ -15,8 +15,8 @@ const wholeMinutes = ms => (!(ms > 0) ? NONE : ms < MINUTE ? '<1' : String(Math.
 /** Minutes of work on a row (or the total): a dash where nothing is counted, `<1` under a minute, else whole minutes. */
 export const minText = row => wholeMinutes(row.workMs)
 
-/** The total row's minutes, as the sidebar's: whole minutes always, 0 where nothing is counted. */
-export const totalMinText = total => String(Math.round(total.workMs / MINUTE))
+/** The total row's minutes, as the sidebar's: `<1` under a minute, else whole minutes, 0 where nothing is counted. */
+export const totalMinText = total => (total.workMs > 0 && total.workMs < MINUTE ? '<1' : String(Math.round(total.workMs / MINUTE)))
 
 /** Estimated dollars of a row or the total: a dash where none is priced, two decimals, `+` where only some are. */
 export const costText = row => (row.costUsd === null || row.costUsd === undefined ? NONE : `${row.costUsd.toFixed(2)}${row.isPartial ? '+' : ''}`)

@@ -648,6 +648,14 @@
 .tk-note, .tk-offline { margin: 4px 0 10px; color: var(--sk-text-2); font-size: 13px; }
 .tk-offline { padding: 6px 10px; border-radius: 12px; background: color-mix(in srgb, var(--st-waiting) 14%, transparent); color: var(--st-waiting); }
 .hq-left .tk-panel { width: 100%; min-width: 0; box-sizing: border-box; }
+/* floating over the diagram (below the wide layout) nothing may read through the panel: the tile's glow on a solid base */
+@media (max-width: 1099px) {
+  .hq-left .tk-panel {
+    background:
+      radial-gradient(130% 92% at var(--gx) var(--gy), color-mix(in srgb, var(--hue) calc(86% * var(--glow)), #fff 0%) 0%, color-mix(in srgb, var(--hue) calc(42% * var(--glow)), #050507) 34%, color-mix(in srgb, var(--hue) calc(12% * var(--glow)), #050507) 58%, transparent 78%),
+      linear-gradient(180deg, rgb(15, 15, 24), rgb(5, 5, 10));
+  }
+}
 html[lang='th'] :is(.tk-table th, .tk-foot, .tk-note, .tk-offline) { letter-spacing: 0; line-height: 1.5; }
 
 /* ---------- Thai (html lang="th"): room for the marks above and below, no tracking, long runs may break ---------- */
