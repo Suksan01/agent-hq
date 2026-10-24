@@ -2,8 +2,9 @@
 // assignment and writes the agent's brief, `statusSummary` tells the lead where the team stands in at most 40 lines.
 // tests/assign.test.ts is the spec.
 
-import type { HqAgent, HqStatus, HqTeam } from '../types'
+import type { HqAgent, HqStatus, HqTeam, HqTeamRole } from '../types'
 import { MAIN, agentWork, isFinished } from './model'
+import { REPLY_LINES, isReadOnlyRole, reportPathOf } from './team'
 import { labelOf, nowLine } from './view'
 import type { HqData } from './view'
 
@@ -36,7 +37,7 @@ function note(input: Record<string, unknown>, key: 'done' | 'limits'): { text?: 
 }
 
 /** Validates hq_assign's input `{ role, task, files?, done?, limits?, name? }` and writes the structured brief. `reserved` names are taken like a listed agent's. */
-export function parseAssign(input: unknown, team: HqTeam | null, agents: Record<string, HqAgent>, reserved: readonly string[] = []): AssignResult {
+export function parseAssign(input: unknown, team: HqTeam | null, agents: Record<string, HqAgent>, reserved: readonly string[] = [], options: { report?: boolean } = {}): AssignResult {
   if (!isRecord(input)) return { ok: false, error: 'hq_assign needs an object like { role, task }' }
   const roles = team ? team.roles : [GENERAL]
   if (typeof input.role !== 'string' || input.role === '') return { ok: false, error: `give the "role" to assign (${roles.map(r => r.id).join(', ')})` }
@@ -80,6 +81,8 @@ export function parseAssign(input: unknown, team: HqTeam | null, agents: Record<
     ...(files.length > 0 ? [`## Files\nChange only these (globs, relative to the project):\n${files.map(f => `- ${f}`).join('\n')}`] : []),
     ...(done.text ? [`## Done when\n${done.text}`] : []),
     ...(limits.text ? [`## Do not touch\n${limits.text}`] : []),
+    // a team member that can write keeps its full report in a file, so its reply to the lead stays short
+    ...(team && options.report !== false && !isReadOnlyRole(role as HqTeamRole) ? [`## Report\nWrite your full report to \`${reportPathOf(role.id, name)}\`, then reply in at most ${REPLY_LINES} lines as your role's reporting rules say.`] : []),
   ]
   return { ok: true, role: role.id, name, prompt: sections.join('\n\n'), task, files }
 }

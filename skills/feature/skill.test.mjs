@@ -2,9 +2,13 @@
 // team-specific steps (parallel prototype variants, review after every task). The mod's test sandbox cannot read Markdown.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 
-const skill = readFileSync(new URL('./SKILL.md', import.meta.url), 'utf8')
+const read = path => readFileSync(new URL(path, import.meta.url), 'utf8')
+const main = read('./SKILL.md')
+// a phase's details live in references/ and load only when the lead reaches it: read them in place of their pointer
+const POINTER = /^Read `(references\/[^`]+)`.*$/gm
+const skill = main.replace(POINTER, (_, path) => read(`./${path}`))
 const PHASES = ['Brainstorm', 'Spec', 'Prototype', 'Plan', 'Build', 'Finish']
 const phaseHeadings = [...skill.matchAll(/^## (\d)\. (.+)$/gm)]
 const section = name => {
@@ -435,4 +439,20 @@ test('the spec and plan are written in the chosen language, while the slug, bran
   assert.match(top, /spec and the plan are written in that language/)
   assert.match(top, /feature slug, branch names, code, tests, commit messages/)
   assert.match(top, /`Status:` and `Skipped:` words, phase names and `AC` ids stay English/) // a resume reads them back
+})
+
+test('SKILL.md stays small: phase details sit in references/ that it points to by a path that exists', () => {
+  assert.ok(Buffer.byteLength(main) < 16_500, `SKILL.md is ${Buffer.byteLength(main)} bytes`) // it was 26.7 KB before the split
+  const pointers = [...main.matchAll(POINTER)].map(m => m[1])
+  assert.deepEqual(pointers, ['references/prototypes.md'])
+  for (const path of pointers) assert.ok(existsSync(new URL(`./${path}`, import.meta.url)), path)
+  assert.match(section('Prototype'), /Read `references\/prototypes\.md`|\*\*Ask once, first\*\*/) // the details are read inside phase 3
+})
+
+test('briefs point to the spec and plan files instead of pasting them, and the lead acts on each status', () => {
+  assert.doesNotMatch(main, /word for word/)
+  assert.match(section('Spec'), /point it to\nthe spec file/)
+  assert.match(section('Build'), /task <n> in `docs\/plans\/<feature>\.md`; read that task, not the\n   whole plan/)
+  assert.match(section('Build'), /never paste the plan or earlier\n   members' replies/)
+  assert.match(section('Build'), /`BLOCKED` or `NEEDS_CONTEXT`/)
 })

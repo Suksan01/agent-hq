@@ -54,6 +54,13 @@ describe('parseAssign', () => {
     return result.error
   }
 
+  test('a team member that can write is told where its full report goes; no team, or report: false, adds none', () => {
+    expect(ok({ role: 'frontend-dev', task: 'Build it' }).prompt).toContain('## Report\nWrite your full report to `.claude/agent-hq/reports/frontend-dev/frontend-dev-1.md`, then reply in at most 15 lines')
+    expect(ok({ role: 'general-purpose', task: 'Build it' }, null).prompt).not.toContain('## Report') // a general agent has no role prompt to follow
+    const review = parseAssign({ role: 'qa', task: 'Review it' }, TEAM, {}, [], { report: false })
+    expect(review.ok && review.prompt).not.toContain('## Report')
+  })
+
   test('a full assignment becomes a brief with Goal, Files, Done when and Do not touch', () => {
     const result = ok({ role: 'frontend-dev', task: 'Build the search page', files: ['app/search/**', 'components/Search*.tsx'], done: 'Tests pass and the page renders', limits: 'Leave the checkout alone' })
     expect(result.role).toBe('frontend-dev')

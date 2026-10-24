@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- **Members work together and cost fewer tokens** (borrowed from Superpowers' subagent workflow). A member that can
+  edit files writes its full report to `.claude/agent-hq/reports/<role>/<name>.md` and replies to the lead in at most
+  15 lines with a `Status:` (DONE, DONE_WITH_CONCERNS, BLOCKED or NEEDS_CONTEXT); a read-only one replies with its
+  findings in at most 30. Members see the board and each other's reports and ask a running teammate directly with
+  SendMessage. The lead points briefs at the spec, the plan task and reports instead of pasting them.
+- **Role skills load on demand.** Members no longer preload their skills and the self-evaluation skill; the role
+  prompt names them for the Skill tool, which limited roles now have.
+- **Leaner reviews.** hq_review points the reviewer at the member's report and the diff, and tells it not to re-run
+  tests the report already proves.
+- **The feature skill is 40% smaller.** Phase 3's prototype steps moved to `skills/feature/references/prototypes.md`,
+  read only when a feature has a user interface.
+
 ## 0.7.0 (2026-10-21)
 
 ### Added

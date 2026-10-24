@@ -7,7 +7,7 @@
 import type { HqTeam, HqTeamRole } from '../types'
 import { changesTeamFile, commandsOf, pushes, writes } from './command'
 import { COORDINATION_TOOLS } from './model'
-import { AGENT_PREFIX, TEAM_FILE, TEAM_NOTES, isReadOnlyRole, memoryDirOf } from './team'
+import { AGENT_PREFIX, REPORTS_DIR, TEAM_FILE, TEAM_NOTES, isReadOnlyRole, memoryDirOf } from './team'
 
 export type GuardCall = {
   team: HqTeam | null
@@ -97,11 +97,11 @@ const shorten = (text: string) => (text.length > SHOWN_MAX ? `${text.slice(0, SH
 
 // ---------- the guard ----------
 
-/** The role's own memory folder or the team notes, inside this project (`..` resolved first). */
+/** The role's own memory folder, its reports folder or the team notes, inside this project (`..` resolved first). */
 function isTeamMemory(roleId: string, given: unknown, cwd: string | undefined): boolean {
   if (typeof given !== 'string' || given === '' || (given.startsWith('/') && !cwd)) return false // absolute needs the project to compare to
   const relative = relativePath(given, cwd)
-  return relative !== null && (relative === TEAM_NOTES || relative.startsWith(`${memoryDirOf(roleId)}/`))
+  return relative !== null && (relative === TEAM_NOTES || relative.startsWith(`${memoryDirOf(roleId)}/`) || relative.startsWith(`${REPORTS_DIR}/${roleId}/`))
 }
 
 /** A team.json (in a project, or in the home folder), which a member must never change: it is where the guards come from. */

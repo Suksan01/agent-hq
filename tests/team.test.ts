@@ -3,7 +3,7 @@ import type { AgentInfo } from 'claude-code'
 
 import { withApproval } from '../hooks/approval'
 import { COORDINATION_TOOLS } from '../hooks/model'
-import { SELF_EVAL_SKILL, TEAM_FILE, TEAM_NOTES, leadModelWarning, leadPrompt, memoryDirOf, parseTeam, roleTitle, rolePrompt } from '../hooks/team'
+import { READ_ONLY_REPLY_LINES, REPLY_LINES, REPORTS_DIR, SELF_EVAL_SKILL, TEAM_FILE, TEAM_NOTES, leadModelWarning, leadPrompt, memoryDirOf, parseTeam, reportPathOf, roleTitle, rolePrompt } from '../hooks/team'
 
 const TEAM = {
   name: 'Booking App Team',
@@ -19,7 +19,7 @@ test('parseTeam reads a team and refuses a broken one with the reason', () => {
   const team = parseTeam(JSON.stringify(TEAM))
   if (typeof team === 'string') throw new Error(team)
   expect(team.roles.map(r => r.id)).toEqual(['senior-dev', 'reviewer'])
-  expect(team.roles[1]?.tools).toEqual(['Read', 'Grep', ...COORDINATION_TOOLS])
+  expect(team.roles[1]?.tools).toEqual(['Read', 'Grep', ...COORDINATION_TOOLS, 'Skill']) // Skill: its skills load on demand, not preloaded
   // a limited role must still be able to hand its report back to the lead
   expect(team.roles[1]?.tools).toContain('SubagentHandback')
   expect(team.roles[0]?.tools).toBeUndefined()
@@ -130,6 +130,41 @@ test('members share the team context and get better between runs', () => {
   expect(memoryDirOf('qa')).toBe('.claude/agent-memory/agent-hq-qa')
 })
 
+test('members work with each other directly and keep their replies to the lead short', () => {
+  const team = parseTeam(JSON.stringify(TEAM))
+  if (typeof team === 'string') throw new Error(team)
+  const [dev, reviewer] = team.roles
+  if (!dev || !reviewer) throw new Error('roles missing')
+  const devPrompt = rolePrompt(team, dev)
+  // no silos: a member reads the board and a peer's report, and asks a running peer itself
+  expect(devPrompt).toContain('Running ones are named "reviewer-<n>"')
+  expect(devPrompt).toContain('TaskList')
+  expect(devPrompt).toContain(`\`${REPORTS_DIR}/<role id>/<name>.md\``)
+  expect(devPrompt).toContain('ask it directly with SendMessage')
+  expect(devPrompt).toContain('never edit its files')
+  // the report contract: detail in a file, a status block for the lead
+  expect(devPrompt).toContain(`reply to the Tech Lead in at most ${REPLY_LINES} lines: \`Status: DONE | DONE_WITH_CONCERNS | BLOCKED | NEEDS_CONTEXT\``)
+  expect(devPrompt).toContain('report file your brief names')
+  // a read-only role cannot write a report: its findings are its reply
+  const reviewerPrompt = rolePrompt(team, reviewer)
+  expect(reviewerPrompt).toContain(`your verdict or result first, then your findings`)
+  expect(reviewerPrompt).toContain(`at most ${READ_ONLY_REPLY_LINES} lines`) // its findings are its reply, so they are capped too
+  expect(reviewerPrompt).toContain('then the Self-check and Open lines (not counted)') // one order, no clash with the review brief's limit
+  expect(devPrompt).toContain('a read-only one\'s findings went to the Tech Lead') // no report file to look for
+  expect(reviewerPrompt).not.toContain('report file your brief names')
+  expect(reportPathOf('senior-dev', 'senior-dev-2')).toBe('.claude/agent-hq/reports/senior-dev/senior-dev-2.md')
+  // the lead points to files instead of pasting them, and knows what to do with each status
+  const lead = leadPrompt(team)
+  expect(lead).toContain('Point to files instead of pasting them')
+  expect(lead).toContain('Never paste earlier members\' replies or a whole plan')
+  expect(lead).toContain(`never commit \`${REPORTS_DIR}/\``)
+  expect(lead).toContain('On `Status: BLOCKED` or `NEEDS_CONTEXT` answer it with SendMessage')
+  // a team without other roles has no one to work with
+  const solo = parseTeam(JSON.stringify({ ...TEAM, roles: [TEAM.roles[0]] }))
+  if (typeof solo === 'string') throw new Error(solo)
+  expect(rolePrompt(solo, solo.roles[0]!)).not.toContain('## Working with teammates')
+})
+
 test('a read-only role is told it cannot write the notes or its memory, and hands what it learned to the lead', () => {
   const team = parseTeam(JSON.stringify({ ...TEAM, roles: [...TEAM.roles, { id: 'auditor', title: 'Auditor', count: 1, mission: 'Audit.', tasks: [], rules: [], skills: [], guard: { readOnly: true } }] }))
   if (typeof team === 'string') throw new Error(team)
@@ -188,8 +223,12 @@ test('a team file loads: roles registered, lead names the main row, lead section
   await $.session.start({ cwd: '/work/app', surface: null, isInteractive: true } as never)
   expect(registered).toEqual(['senior-dev', 'reviewer'])
   expect(memories).toEqual(['project', 'project']) // each role keeps its own memory in the project between runs
-  expect(skills).toEqual([['tdd', SELF_EVAL_SKILL], [SELF_EVAL_SKILL]]) // its own skills, then the self-evaluation every member carries
+  // nothing is preloaded (each SKILL.md would sit in every member's context): the prompt names them to load on demand
+  expect(skills).toEqual([undefined, undefined])
+  expect(prompts[0]).toContain('## Skills\nLoad each with the Skill tool when you reach the step it covers, not before: tdd.')
+  expect(prompts[1]).not.toContain('## Skills')
   expect(SELF_EVAL_SKILL).toBe('agent-hq:self-evaluation') // the mod's skills/self-evaluation folder
+  expect(prompts[0]).toContain(`load the \`${SELF_EVAL_SKILL}\` skill only when unsure`)
   expect(prompts[0]).toContain('update your agent memory') // auto memory is on here (the variable is not set to a yes)
 
   const composed = await $.prompt.compose({ model: 'm', promptModel: 'm', surfaces: [], tools: [], outputStyle: null, traits: [] })

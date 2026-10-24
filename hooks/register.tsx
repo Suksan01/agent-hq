@@ -4,7 +4,7 @@ import type { EngineInterface, PromptOrigin, Register } from 'claude-code'
 import { DOING_TOOL, MAIN, barIdsIn, clearFinished, countTool, createTask, mergeAgents, mergeTodos, overallProgress, planSteps, updateTask, who, workingCount } from './model'
 import { cleanSaying, currentStep, maskedWork, pruneSays } from './says'
 import type { HqTeam, HqTodo } from '../types'
-import { MEMORY_SCOPE, NO_TEAM_PROMPT, SELF_EVAL_SKILL, TEAM_FILE, languageSection, leadModelWarning, leadPrompt, parseTeam, rolePrompt } from './team'
+import { MEMORY_SCOPE, NO_TEAM_PROMPT, TEAM_FILE, languageSection, leadModelWarning, leadPrompt, parseTeam, rolePrompt } from './team'
 import { LANGUAGE_CHOICES, LANGUAGE_HEADER, LANGUAGE_OPTION, LANGUAGE_QUESTION, langOf, languageOfAnswer, t } from './i18n'
 import type { Key, Lang } from './i18n'
 import { PERSON_FRAME, personStarts, runFreshActions } from './actions'
@@ -146,7 +146,7 @@ async function loadTeam($: EngineInterface, options: { approve?: boolean; expect
       ...(role.tools ? { tools: role.tools } : {}),
       ...(role.model ? { model: role.model } : {}),
       ...(role.effort ? { effort: role.effort } : {}),
-      skills: [...new Set([...role.skills, SELF_EVAL_SKILL])],
+      // no `skills` preload: each would put its whole SKILL.md in every member's context; the prompt names them to load on demand
       memory: MEMORY_SCOPE,
     })
   }

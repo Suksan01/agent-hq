@@ -283,6 +283,11 @@ test('a member that may write files keeps its own memory and the team notes what
   expect(call('editor', 'Write', { file_path: own('editor') })?.deny).toContain('Write') // Write is not one of its tools
   expect(call('auditor', 'Read', { file_path: own('auditor') })).toBeNull() // reading is never a problem
 
+  // its own reports folder too, so the full report never needs a path in the assignment
+  expect(call('scoped', 'Write', { file_path: '.claude/agent-hq/reports/scoped/scoped-1.md' }, { assignment: { paths: ['src/search/**'] } })).toBeNull()
+  expect(call('scoped', 'Write', { file_path: '.claude/agent-hq/reports/dev/dev-1.md' }, { assignment: { paths: ['src/search/**'] } })).not.toBeNull() // another role's report
+  expect(call('scoped', 'Write', { file_path: '.claude/agent-hq/reports/scoped/../../team.json' }, { assignment: { paths: ['src/search/**'] } })).not.toBeNull()
+
   expect(call('scoped', 'Edit', { file_path: own('dev') })).not.toBeNull() // another role's memory
   expect(call('scoped', 'Edit', { file_path: '.claude/agent-memory/agent-hq-scoped/../../../lib/a.ts' })).not.toBeNull()
   expect(call('scoped', 'Edit', { file_path: `/elsewhere/${own('scoped')}` }, { cwd })).not.toBeNull() // another project's

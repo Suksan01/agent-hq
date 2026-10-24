@@ -9,9 +9,9 @@ import type { Progress } from './model'
 import { labelOf } from './view'
 import type { HqData } from './view'
 import { t } from './i18n'
+import { REPORTS_DIR } from './team'
 import type { Lang } from './i18n'
 
-export const REPORTS_DIR = '.claude/agent-hq/reports'
 const SUMMARY_MODEL = 'haiku'
 const SUMMARY_MAX_TOKENS = 300
 const SUMMARY_TIMEOUT_MS = 20_000
