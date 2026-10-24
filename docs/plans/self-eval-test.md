@@ -15,7 +15,7 @@ Spec: docs/specs/self-eval-test.md (AC1-AC5). Tasks run one after another: each 
   - Done: task 1's test passes; `node --test skills/*/skill.test.mjs` passes; the rule paragraph states the
     axis-specific proof the role prompt states; both examples follow it
   - Limits: never edit the test or `hooks/team.ts`
-- [ ] 3. **Full test run** (QA Engineer)
+- [x] 3. **Full test run** (QA Engineer)
   - Done: `node --test skills/*/skill.test.mjs` and `claude plugin test .` give no new failures (2 page-approval tests
     already fail on main)
 

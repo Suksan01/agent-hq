@@ -1,6 +1,6 @@
 # Self-evaluation skill test
 
-Status: build (draft)
+Status: done
 Skipped: prototype (no user interface)
 
 ## Direction (chosen 2026-10-24)
