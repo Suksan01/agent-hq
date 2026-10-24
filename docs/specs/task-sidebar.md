@@ -213,6 +213,8 @@ A table under the team, in place of the single Tasks track when a plan list exis
 - **AC19** Given no `tasks.json`, then the sidebar and live page look exactly as they do today.
 - **AC20** Given `hq_assign` or `hq_review` without `plan_task` and no list, they behave as today (existing tests
   pass unchanged).
+- **AC21** Given an approved plan, when a member writes, edits or deletes that plan file (Write, Edit or a shell
+  command), then the guard refuses it; the lead may still tick its boxes. (Decided during the build.)
 
 ## Project rules
 

@@ -8,7 +8,7 @@ then the review role reviews and QA runs the tests. One commit per accepted task
 
 ## Tasks
 
-- [ ] 1. **Task list store** - owner: senior-dev
+- [x] 1. **Task list store** - owner: senior-dev
   - Files: `hooks/tasklist.ts` (new). Tests (QA): `tests/tasklist.test.ts`.
   - Meets: AC1, AC2, AC3, AC12. Types for the list (spec "Data"), `parsePlan(text)` (the `- [ ] N. Title` and
     `- [x] N. Title` lines; titles cut and masked with `maskSecrets`), `mergeList(old, parsed)` (re-plan: work kept by
@@ -19,7 +19,7 @@ then the review role reviews and QA runs the tests. One commit per accepted task
   - Done: tests pass; invalid or missing file reads as "no list" with a reason, never throws.
   - Depends on: none.
 
-- [ ] 2. **Price table and cost** - owner: senior-dev
+- [x] 2. **Price table and cost** - owner: senior-dev
   - Files: `hooks/prices.ts` (new). Tests (QA): `tests/prices.test.ts`.
   - Meets: AC10. Prices per model id prefix (input, output, cache read, cache write, USD per million tokens) with the
     date taken; taken with the `claude-api` skill, never from memory. `costOf(work)` returns dollars or null for an
@@ -29,7 +29,7 @@ then the review role reviews and QA runs the tests. One commit per accepted task
 
 - [ ] 3. **Guard tasks.json** - owner: senior-dev
   - Files: `hooks/guard.ts`, `hooks/command.ts`. Tests (QA): `tests/guard-tasklist.test.ts`.
-  - Meets: AC13. A member's (or any sub-agent's) Write, Edit, NotebookEdit or shell command that changes
+  - Meets: AC13, AC21 (the approved plan file, path passed in by task 5). A member's (or any sub-agent's) Write, Edit, NotebookEdit or shell command that changes
     `.claude/agent-hq/tasks.json` is refused, as `team.json` is now; the lead is not.
   - Done: tests pass; existing guard tests unchanged and passing.
   - Depends on: none. Parallel with 1 and 2.
@@ -47,7 +47,7 @@ then the review role reviews and QA runs the tests. One commit per accepted task
 - [ ] 5. **Wiring: turns, plan ticks and data** - owner: senior-dev
   - Files: `hooks/register.tsx`, `hooks/taskwork.ts` (new), `hooks/usage.ts` (header comment only). Tests (QA):
     `tests/taskwork.test.ts`, `tests/taskwork-wiring.test.ts`.
-  - Meets: AC6, AC8, AC9, AC11. `turn.complete` adds the member's time and tokens (cache read and cache write apart)
+  - Meets: AC6, AC8, AC9, AC11, AC21 (passes the list's plan path to the guard). `turn.complete` adds the member's time and tokens (cache read and cache write apart)
     to its linked task; the lead counts on none; a linked member working again moves review back to working. After a
     Write or Edit of the list's plan file, the plan is re-read: newly ticked tasks become done, `doneBy` the last
     linked member that is neither the review nor the QA role. `readData` and the live snapshot input get the list.
