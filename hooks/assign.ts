@@ -14,6 +14,8 @@ export type AssignResult = { ok: true; role: string; name: string; prompt: strin
 const GENERAL = { id: 'general-purpose', title: 'General agent', count: 10 }
 const NAME = /^[A-Za-z0-9_-]{1,48}$/
 const MODEL = /^[A-Za-z0-9._[\]-]{1,80}$/ // an alias (haiku) or an id (claude-opus-5-5[1m])
+const SKILL = /^[A-Za-z0-9._:-]{1,80}$/ // a skill name, plugin-scoped or not (superpowers:systematic-debugging)
+const MAX_SKILLS = 5
 const MAX_TASK = 4000
 const MAX_NOTE = 1000 // `done` and `limits`
 const MAX_FILES = 50
@@ -70,6 +72,14 @@ export function parseAssign(input: unknown, team: HqTeam | null, agents: Record<
     model = input.model.trim()
   }
 
+  let skills: string[] = []
+  if (input.skills !== undefined && input.skills !== null) {
+    if (!Array.isArray(input.skills) || input.skills.length > MAX_SKILLS || !input.skills.every(x => typeof x === 'string' && SKILL.test(x))) {
+      return { ok: false, error: `"skills" must be a list of at most ${MAX_SKILLS} skill names, such as ["tdd"]` }
+    }
+    skills = [...new Set(input.skills as string[])]
+  }
+
   const everyone = Object.values(agents)
   const live = everyone.filter(a => a.id !== MAIN && !isFinished(a.status) && a.role === (team ? `agent-hq:${role.id}` : role.id))
   if (live.length >= role.count) return { ok: false, error: `${role.title} is fully staffed (${live.length} of ${role.count} at work); hire another with hq_hire, or wait for one to finish` }
@@ -85,6 +95,8 @@ export function parseAssign(input: unknown, team: HqTeam | null, agents: Record<
   }
 
   const sections = [
+    // members did not load their skills on their own in a real run: the lead names the ones this task needs, up front
+    ...(skills.length > 0 ? [`## Load first\nBefore anything else, load ${skills.length > 1 ? 'these skills' : 'this skill'} with the Skill tool and follow ${skills.length > 1 ? 'them' : 'it'}: ${skills.join(', ')}.`] : []),
     `## Goal\n${task}`,
     ...(files.length > 0 ? [`## Files\nChange only these (globs, relative to the project):\n${files.map(f => `- ${f}`).join('\n')}`] : []),
     ...(done.text ? [`## Done when\n${done.text}`] : []),

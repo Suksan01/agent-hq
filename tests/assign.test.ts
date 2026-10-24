@@ -63,6 +63,13 @@ describe('parseAssign', () => {
     expect(review.ok && review.prompt).not.toContain('## Report')
   })
 
+  test('skills the lead names come first in the brief, to load before anything else; bad ones are refused', () => {
+    expect(ok({ role: 'frontend-dev', task: 'Build it', skills: ['tdd', 'superpowers:systematic-debugging', 'tdd'] }).prompt).toMatch(/^## Load first\nBefore anything else, load these skills with the Skill tool and follow them: tdd, superpowers:systematic-debugging\.\n\n## Goal/)
+    expect(ok({ role: 'frontend-dev', task: 'Build it', skills: ['tdd'] }).prompt).toContain('load this skill with the Skill tool and follow it: tdd.')
+    expect(ok({ role: 'frontend-dev', task: 'Build it' }).prompt).not.toContain('## Load first')
+    for (const skills of ['tdd', ['a b'], [7], ['a', 'b', 'c', 'd', 'e', 'f']]) expect(error({ role: 'frontend-dev', task: 'x', skills })).toContain('"skills" must be a list')
+  })
+
   test('a full assignment becomes a brief with Goal, Files, Done when and Do not touch', () => {
     const result = ok({ role: 'frontend-dev', task: 'Build the search page', files: ['app/search/**', 'components/Search*.tsx'], done: 'Tests pass and the page renders', limits: 'Leave the checkout alone' })
     expect(result.role).toBe('frontend-dev')

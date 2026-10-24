@@ -43,6 +43,7 @@ export const TOOL_SPECS: ToolSpec[] = [
         done: { type: 'string', description: 'How the agent knows it is finished.' },
         limits: { type: 'string', description: 'What the agent must leave alone.' },
         name: { type: 'string', description: 'A name for the agent; default is the next free "<role>-<n>".' },
+        skills: { type: 'array', items: { type: 'string' }, description: 'The skills this task needs, loaded before it starts (at most 5), e.g. ["tdd"] for a code change: members rarely load them on their own. Pick from the role\'s skills.' },
         model: { type: 'string', description: 'A model for this one task, overriding the role\'s: "haiku" for mechanical work its brief fully specifies, a stronger one for a task a member got stuck on. Leave out to use the role\'s model.' },
       },
       required: ['role'],

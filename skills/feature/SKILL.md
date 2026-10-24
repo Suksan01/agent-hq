@@ -150,7 +150,7 @@ For each task that is ready (its dependencies done):
    (`test: failing tests for task 3`) before step 2, so the developer starts from them.
 2. **Assign** with hq_assign: the task's title and "task <n> in `docs/plans/<feature>.md`; read that task, not the
    whole plan", plus pointers to the spec sections it meets and the failing tests (never paste the plan or earlier
-   members' replies), the `files` from the plan, its `done`, and `limits` (the rest of the code, and never push or
+   members' replies), the `files` from the plan, the `skills` it needs, its `done`, and `limits` (the rest of the code, and never push or
    merge). A screen task covers its loading, empty, error and partial states from the spec, not only the happy path.
    When the person adopted HeroUI, a UI task's brief has the member load `heroui-react` and look up every component
    with the HeroUI MCP (`get_component_docs`) before it uses it; otherwise the brief names the project's own library's
