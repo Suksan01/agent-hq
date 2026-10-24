@@ -76,7 +76,7 @@ then the review role reviews and QA runs the tests. One commit per accepted task
   - Done: tests pass; `node --test web/*.test.mjs` passes; checked in a browser by QA at 1280 and 375.
   - Depends on: 1, 2, 5. Parallel with 6.
 
-- [ ] 8. **Feature skill and docs** - owner: senior-dev
+- [x] 8. **Feature skill and docs** - owner: senior-dev
   - Files: `skills/feature/SKILL.md`, `README.md`, `CHANGELOG.md`. Tests: the existing skill tests.
   - Meets: project rules. Phase 4's gate calls `hq_plan` after approval; phase 5's `hq_assign` and `hq_review` pass
     `plan_task`; the README says what the table shows and that the cost is an estimate; a `## Unreleased` changelog
@@ -118,6 +118,10 @@ At most 3 members build at once, plus QA writing tests ahead of them.
 
 ## Follow-ups (not in this build)
 
+- `hooks/view.tsx` is over the 800-line ceiling (831 with the table wiring, 809 before): split the tree and band
+  drawing into their own modules (reviewer-1).
+- A working task's spinner shows a still frame while no agent is working (frames run only with live agents);
+  acceptable, say so in the README if people ask (reviewer-1).
 - Plan-file guard (AC21) does not catch a glob over the plan's name (`rm docs/plans/task-*.md`); reuse the glob
   branch of `namesAgentFile` (reviewer-1, minor).
 - Plan-file guard allows a proper suffix of the plan path after an earlier `cd` (`plans/task-sidebar.md` after

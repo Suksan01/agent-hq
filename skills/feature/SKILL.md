@@ -134,8 +134,9 @@ chosen variant:
 
 **Gate:** AskUserQuestion, header "Plan": "Approve" (Recommended), "Change it", "Stop". Preview the task list with
 owners, and an estimate: how many tasks, how many agents at once at most, and roughly how long. For a large build (more
-than about 10 tasks or 4 agents at once) say so plainly in the question. The next phase starts on "Approve": set `Status: plan (approved)` and
-commit the plan on the feature branch.
+than about 10 tasks or 4 agents at once) say so plainly in the question. The next phase starts on "Approve": set `Status: plan (approved)`, commit the plan on the feature branch and call
+`hq_plan` with the plan's path, so the task table shows every task. After a re-plan call `hq_plan` again: work already
+counted stays with its task number. When `hq_plan` refuses, its answer names the checklist line format to fix.
 
 ## 5. Build, one task at a time
 
@@ -148,7 +149,7 @@ For each task that is ready (its dependencies done):
    (an hq_assign with those test files as its `files`; the developer does it, in the same assignment, when the team has
    no QA role) and shows they fail for the right reason. Commit them on the feature branch
    (`test: failing tests for task 3`) before step 2, so the developer starts from them.
-2. **Assign** with hq_assign: the task's title and "task <n> in `docs/plans/<feature>.md`; read that task, not the
+2. **Assign** with hq_assign, passing `plan_task` (the task's number) so its time and cost count on the task: the task's title and "task <n> in `docs/plans/<feature>.md`; read that task, not the
    whole plan", plus pointers to the spec sections it meets and the failing tests (never paste the plan or earlier
    members' replies), the `files` from the plan, the `skills` it needs, its `done`, and `limits` (the rest of the code, and never push or
    merge). A screen task covers its loading, empty, error and partial states from the spec, not only the happy path.
@@ -164,7 +165,7 @@ For each task that is ready (its dependencies done):
    every set of failing tests is committed, so it shows only what the members running now changed. Each file must be
    inside the `files` of the member that reported or of another member running now (Bash is not limited to them). A
    changed file inside no one's `files` cannot be traced to one member: send it as a finding to every member running,
-   and keep parallel tasks few so this stays rare. Then hq_review to the review role, with `focus` on the review checklist (the project rules
+   and keep parallel tasks few so this stays rare. Then hq_review to the review role (pass `plan_task` again), with `focus` on the review checklist (the project rules
    for this task and the spec's edge cases and states). Have the QA role run the task's tests. Do not accept the task
    until both pass.
 5. **Fix**, at most three rounds: findings go back to the same member with SendMessage (it keeps its context), then
