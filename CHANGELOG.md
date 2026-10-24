@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.7.1 (2026-10-24)
 
 ### Changed
 - **Members work together and cost fewer tokens** (borrowed from Superpowers' subagent workflow). A member that can
