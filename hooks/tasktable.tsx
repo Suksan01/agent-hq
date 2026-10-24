@@ -6,6 +6,7 @@ import type { Elements, RenderElement } from 'claude-code'
 import { MIN_NAME, fitText, glyphCells, textWidth, tonesFor } from './cells'
 import { t } from './i18n'
 import { costOf } from './prices'
+import { isCounted } from './tasklist'
 import type { ListTask, TaskStatus } from './tasklist'
 import type { HqData, Raster } from './view'
 
@@ -31,7 +32,6 @@ export function shownTasks(tasks: ListTask[]): ListTask[] {
 }
 
 const works = (x: ListTask) => Object.values(x.work)
-const isCounted = (w: ListTask['work'][string]) => w.workMs > 0 || w.inputTokens + w.outputTokens + w.cacheReadTokens + w.cacheWriteTokens > 0
 
 /** Work minutes, and the cost of the priced entries (partial when a counted entry has no price; none when nothing is priced). */
 function totalsOf(x: ListTask) {

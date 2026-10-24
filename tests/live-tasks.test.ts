@@ -148,3 +148,13 @@ test('the removed totals count in the total, and a partial removed cost makes it
   expect(near(total?.costUsd, priced(work(1)) + 1.25)).toBe(true)
   expect(total?.isPartial).toBe(true)
 })
+
+test('a member just linked, with nothing counted, does not make the row or the total partial; work with no price still does', () => {
+  const empty = { ...work(0), inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, model: null }
+  const linked = buildSnapshot(data(listOf([task(1, { status: 'review', work: { 'dev-1': work(2), 'rev-1': empty }, events: [ev('dev-1', 1), ev('rev-1', 2, 'review')] })])), 5000).taskList
+  const unpriced = buildSnapshot(data(listOf([task(1, { status: 'review', work: { 'dev-1': work(2), 'rev-1': work(1, { model: 'mystery-model' }) }, events: [ev('dev-1', 1)] })])), 5000).taskList
+
+  expect([linked?.rows[0]?.isPartial, linked?.total.isPartial]).toEqual([false, false])
+  expect(near(linked?.rows[0]?.costUsd, priced(work(2)))).toBe(true)
+  expect([unpriced?.rows[0]?.isPartial, unpriced?.total.isPartial]).toEqual([true, true])
+})

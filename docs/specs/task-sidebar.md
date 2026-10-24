@@ -1,6 +1,6 @@
 # Task sidebar
 
-Status: plan (approved)
+Status: done
 
 ## Request
 
@@ -92,7 +92,8 @@ A table under the team, in place of the single Tasks track when a plan list exis
 
 - Status glyphs: ✓ done, an animated spinner on working (the sidebar's existing animation tick, no new timer), ◑
   review, ○ waiting.
-- Who: the member on it now; for a done task, who finished it. Names shortened the way the sidebar shortens them now.
+- Who: the member on it now; for a done task, who finished it. Built as the member's real name cut to the column,
+  never below the sidebar's 6-column floor for names (decided during the build; nicknames are not shown).
 - Min: working minutes, rounded; under 1 minute shows `<1`. ≈ $: two decimals; `—` when nothing is counted yet.
 - Columns fit the sidebar's width: the Task column shrinks first (cut with `…`, wide Thai text measured by display
   width), then Who; Min and ≈ $ are never cut.
@@ -146,8 +147,10 @@ A table under the team, in place of the single Tasks track when a plan list exis
 - Written by the lead's hooks only. The guard treats it like `team.json`: no member may change it.
 - Titles come from the plan file and are untrusted text: cut to a fixed length, masked for secrets like other shown
   text, and escaped on the live page.
-- Atomic write (temp file + rename) so a crash never leaves half a file.
-- `.claude/agent-hq/` is the team's scratch, already outside git for reports; `tasks.json` is not committed.
+- Written in one call (the engine's `$.fs` has no rename); the previous good file is copied to `tasks.json.bak`
+  first, and a half-written or invalid file falls back to it, so saved time and cost survive a cut-short write.
+- `tasks.json` and its `.bak` are not committed: this repo's `.gitignore` lists them; in other projects the person
+  decides.
 
 ### New: price table (`hooks/prices.ts`)
 

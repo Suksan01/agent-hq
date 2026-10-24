@@ -13,6 +13,9 @@ export type TaskStatus = 'waiting' | 'working' | 'review' | 'done'
 const STATUSES: readonly string[] = ['waiting', 'working', 'review', 'done']
 
 export type TaskWork = { role: string; step: string; workMs: number; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; model: string | null }
+/** Work was counted for a member: time, or any token of any kind. Nothing counted is a member just linked, not an unpriced one. */
+export const isCounted = (w: Pick<TaskWork, 'workMs' | 'inputTokens' | 'outputTokens' | 'cacheReadTokens' | 'cacheWriteTokens'>) => w.workMs > 0 || w.inputTokens + w.outputTokens + w.cacheReadTokens + w.cacheWriteTokens > 0
+
 export type TaskEvent = { at: number; kind: string; who: string | null }
 export type ListTask = { n: number; title: string; status: TaskStatus; doneBy: string | null; startedAt: number | null; doneAt: number | null; work: Record<string, TaskWork>; events: TaskEvent[] }
 export type TaskList = { version: 1; plan: string; approvedAt: number; tasks: ListTask[]; removed: { workMs: number; costUsd: number; isPartial?: boolean } }
@@ -73,7 +76,7 @@ export function mergeList(old: TaskList | null, parsed: PlanTask[], options: Mer
   const kept = new Map((old?.tasks ?? []).map(t => [t.n, t]))
   const now = new Set(parsed.map(p => p.n))
   const dropped = (old?.tasks ?? []).filter(t => !now.has(t.n)).flatMap(t => Object.values(t.work))
-  const unpriced = dropped.some(w => (w.workMs > 0 || w.inputTokens + w.outputTokens + w.cacheReadTokens + w.cacheWriteTokens > 0) && options.price(w) === null)
+  const unpriced = dropped.some(w => isCounted(w) && options.price(w) === null)
   const isPartial = old?.removed.isPartial === true || unpriced
   const merged: TaskList = {
     version: LIST_VERSION,

@@ -18,6 +18,7 @@ import type { BarFallback } from './view'
 import { BADGES } from './xp'
 import type { XpSummary } from './xpstore'
 import { costOf } from './prices'
+import { isCounted } from './tasklist'
 import type { ListTask, TaskList } from './tasklist'
 import { t } from './i18n'
 import type { Lang } from './i18n'
@@ -163,7 +164,7 @@ function taskRow(task: ListTask): LiveTaskRow {
     doneAt: task.doneAt,
     workMs: work.reduce((s, w) => s + w.workMs, 0),
     costUsd: sumCosts(work.map(w => w.costUsd)),
-    isPartial: work.some(w => w.costUsd === null),
+    isPartial: work.some(w => w.costUsd === null && isCounted(w)), // a member just linked, with nothing counted yet, is not an unpriced one
     work,
     events,
   }

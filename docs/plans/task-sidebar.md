@@ -118,11 +118,15 @@ At most 3 members build at once, plus QA writing tests ahead of them.
 
 ## Follow-ups (not in this build)
 
+- `hooks/tasktable.tsx:44`: the `minutes` helper's parameter `isCounted` shadows the shared import; rename it
+  (e.g. `hasWork`) when the file is next touched (reviewer-1, cosmetic).
+- `register.tsx`'s `fs.exists` pre-check before reading the list can go once the `hq_plan` wiring test mocks a
+  missing read; `readList` already reports `kind: 'missing'` (reviewer-1).
 - Two browser-driven web tests time out now and then under the full `node --test web/*.test.mjs` load
   (`web/nextsteps.test.mjs` "the next steps hide…", `web/browser.test.mjs` "a click the hub cannot deliver at
   first…"); both pass alone and are untouched by this feature.
-- `hooks/view.tsx` is over the 800-line ceiling (831 with the table wiring, 809 before): split the tree and band
-  drawing into their own modules (reviewer-1).
+- `hooks/view.tsx` (818 lines) and `hooks/register.tsx` (1448, about 64 more than before) are over the 800-line
+  ceiling: split the tree and band drawing, and the task list wiring, into their own modules (reviewer-1).
 - A working task's spinner shows a still frame while no agent is working (frames run only with live agents);
   acceptable, say so in the README if people ask (reviewer-1).
 - Plan-file guard (AC21) does not catch a glob over the plan's name (`rm docs/plans/task-*.md`); reuse the glob

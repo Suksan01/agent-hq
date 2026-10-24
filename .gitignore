@@ -2,3 +2,5 @@
 graphify-out/
 # the design system page, built by web/build-design.mjs
 web/design/out/
+# a task list made in this repo
+.claude/agent-hq/tasks.json*
