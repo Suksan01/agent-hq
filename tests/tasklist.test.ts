@@ -348,3 +348,11 @@ test('readList says unreadable, not invalid, when the list is broken and its bac
 
   expect(out).toMatchObject({ list: null, kind: 'unreadable', reason: expect.stringMatching(/EACCES/) })
 })
+
+test('applyPlanTicks credits a QA member who built the task, not the reviewer who reviewed it', () => {
+  const list = listOf([task(1, { status: 'review', work: { 'qa-1': work({ role: 'qa', step: 'build' }), 'rev-1': work({ role: 'reviewer', step: 'review' }) } })])
+
+  const next = applyPlanTicks(list, [{ n: 1, title: 'a', done: true }], 9)
+
+  expect(next.tasks[0]?.doneBy).toBe('qa-1')
+})

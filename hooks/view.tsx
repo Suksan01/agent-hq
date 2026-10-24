@@ -748,6 +748,15 @@ function TaskBoard({ Box, Text, Button }: Els, data: HqData, actions: HqActions)
   )
 }
 
+/** "TASKS · task-sidebar": the section's label and the plan file's name while it fits beside the done/total count. */
+function tasksHeading(data: HqData, lang: Lang): string {
+  const label = t(lang, 'sidebar.tasks')
+  const count = `${data.taskList?.tasks.filter(x => x.status === 'done').length ?? 0}/${data.taskList?.tasks.length ?? 0}`
+  const file = folderOf(data.taskList?.plan ?? '').replace(/\.md$/i, '')
+  const full = `${label} · ${file}`
+  return file && width(full) <= data.columns - width(count) - HEADING_PADDING ? full : label
+}
+
 export function SidebarView(els: Els, data: HqData, actions: HqActions, draw: DrawRaster): RenderElement {
   const { Box, Text, Button } = els
   const lang = data.lang ?? 'en'
@@ -755,6 +764,7 @@ export function SidebarView(els: Els, data: HqData, actions: HqActions, draw: Dr
   const rows = walkTree(data, data.isTreeExpanded ? Infinity : MAX_COMPACT)
   const taskP = progressOf(Object.values(data.tasks))
   const hasTable = (data.taskList?.tasks.length ?? 0) > 0 // an empty list draws no table, so the board stays
+  const doneTasks = data.taskList?.tasks.filter(x => x.status === 'done').length ?? 0
   const hiddenAgents = team.filter(a => data.hideFinished && isFinished(a.status)).length
   const agentCount = t(lang, team.length === 1 ? 'sidebar.agent' : 'sidebar.agents', { n: team.length })
   // data.columns is the width inside the padding, as the caller measured it for the Rasters
@@ -790,6 +800,7 @@ export function SidebarView(els: Els, data: HqData, actions: HqActions, draw: Dr
       {rows.map(row => TreeLine(els, data, actions, row, draw))}
       {team.length === 0 && <Text dimColor>{t(lang, 'sidebar.noAgents')}</Text>}
       {hiddenAgents > 0 && <Text dimColor>{t(lang, 'sidebar.hiddenAgents', { n: hiddenAgents })}</Text>}
+      {hasTable && Section(els, data, tasksHeading(data, lang), `${doneTasks}/${data.taskList?.tasks.length ?? 0}`)}
       {TaskTable(els, data, draw)}
       {taskP.total > 0 && !hasTable && Section(els, data, t(lang, 'sidebar.taskBoard'), `${taskP.done}/${taskP.total}`)}
       {taskP.total > 0 && !hasTable && TaskBoard(els, data, actions)}

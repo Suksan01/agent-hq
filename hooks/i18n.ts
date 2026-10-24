@@ -71,6 +71,7 @@ const en = {
   'sidebar.hiddenAgents': '{n} finished agent(s) hidden',
   'sidebar.taskBoard': 'TASK BOARD',
   // the plan's task table (hooks/tasktable.tsx)
+  'sidebar.tasks': 'TASKS',
   'tasktable.task': 'Task',
   'tasktable.who': 'Who',
   'tasktable.min': 'Min',
@@ -334,6 +335,7 @@ const th: Record<Key, string> = {
   'sidebar.noAgents': 'ยังไม่มีเอเจนต์ย่อย จะแสดงที่นี่เมื่อมีเอเจนต์เริ่มทำงาน',
   'sidebar.hiddenAgents': 'ซ่อนเอเจนต์ที่เสร็จแล้ว {n} คน',
   'sidebar.taskBoard': 'บอร์ดงาน',
+  'sidebar.tasks': 'งาน',
   'tasktable.task': 'งาน',
   'tasktable.who': 'ผู้ทำ',
   'tasktable.min': 'นาที',

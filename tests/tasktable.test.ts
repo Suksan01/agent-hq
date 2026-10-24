@@ -332,3 +332,14 @@ test('costs follow the price table: a model\'s own price decides the number (AC1
   expect(tail(rowOf(await linesOf(ui), 1))[1]).toBe(money(cost ?? Number.NaN))
   await ui.unmount()
 })
+
+test('a heading above the table names the section, the plan file and done/total, after the agents and before the rows', async ($, on) => {
+  const ui = await mountTable($, on, LEDGER(), 60)
+
+  const heading = await ui.find({ text: /TASKS/ })
+
+  expect(heading?.text).toMatch(/TASKS · x · 1\/5/) // the plan is docs/plans/x.md; the count of done tasks rides the right
+  expect(heading?.text.indexOf('TASKS')).toBeLessThan(heading?.text.indexOf('Total') ?? 0) // above the table, after the agents
+  expect(await ui.find({ text: /TASK BOARD/ })).toBeUndefined()
+  await ui.unmount()
+})

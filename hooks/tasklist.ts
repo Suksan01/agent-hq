@@ -46,14 +46,15 @@ const isBuilder = (w: TaskWork) => !NOT_BUILDER.test(w.role) && w.step !== 'revi
 
 /**
  * `list` with every task whose box is now ticked in `parsed` set done (at `at`, by the last member linked to it that is
- * neither a reviewer nor QA (by role and step), else the last one linked). A task already done stays as it is, and an unticked box undoes nothing.
+ * neither a reviewer nor QA (by role and step), else the last one that built or fixed it, else the last one linked). A task already done stays as it is, and an unticked box undoes nothing.
  */
 export function applyPlanTicks(list: TaskList, parsed: PlanTask[], at: number): TaskList {
   const ticked = new Set(parsed.filter(p => p.done).map(p => p.n))
   const tasks = list.tasks.map(x => {
     if (!ticked.has(x.n) || x.status === 'done') return x
     const linked = Object.entries(x.work)
-    const builder = linked.filter(([, w]) => isBuilder(w)).at(-1) ?? linked.at(-1)
+    // no builder by role: whoever last built or fixed it whatever their role (a QA member may have built it), else the last linked
+    const builder = linked.filter(([, w]) => isBuilder(w)).at(-1) ?? linked.filter(([, w]) => w.step === 'build' || w.step === 'fix').at(-1) ?? linked.at(-1)
     return { ...x, status: 'done' as const, doneAt: at, doneBy: builder?.[0] ?? null }
   })
   return { ...list, tasks }
