@@ -105,7 +105,10 @@ The lead (the main session) gets four tools, offered as `mcp__agent-hq__hq_assig
 - **`hq_assign`**: start a member on a scoped job. Input: `role`, `task`, and optionally `files` (globs the member may
   change), `done` (what finished means), `limits` (what to leave alone), `name` and `worktree`
   (`true` runs the member in its own git worktree: the tool then does not start it, but answers with the Agent call, with
-  `isolation: "worktree"`, for the lead to make; the member commits there and the lead merges). The member receives a brief with
+  `isolation: "worktree"`, for the lead to make; the member commits there and the lead merges; it cannot be combined with
+  `files`, as the guard checks scopes against the project folder, not the worktree). Until the lead makes that call the
+  member's name stays reserved, as after a refused start. In a session without a TaskCreate tool, `hq_assign` says the job
+  is tracked on the sidebar and live page instead of reporting a board failure. The member receives a brief with
   Goal / Files / Done when / Do not touch sections, the job goes on the task board with the member as owner, and the
   files scope is handed to the rule guard. If the session refuses the mod's start (auto mode does, as a plugin's start
   carries no request from you), the board task and scope stay set and the tool answers with the exact Agent call

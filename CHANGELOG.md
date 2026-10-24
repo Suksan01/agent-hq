@@ -3,10 +3,10 @@
 ## Unreleased
 
 ### Added
-- **hq_assign `worktree: true`.** Runs a member in its own git worktree: the tool answers with the Agent call (carrying `isolation: "worktree"`) for the lead to make, and the brief tells the member to commit there for the lead to merge. The feature skill uses it for parallel tasks.
+- **hq_assign `worktree: true`.** Runs a member in its own git worktree: the tool answers with the Agent call (carrying `isolation: "worktree"`) for the lead to make, and the brief tells the member to commit there for the lead to merge. It cannot be combined with `files` (the guard checks scopes against the project folder). The feature skill uses it for parallel tasks.
 
 ### Fixed
-- **No false board failure.** In a session without a TaskCreate tool, hq_assign no longer says the board "could not be updated": it says once that the assignment is tracked on the Agent HQ sidebar and live page. A real TaskCreate error keeps its reason.
+- **No false board failure.** In a session whose tool list has no TaskCreate (and the call fails), hq_assign no longer says the board "could not be updated": it says once that the assignment is tracked on the Agent HQ sidebar and live page. A real TaskCreate error keeps its reason.
 
 ## 0.7.2 (2026-10-24)
 
