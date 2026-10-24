@@ -13,7 +13,9 @@ then the review role reviews and QA runs the tests. One commit per accepted task
   - Meets: AC1, AC2, AC3, AC12. Types for the list (spec "Data"), `parsePlan(text)` (the `- [ ] N. Title` and
     `- [x] N. Title` lines; titles cut and masked with `maskSecrets`), `mergeList(old, parsed)` (re-plan: work kept by
     number, dropped tasks' time and cost into `removed`), `readList`/`writeList` (validate on read, unknown `version`
-    ignored, atomic write by temp file and rename). Pure functions take no engine; file I/O takes `$`.
+    ignored). The engine's `$.fs` has no rename, so the list is written in one call; a half-written file reads as no
+    list (AC12) and the next `hq_plan` rewrites it. Pure functions take no engine; file I/O takes `$`. Signatures as
+    QA's tests fix them (`.claude/agent-hq/reports/qa/qa-1.md`).
   - Done: tests pass; invalid or missing file reads as "no list" with a reason, never throws.
   - Depends on: none.
 
@@ -27,8 +29,8 @@ then the review role reviews and QA runs the tests. One commit per accepted task
 
 - [ ] 3. **Guard tasks.json** - owner: senior-dev
   - Files: `hooks/guard.ts`, `hooks/command.ts`. Tests (QA): `tests/guard-tasklist.test.ts`.
-  - Meets: AC13. A member's Write, Edit, NotebookEdit or shell command that changes `.claude/agent-hq/tasks.json` is
-    refused, as `team.json` is now.
+  - Meets: AC13. A member's (or any sub-agent's) Write, Edit, NotebookEdit or shell command that changes
+    `.claude/agent-hq/tasks.json` is refused, as `team.json` is now; the lead is not.
   - Done: tests pass; existing guard tests unchanged and passing.
   - Depends on: none. Parallel with 1 and 2.
 
