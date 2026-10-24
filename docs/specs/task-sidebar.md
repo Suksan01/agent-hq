@@ -1,6 +1,6 @@
 # Task sidebar
 
-Status: spec (draft)
+Status: spec (approved)
 
 ## Request
 
