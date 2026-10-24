@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Changed
+- **Self-evaluation states the evidence rule.** The skill now says a 5 cites its proof and what counts as proof per axis, as the role prompt does, and every axis in its examples carries a gap or a proof.
 - **Works alongside Superpowers.** With Superpowers (or another workflow plugin) enabled, the lead is told that
   Agent HQ runs the team's work: `/agent-hq:feature`, hq_assign and hq_review, not Superpowers'
   subagent-driven-development, executing-plans or dispatching-parallel-agents, whose plain subagents skip the board,

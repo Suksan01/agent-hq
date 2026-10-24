@@ -9,7 +9,7 @@ Spec: docs/specs/self-eval-test.md (AC1-AC5). Tasks run one after another: each 
     example and the axis, the brainstorm found (spec "What the brainstorm found"); no other file changed
   - Notes: plain `node:test` and `node:assert/strict`, read files with `readFileSync` like
     `skills/feature/skill.test.mjs`; read `hooks/team.ts` as text, never import it
-- [ ] 2. **Fix the skill** (Senior Developer, senior-dev-1), after 1
+- [x] 2. **Fix the skill** (Senior Developer, senior-dev-1), after 1
   - Files: `skills/self-evaluation/SKILL.md`, `CHANGELOG.md`
   - Meets: AC4 (second half), project rules (CHANGELOG line under Unreleased; the language line stays)
   - Done: task 1's test passes; `node --test skills/*/skill.test.mjs` passes; the rule paragraph states the

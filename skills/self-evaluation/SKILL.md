@@ -30,8 +30,9 @@ your next run.
 Scores: **5** nothing reasonable to improve · **4** minor nits only · **3** meets the assignment with one notable
 weakness · **2** a clear gap that hurts correctness or use · **1** misses the assignment or has serious errors.
 
-**The evidence rule.** Every score below 5 names the gap: what is missing or wrong, and where. "Could be better" is
-not a score. A 5 needs proof too: cite the test run, exit code, lint output or grep that shows it. Show the gap, don't
+**The evidence rule.** Every score below 5 names its gap: what is missing or wrong, and where. "Could be better" is
+not a score. A 5 cites its proof in the same place: for accuracy and completeness a test run or grep, for clarity,
+actionability and conciseness a file:line, a line count or a section of your reply. Show the gap or the proof, don't
 just name it.
 
 ## Steps
@@ -43,7 +44,8 @@ just name it.
 4. End your reply to the lead with the scorecard, in this shape:
 
    ```
-   Self-check 4.2: accuracy 5, completeness 4 (no test for an empty list), clarity 4, actionability 4 (migration not run), conciseness 4
+   Self-check 4.2: accuracy 5 (node --test: 12 pass), completeness 4 (no test for an empty list), clarity 4 (the
+   result sits in the last paragraph), actionability 4 (migration not run), conciseness 4 (steps 2 and 3 repeat)
    Open: run the migration before merging; nothing else
    ```
 
@@ -59,8 +61,8 @@ just name it.
 ```
 Assignment: add retry logic to every HTTP call in the client.
 Self-check 2.8: accuracy 2 (used urllib3; the client is built on httpx), completeness 3 (GET only, the assignment
-said every call), clarity 4, actionability 2 (no tests, so the lead cannot merge it), conciseness 3 (retry settings
-repeated in three places)
+said every call), clarity 4 (the retry settings are explained only after the code), actionability 2 (no tests, so the lead cannot merge it),
+conciseness 3 (retry settings repeated in three places)
 Open: switch to httpx retries, cover POST/PUT, add tests
 Lesson kept: check which HTTP library the client uses before adding to it.
 ```
