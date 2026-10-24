@@ -142,6 +142,14 @@ test('an ask a host answers (approver host: an SDK or -p permission callback, a 
   expect(s.runs).toEqual([])
 })
 
+// the shape the engine sends a plugin (read from the engine binary, no package type exists): a renamed field must fail here
+test('a full tool.check event as the engine sends it holds a person ask and passes a host ask', async ($, on) => {
+  const s = await boot($, on)
+  const event = { tool: 'Bash', input: { command: 'rm -rf build' }, tool_use_id: 'u9', agentId: undefined, approver: 'person' }
+  expect(await s.check(event)).toEqual({ decision: 'allow', reason: ALLOWED })
+  expect(await s.check({ ...event, tool_use_id: 'u10', approver: 'host' })).toEqual(ASKED)
+})
+
 test('an ask with no approver (nobody can answer it) is never held', async ($, on) => {
   const s = await boot($, on)
   expect(await s.check({ approver: undefined })).toEqual(ASKED)
