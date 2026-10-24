@@ -58,6 +58,8 @@ describe('parseAssign', () => {
     expect(ok({ role: 'frontend-dev', task: 'Build it' }).prompt).toContain('## Report\nWrite your full report to `.claude/agent-hq/reports/frontend-dev/frontend-dev-1.md`, then reply in at most 15 lines')
     expect(ok({ role: 'general-purpose', task: 'Build it' }, null).prompt).not.toContain('## Report') // a general agent has no role prompt to follow
     const review = parseAssign({ role: 'qa', task: 'Review it' }, TEAM, {}, [], { report: false })
+    const rooted = parseAssign({ role: 'frontend-dev', task: 'Build it' }, TEAM, {}, [], { root: '/work/app' })
+    expect(rooted.ok && rooted.prompt).toContain('to `/work/app/.claude/agent-hq/reports/frontend-dev/frontend-dev-1.md`') // absolute when the project is known
     expect(review.ok && review.prompt).not.toContain('## Report')
   })
 

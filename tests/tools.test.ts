@@ -558,6 +558,9 @@ test('hq_review points the reviewer at the member\'s report file and keeps the r
   expect(prompt).toContain('Do not re-run tests its report shows passing')
   expect(prompt).toContain('at most 30 lines')
   expect(prompt).not.toContain('## Report') // the verdict is the reply: a reviewer writes no report file
+  const rooted = setup({ agents: [agent('a1', 'frontend-dev-1', 'completed')] })
+  await hqReview(rooted.$, { agent: 'a1' }, { ...rooted.deps, root: async () => '/work/app' })
+  expect(String(rooted.calls.spawn[0]?.prompt)).toContain('`/work/app/.claude/agent-hq/reports/frontend-dev/frontend-dev-1.md`')
 })
 
 test('hq_review keeps the whole brief within a task even with a huge report, and the report fence stays closed', async () => {

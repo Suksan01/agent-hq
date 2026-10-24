@@ -249,6 +249,9 @@ test('a team file loads: roles registered, lead names the main row, lead section
   expect(SELF_EVAL_SKILL).toBe('agent-hq:self-evaluation') // the mod's skills/self-evaluation folder
   expect(prompts[0]).toContain(`load the \`${SELF_EVAL_SKILL}\` skill only when unsure`)
   expect(prompts[0]).toContain('update your agent memory') // auto memory is on here (the variable is not set to a yes)
+  // the team's files by absolute path: a member working in another repo would otherwise write them there
+  expect(prompts[0]).toContain('Read `/work/app/.claude/agent-hq/team-notes.md` before you start')
+  expect(prompts[0]).toContain('`/work/app/.claude/agent-hq/reports/<role id>/<name>.md`')
 
   const composed = await $.prompt.compose({ model: 'm', promptModel: 'm', surfaces: [], tools: [], outputStyle: null, traits: [] })
   expect(composed.sections.map(s => s.id)).toEqual(['engine', 'agent-hq:team'])

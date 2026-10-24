@@ -137,12 +137,13 @@ async function loadTeam($: EngineInterface, options: { approve?: boolean; expect
   // the engine ignores an agent's `memory` when auto memory is off; members then keep lessons in the team notes.
   // shortcut: only the environment variable is seen, not `autoMemoryEnabled: false` in settings.
   const hasMemory = !/^(1|true|yes|on)$/i.test((await $.env.get('CLAUDE_CODE_DISABLE_AUTO_MEMORY').catch(() => undefined)) ?? '')
+  const root = await $.session.cwd().catch(() => undefined) // the project, so members name its team files absolutely
   // shortcut: a role removed from the file stays registered until the session restarts (there is no unregister).
   for (const role of parsed.roles) {
     await $.agent.register({
       name: role.id,
       description: `${role.title} on the ${parsed.name} team. ${role.mission}`.slice(0, 1000),
-      prompt: rolePrompt(parsed, role, hasMemory, lang),
+      prompt: rolePrompt(parsed, role, hasMemory, lang, root),
       ...(role.tools ? { tools: role.tools } : {}),
       ...(role.model ? { model: role.model } : {}),
       ...(role.effort ? { effort: role.effort } : {}),
@@ -406,6 +407,7 @@ const toolDeps = ($: EngineInterface): ToolDeps => ({
   resultOf: async id => (await read($, results))[id],
   record: event => recordEvents($, [event]),
   // the engine allows $.fs only as calls on $, so the reader gets two functions rather than $.fs itself
+  root: () => $.session.cwd(),
   readBrief: async path => readBriefFile({ stat: (p, options) => $.fs.stat(p, options), read: p => $.fs.read(p) }, await pathOf($, path), await pathOf($, BRIEFS_DIR)),
   readTeamFile: async () => {
     const source = await read($, teamSource)
