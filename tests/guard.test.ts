@@ -58,6 +58,24 @@ test('a role with a tools list refuses every other tool and says which', () => {
   expect(call('free', 'WebFetch', { url: 'https://x.dev' })).toBeNull() // no tools list: every tool
 })
 
+test('only the team assistant writes briefs, whatever its paths: a brief becomes another member\'s instructions', () => {
+  const team: HqTeam = {
+    ...TEAM,
+    roles: [
+      ...TEAM.roles,
+      { id: 'assistant', title: 'Team Assistant', count: 1, mission: 'm', tasks: [], rules: [], skills: [], tools: ['Read', 'Write', 'Edit'], guard: { paths: ['docs/specs/**', 'docs/plans/**'] } },
+      { id: 'coord', title: 'Read-only Coordinator', count: 1, mission: 'm', tasks: [], rules: [], skills: [], guard: { readOnly: true } },
+    ],
+  }
+  const brief = '.claude/agent-hq/briefs/3-dev.md'
+  expect(call('assistant', 'Write', { file_path: brief }, { team })).toBeNull() // outside its guard paths
+  expect(call('assistant', 'Edit', { file_path: `/work/app/${brief}` }, { team, cwd: '/work/app' })).toBeNull()
+  expect(call('assistant', 'Write', { file_path: '.claude/agent-hq/briefs/../team.json' }, { team })).not.toBeNull()
+  expect(call('assistant', 'Write', { file_path: '.claude/agent-hq/briefsx/3.md' }, { team })).not.toBeNull() // a sibling sharing the prefix
+  expect(call('scoped', 'Write', { file_path: brief }, { team })).not.toBeNull() // a developer may not
+  expect(call('coord', 'Write', { file_path: brief }, { team })).not.toBeNull() // nor a read-only coordinator
+})
+
 test('coordination tools (SendMessage, progress and task tools) are always allowed, for every role, whatever its tools list, read-only flag or path guard', () => {
   const PROGRESS = ['SendMessage', 'TodoWrite', 'mcp__plan-progress__plan_progress', 'TaskCreate', 'TaskUpdate', 'TaskGet', 'TaskList']
   // hand-built, so the tools lists really lack them (parseTeam adds them to a list; the guard must not depend on that)

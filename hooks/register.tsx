@@ -405,6 +405,7 @@ const toolDeps = ($: EngineInterface): ToolDeps => ({
   recordAssignment: async (name, assignment) => void (await update($, assignments, all => ({ ...all, [name]: assignment }))),
   resultOf: async id => (await read($, results))[id],
   record: event => recordEvents($, [event]),
+  readBrief: async path => $.fs.read(await pathOf($, path)).catch(() => null),
   readTeamFile: async () => {
     const source = await read($, teamSource)
     if (!source || source.error || source.needsApproval || !(await read($, team))) return null

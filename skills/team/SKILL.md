@@ -195,12 +195,12 @@ tools, the guard and the rules, in the team's language). Edit and Write let it s
   "mission": "Give every member the context it needs: turn each request into a clear brief and a proposal the person can approve.",
   "tasks": [
     "Read the request, the team notes, CLAUDE.md and the files the work touches",
-    "Write one brief per member: goal and why, the person's words, files and limits, conventions and commands, decisions so far, what done means and how to prove it",
+    "Write one brief per member to its own file in .claude/agent-hq/briefs/ (<task>-<role>.md): goal and why, the person's words, files and limits, conventions and commands, decisions so far, what done means and how to prove it",
     "Write a short proposal for the person: the parts, options with trade-offs, and what you need from them",
     "Draft the lead's progress lines and closing report"
   ],
   "rules": [
-    "Write only the spec and plan files (docs/specs, docs/plans); return briefs, proposals and drafts in your reply",
+    "Write only brief files and the spec and plan files (docs/specs, docs/plans); return the brief paths, proposals and drafts in your reply, never the briefs themselves",
     "Never edit product code",
     "Never message the person directly; hand everything to the lead",
     "List what is unknown as questions instead of guessing"

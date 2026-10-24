@@ -25,6 +25,8 @@ export const memoryDirOf = (roleId: string) => `.claude/agent-memory/${`${AGENT_
 /** Members' full reports, one folder per role: the lead and peers read them on demand instead of carrying them in context. */
 export const REPORTS_DIR = '.claude/agent-hq/reports'
 export const reportPathOf = (roleId: string, name: string) => `${REPORTS_DIR}/${roleId}/${name}.md`
+/** Briefs the team's assistant writes for hq_assign's `brief_file`, so a brief is never pasted through the lead twice. */
+export const BRIEFS_DIR = '.claude/agent-hq/briefs'
 /** How long a member's reply to the lead may be (Superpowers' report contract): the full detail stays in its report file. */
 export const REPLY_LINES = 15
 /** A read-only member cannot write a report file, so its findings are its reply: capped too. */
@@ -228,10 +230,12 @@ export const NO_TEAM_PROMPT =
   'Agent HQ is installed but this project has no agent team yet. When the person asks for a team of agents, or for work that clearly needs several agents in parallel, offer to set one up with /agent-hq:team (one short line; do not push it otherwise).'
 
 const ASSISTANT_TITLE = /assistant|coordinator/i
+/** The team's assistant, which writes the briefs: by id, or by a title such as "Team Assistant" or "Coordinator". */
+export const isAssistantRole = (role: TeamRole) => role.id === 'assistant' || ASSISTANT_TITLE.test(role.title)
 
 /** How the lead briefs members, who see none of the conversation; a team's assistant, when it has one, writes the briefs. */
 function briefingSection(team: Team): string {
-  const assistant = team.roles.find(r => r.id === 'assistant' || ASSISTANT_TITLE.test(r.title))
+  const assistant = team.roles.find(isAssistantRole)
   return [
     '## Briefing members',
     'A member sees none of this conversation, only the brief you give it. Each brief carries: the goal and why it matters, the person\'s own words where they said what they want, the files or area and what it must not touch, the project\'s conventions and commands that apply, decisions already made, and what "done" means and how to prove it.',
@@ -239,7 +243,7 @@ function briefingSection(team: Team): string {
     `- A member's reply is a short status block; its full report is in the file the reply names. Read that file only when you need the detail, and never commit \`${REPORTS_DIR}/\` (it is the team's scratch). On \`Status: BLOCKED\` or \`NEEDS_CONTEXT\` answer it with SendMessage (the missing context, a ruling, or a smaller task); on \`DONE_WITH_CONCERNS\` weigh the concerns before review.`,
     '- Give several small tasks of the same kind to one member in one brief rather than one member each.',
     assistant
-      ? `- Before you assign substantial work, have the ${assistant.title} ("${AGENT_PREFIX}${assistant.id}") write each member's brief and a short proposal for the person (the parts, options and trade-offs, what it needs from them); it returns them in its reply, and saves only spec and plan files. Check its briefs, show the person the proposal, then hand each brief to its member. It also drafts your updates and the closing report for you to send.`
+      ? `- Before you assign substantial work, have the ${assistant.title} ("${AGENT_PREFIX}${assistant.id}") write each member's brief to its own file in \`${BRIEFS_DIR}/\` and a short proposal for the person (the parts, options and trade-offs, what it needs from them); its reply gives the proposal and the brief paths, not the briefs, and it saves only those, spec and plan files. Read each brief file to check it, show the person the proposal, then hand each one over with hq_assign's \`brief_file\` instead of pasting it. It also drafts your updates and the closing report for you to send.`
       : '',
   ]
     .filter(Boolean)

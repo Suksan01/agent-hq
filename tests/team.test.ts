@@ -166,6 +166,14 @@ test('members work with each other directly and keep their replies to the lead s
   expect(lead).toContain('Use superset:orchestrate only when the person asks for separate workspaces or hosts')
   expect(lead).toContain("Superset's page to share a spec or report")
   expect(lead).toContain('On `Status: BLOCKED` or `NEEDS_CONTEXT` answer it with SendMessage')
+  expect(lead).not.toContain('brief_file') // no assistant, no brief files
+  // with an assistant, briefs go through files: written once, read by the lead to check, handed over by path
+  const withAssistant = parseTeam(JSON.stringify({ ...TEAM, roles: [...TEAM.roles, { id: 'assistant', title: 'Team Assistant', count: 1, mission: 'Write briefs.', tasks: [], rules: [], skills: [] }] }))
+  if (typeof withAssistant === 'string') throw new Error(withAssistant)
+  const assistedLead = leadPrompt(withAssistant)
+  expect(assistedLead).toContain('to its own file in `.claude/agent-hq/briefs/`')
+  expect(assistedLead).toContain('the brief paths, not the briefs')
+  expect(assistedLead).toContain("hq_assign's `brief_file` instead of pasting it")
   // a team without other roles has no one to work with
   const solo = parseTeam(JSON.stringify({ ...TEAM, roles: [TEAM.roles[0]] }))
   if (typeof solo === 'string') throw new Error(solo)

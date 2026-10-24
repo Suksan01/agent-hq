@@ -95,6 +95,30 @@ test('hq_assign starts the agent as the team role, remembers its files for the g
   expect(s.memory.events).toEqual([{ agent: 'new1', kind: 'action', text: 'assigned frontend-dev-1: Build the search page' }])
 })
 
+test('hq_assign reads a brief_file the assistant wrote into the task, and refuses one outside the briefs folder', async () => {
+  const s = setup()
+  const read: string[] = []
+  const deps = { ...s.deps, readBrief: async (path: string) => (read.push(path), path.endsWith('3-frontend-dev.md') ? '## Build the search page\nUse the spec.' : null) }
+
+  const answer = await hqAssign(s.$, { role: 'frontend-dev', task: 'Task 3', brief_file: '.claude/agent-hq/briefs/3-frontend-dev.md' }, deps)
+
+  expect(answer.isError).toBeUndefined()
+  expect(String(s.calls.spawn[0]?.prompt)).toContain('## Goal\nTask 3\n\n## Build the search page\nUse the spec.') // the lead's line first, then the brief
+  expect(s.memory.assignments['frontend-dev-1']?.task).toBe('Task 3\n\n## Build the search page\nUse the spec.')
+  // a brief alone is a task too
+  expect((await hqAssign(s.$, { role: 'frontend-dev', brief_file: '.claude/agent-hq/briefs/3-frontend-dev.md' }, deps)).isError).toBeUndefined()
+  // anything but a .md file inside the briefs folder is never read
+  for (const path of ['src/secrets.md', '.claude/agent-hq/briefs/../team.json', '.claude/agent-hq/briefs/x.txt', '/etc/passwd', 7]) {
+    const refused = await hqAssign(s.$, { role: 'frontend-dev', brief_file: path }, deps)
+    expect([path, refused.isError, refused.text]).toEqual([path, true, expect.stringContaining('"brief_file" must be a .md file under .claude/agent-hq/briefs/')])
+  }
+  expect(read).toEqual(['.claude/agent-hq/briefs/3-frontend-dev.md', '.claude/agent-hq/briefs/3-frontend-dev.md'])
+  // a missing or empty brief, or no task at all, starts nobody
+  expect((await hqAssign(s.$, { role: 'frontend-dev', brief_file: '.claude/agent-hq/briefs/9-gone.md' }, deps)).text).toContain('could not read .claude/agent-hq/briefs/9-gone.md')
+  expect((await hqAssign(s.$, { role: 'frontend-dev' }, deps)).text).toContain('give the "task"')
+  expect(s.calls.spawn).toHaveLength(2)
+})
+
 test('hq_assign names the new agent with its nickname, in the answer and in the feed', async () => {
   const s = setup({ nickname: 'Mochi-chan' })
 

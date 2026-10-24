@@ -11,7 +11,7 @@ import { planHire } from './hire'
 import { LockTimeout, withLock } from './lock'
 import type { NewEvent } from './feed'
 import { MAIN, isFinished, who } from './model'
-import { isReadOnlyRole, reportPathOf, roleTitle } from './team'
+import { BRIEFS_DIR, isReadOnlyRole, reportPathOf, roleTitle } from './team'
 import { t } from './i18n'
 import type { Lang } from './i18n'
 import type { HqData } from './view'
@@ -37,13 +37,14 @@ export const TOOL_SPECS: ToolSpec[] = [
       type: 'object',
       properties: {
         role: { type: 'string', description: 'The team role id, e.g. "frontend-dev".' },
-        task: { type: 'string', description: 'What the agent is to do (at most 4000 characters).' },
+        task: { type: 'string', description: 'What the agent is to do (at most 4000 characters with any brief_file). Give this, brief_file, or both.' },
+        brief_file: { type: 'string', description: 'A brief the team assistant wrote, under .claude/agent-hq/briefs/ (e.g. ".claude/agent-hq/briefs/3-frontend-dev.md"); its text becomes the task, after any "task" you give. Read it first to check it.' },
         files: { type: 'array', items: { type: 'string' }, description: 'Globs the agent may change, relative to the project (at most 50). The guard keeps it inside them.' },
         done: { type: 'string', description: 'How the agent knows it is finished.' },
         limits: { type: 'string', description: 'What the agent must leave alone.' },
         name: { type: 'string', description: 'A name for the agent; default is the next free "<role>-<n>".' },
       },
-      required: ['role', 'task'],
+      required: ['role'],
     },
   },
   {
@@ -127,6 +128,8 @@ export type ToolDeps = {
   writeTeam: (path: string, source: string) => Promise<HqTeam | null>
   /** Asks the person to confirm (the engine's question dialog): 'unavailable' when nobody can be asked. */
   confirm: (question: string) => Promise<'yes' | 'no' | 'unavailable'>
+  /** A project file's text (hq_assign's brief_file, already checked to be under the briefs folder), or null. */
+  readBrief?: (path: string) => Promise<string | null>
   /** The person's language, for what they read (the feed, the confirmation); the answers the model reads stay English. */
   lang?: Lang
 }
@@ -196,8 +199,25 @@ async function startAssigned($: EngineInterface, input: unknown, deps: ToolDeps)
   return { ...assigned, agentId: started.agentId }
 }
 
+/** A brief_file hq_assign may read: one plain relative .md path inside the briefs folder, going nowhere above it. */
+const isBriefPath = (path: string) => path.startsWith(`${BRIEFS_DIR}/`) && path.endsWith('.md') && !/[\r\n\\]/.test(path) && !path.split('/').includes('..')
+
+/** The input with a brief_file's text joined into its task, or the reason it is refused; input without one as it is. */
+async function withBrief(input: unknown, deps: ToolDeps): Promise<{ input: unknown } | { error: string }> {
+  if (!isRecord(input) || input.brief_file === undefined || input.brief_file === null) return { input }
+  const path = input.brief_file
+  if (typeof path !== 'string' || !isBriefPath(path.trim())) return { error: `"brief_file" must be a .md file under ${BRIEFS_DIR}/, relative to the project` }
+  const text = ((await deps.readBrief?.(path.trim())) ?? '').trim()
+  if (!text) return { error: `could not read ${path.trim()}, or it is empty` }
+  const task = typeof input.task === 'string' && input.task.trim() ? `${input.task.trim()}\n\n${text}` : text
+  return { input: { ...input, task } }
+}
+
 /** hq_assign: check the input, start the agent, remember its scope for the guard, and put it on the board. */
-export async function hqAssign($: EngineInterface, input: unknown, deps: ToolDeps): Promise<ToolAnswer> {
+export async function hqAssign($: EngineInterface, given: unknown, deps: ToolDeps): Promise<ToolAnswer> {
+  const briefed = await withBrief(given, deps)
+  if ('error' in briefed) return fail(`hq_assign: ${briefed.error}`)
+  const input = briefed.input
   const asked = isRecord(input) ? (typeof input.name === 'string' && input.name ? input.name : typeof input.role === 'string' ? input.role : '') : ''
   let started: Started
   try {

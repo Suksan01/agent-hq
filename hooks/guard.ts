@@ -7,7 +7,7 @@
 import type { HqTeam, HqTeamRole } from '../types'
 import { changesTeamFile, commandsOf, pushes, writes } from './command'
 import { COORDINATION_TOOLS } from './model'
-import { AGENT_PREFIX, REPORTS_DIR, TEAM_FILE, TEAM_NOTES, isReadOnlyRole, memoryDirOf } from './team'
+import { AGENT_PREFIX, BRIEFS_DIR, REPORTS_DIR, TEAM_FILE, TEAM_NOTES, isAssistantRole, isReadOnlyRole, memoryDirOf } from './team'
 
 export type GuardCall = {
   team: HqTeam | null
@@ -104,6 +104,13 @@ function isTeamMemory(roleId: string, given: unknown, cwd: string | undefined): 
   return relative !== null && (relative === TEAM_NOTES || relative.startsWith(`${memoryDirOf(roleId)}/`) || relative.startsWith(`${REPORTS_DIR}/${roleId}/`))
 }
 
+/** A file inside `dir` of this project (`..` resolved first; absolute only with the project to compare to). */
+function isUnder(dir: string, given: unknown, cwd: string | undefined): boolean {
+  if (typeof given !== 'string' || given === '' || (given.startsWith('/') && !cwd)) return false
+  const relative = relativePath(given, cwd)
+  return relative !== null && relative.startsWith(`${dir}/`)
+}
+
 /** A team.json (in a project, or in the home folder), which a member must never change: it is where the guards come from. */
 function isTeamFile(given: unknown): boolean {
   const parts = typeof given === 'string' ? resolveParts(given) : null
@@ -140,6 +147,8 @@ function guardRole(role: HqTeamRole, call: GuardCall): { deny: string } | null {
   if (WRITE_TOOLS.includes(call.tool) && isTeamFile(named)) return deny(TEAM_FILE_REASON)
   // memory and notes are plain files: only a role that may write files at all keeps them, whatever its paths
   if (MEMORY_TOOLS.includes(call.tool) && !readOnly && (!role.tools || role.tools.includes(call.tool)) && isTeamMemory(role.id, call.input.file_path, call.cwd)) return null
+  // only the assistant writes briefs: a brief becomes another member's instructions once the lead hands it over
+  if (MEMORY_TOOLS.includes(call.tool) && !readOnly && (!role.tools || role.tools.includes(call.tool)) && isAssistantRole(role) && isUnder(BRIEFS_DIR, call.input.file_path, call.cwd)) return null
 
   if (role.tools && !role.tools.includes(call.tool)) return deny(`${call.tool} is not one of this role's tools`)
 
