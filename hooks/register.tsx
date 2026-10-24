@@ -681,8 +681,8 @@ function noteMode(e: { permission_mode?: string; agent_id?: string }) {
   if (typeof e.permission_mode === 'string') modes.set(e.agent_id ?? MAIN, e.permission_mode)
 }
 
-type Ask = { tool: string; input: unknown; tool_use_id?: string; agentId?: string; ceiling?: string }
-type Verdict = { decision: 'allow' | 'ask' | 'deny'; reason?: string; setting?: string; hook?: string; decider?: 'host' }
+type Ask = { tool: string; input: unknown; tool_use_id?: string; agentId?: string; ceiling?: string; approver?: string }
+type Verdict = { decision: 'allow' | 'ask' | 'deny'; reason?: string; setting?: string; hook?: string }
 
 /**
  * An ask offered on the live page first: tool.check waits while web/approve.mjs waits for the person's answer there.
@@ -698,7 +698,7 @@ async function askOnPage<V extends Verdict>($: EngineInterface, e: Ask, verdict:
     const reason = verdict.reason ? maskSecrets(verdict.reason) : undefined
     const facts = {
       decision: verdict.decision,
-      decider: verdict.decider,
+      approver: e.approver,
       isOn: await isSettingOn($, PAGE_APPROVALS),
       pages: await openPages($),
       toolUseId: e.tool_use_id,

@@ -14,7 +14,7 @@ const PAGES = '/home/me/.claude/agent-hq/live/pages.json'
 const MEMBER: AgentInfo = { id: 'a1', name: 'dev-1', type: 'general-purpose', description: 'x', status: 'running' }
 type Run = { argv: readonly string[]; init?: { stdin?: string; timeoutMs?: number } }
 type Helper = { stdout: string; exitCode?: number } | 'rejects' | 'waits'
-type Verdict = { decision: 'allow' | 'ask' | 'deny'; reason?: string; setting?: string; hook?: string; decider?: 'host' }
+type Verdict = { decision: 'allow' | 'ask' | 'deny'; reason?: string; setting?: string; hook?: string }
 type Box = { verdict: Verdict; pages: string | null; helper: Helper; release: () => void; login: string; opens: boolean; answer: string | null }
 type Origin = { kind: string; name?: string }
 
@@ -66,7 +66,11 @@ async function boot($: Engine, on: On, options: Boot = {}) {
     return { value: { code: 0, signal: null } }
   })
   on('agent.list', () => ({ value: [MEMBER] }))
-  on('tool.check', () => box.verdict)
+  // the engine's own dialog call is not the ask under test: a plugin ask nobody can answer (no approver) is denied, so let it through
+  on('tool.check', (_, e) => {
+    const isDialog = (e.tool as string) === 'AskUserQuestion' && ((e.input as { questions?: unknown[] }).questions?.length ?? 0) > 0
+    return isDialog ? { decision: 'allow' as const } : box.verdict
+  })
   on('ui.toast', (_, e) => {
     toasts.push(e.text)
     toastTimes.push(e.timeoutMs)
@@ -132,10 +136,9 @@ test('the card says why the engine asked: the reason, masked, and the setting or
   expect(JSON.parse(s.runs[1]?.init?.stdin ?? '')).toMatchObject({ reason: null, hook: null, setting: null })
 })
 
-test('an ask a host answers (decider host: an SDK or -p permission callback, a served call) is never held', async ($, on) => {
+test('an ask a host answers (approver host: an SDK or -p permission callback, a served call) is never held', async ($, on) => {
   const s = await boot($, on)
-  s.box.verdict = { decision: 'ask', reason: 'needs a look', decider: 'host' }
-  expect(await s.check()).toEqual({ decision: 'ask', reason: 'needs a look', decider: 'host' })
+  expect(await s.check({ approver: 'host' })).toEqual(ASKED)
   expect(s.runs).toEqual([])
 })
 

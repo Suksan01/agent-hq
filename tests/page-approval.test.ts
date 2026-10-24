@@ -13,7 +13,7 @@ test('held only when every condition holds', () => {
   const refused: Partial<HoldFacts>[] = [
     { decision: 'allow' },
     { decision: 'deny' },
-    { decider: 'host' }, // an SDK or -p host's permission callback, or a served call's own session, answers it
+    { approver: 'host' }, // an SDK or -p host's permission callback, or a served call's own session, answers it
     { isOn: false },
     { pages: 0 },
     { toolUseId: undefined },
