@@ -256,7 +256,7 @@ test('hq_assign still succeeds when the board cannot be updated, and says so', a
     const s = setup({ board })
     const answer = await hqAssign(s.$, { role: 'frontend-dev', task: 'x' }, s.deps)
     expect(answer.isError).toBeUndefined()
-    expect(answer.text).toContain('task board could not be updated')
+    expect(answer.text).toContain(`task board could not be updated: ${board === 'throws' ? 'no board' : 'TaskCreate returned no task id'}.`) // the reason, for the lead to read
     expect(s.calls.spawn).toHaveLength(1)
   }
 })
@@ -309,6 +309,15 @@ test('hq_review works from the agent id, and notes when no answer was recorded',
 
   expect((s.calls.spawn[0] as { prompt: string }).prompt).toContain('no final message was recorded')
   expect((s.calls.spawn[0] as { prompt: string }).prompt).toContain('job of frontend-dev-1') // the agent's description stands in for its task
+})
+
+test('hq_review takes an idle teammate (it replied and waits for the next message), but not one held on a permission', async () => {
+  const s = setup({ agents: [agent('a1', 'frontend-dev-1', 'idle'), agent('a2', 'frontend-dev-2', 'waiting')] })
+  s.memory.results.a1 = 'Status: DONE'
+
+  expect((await hqReview(s.$, { agent: 'a1' }, s.deps)).isError).toBeUndefined()
+  expect(String(s.calls.spawn[0]?.prompt)).toContain('Status: DONE')
+  expect((await hqReview(s.$, { agent: 'a2' }, s.deps)).text).toContain('has not finished (it is waiting)')
 })
 
 test('hq_review refuses an unknown, unfinished or failed agent, a missing review role, and bad input', async () => {

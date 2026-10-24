@@ -143,18 +143,24 @@ type BoardCall = (call: { tool: 'TaskCreate' | 'TaskUpdate'; [field: string]: un
 /** A text's first line, trimmed and cut to `max`: a task's subject or description, with nothing of the lines below. */
 const firstLine = (text: string, max: number) => text.split('\n')[0]?.trim().slice(0, max) ?? ''
 
-/** The board task for an assignment: created, then owned by the agent and, once it runs, marked in progress. Returns its id, or null. */
-async function linkBoardTask($: EngineInterface, name: string, task: string, isRunning: boolean): Promise<string | null> {
+const MAX_BOARD_REASON = 120
+
+/**
+ * The board task for an assignment: created, then owned by the agent and, once it runs, marked in progress. Its id, or
+ * why there is none (a session without the task tools rejects the call by name), for the lead to read.
+ */
+async function linkBoardTask($: EngineInterface, name: string, task: string, isRunning: boolean): Promise<{ id: string } | { reason: string }> {
   try {
     const subject = firstLine(task, SUBJECT_MAX) || `Work for ${name}`
     // the session's own task tools, so the board (and the plugin's hook that mirrors it) see them like Claude's own calls
     const created = await ($.tool.call as unknown as BoardCall)({ tool: 'TaskCreate', subject, description: task, activeForm: `${name}: ${subject}` })
     const id = created.result?.task?.id
-    if (!id) return null
+    if (!id) return { reason: 'TaskCreate returned no task id' }
     await ($.tool.call as unknown as BoardCall)({ tool: 'TaskUpdate', taskId: id, owner: name, ...(isRunning ? { status: 'in_progress' } : {}) })
-    return id
-  } catch {
-    return null // the board is a convenience: a failure here never undoes a started agent
+    return { id }
+  } catch (error) {
+    // the board is a convenience: a failure here never undoes a started agent
+    return { reason: firstLine(error instanceof Error ? error.message : String(error), MAX_BOARD_REASON) || 'TaskCreate failed' }
   }
 }
 
@@ -250,7 +256,8 @@ export async function hqAssign($: EngineInterface, given: unknown, deps: ToolDep
     throw error
   }
   if (!started.ok) return fail(`hq_assign: ${started.error}`)
-  const board = await linkBoardTask($, started.name, started.task, !started.refused)
+  const linked = await linkBoardTask($, started.name, started.task, !started.refused)
+  const board = 'id' in linked ? linked.id : null
   if (started.refused) {
     await deps.record({ agent: started.name, kind: 'action', text: t(deps.lang ?? 'en', 'feed.assignedHanded', { name: started.name, task: started.task }) })
     const kept = [...(board ? [`board task #${board}`] : []), ...(started.files.length > 0 ? ['the file scope'] : [])]
@@ -262,7 +269,7 @@ export async function hqAssign($: EngineInterface, given: unknown, deps: ToolDep
   const title = roleTitle(started.team, started.team ? `agent-hq:${started.role}` : started.role)
   return {
     text: [
-      `Started ${called} as ${title}.${board ? ` Board task #${board}.` : ' (The task board could not be updated.)'}`,
+      `Started ${called} as ${title}.${'id' in linked ? ` Board task #${linked.id}.` : ` (The task board could not be updated: ${linked.reason}.)`}`,
       started.files.length > 0 ? `It may change only: ${started.files.join(', ')}.` : 'No file scope was set.',
       'Its result arrives when it finishes; hq_status shows where it stands.',
     ].join(' '),
@@ -291,8 +298,10 @@ export async function hqReview($: EngineInterface, input: unknown, deps: ToolDep
   const wanted = input.agent.trim()
   const subject = Object.values(data.agents).find(a => a.id !== MAIN && (a.id === wanted || a.name === wanted))
   if (!subject) return fail(`hq_review: no agent "${wanted}"`)
-  if (!isFinished(subject.status)) return fail(`hq_review: ${who(subject)} has not finished (it is ${subject.status})`)
-  if (subject.status !== 'completed') return fail(`hq_review: ${who(subject)} did not complete (it ${subject.status === 'killed' ? 'was stopped' : 'failed'}), so there is no work to review`)
+  // a teammate never completes: after its reply it goes idle, waiting for the next message, so idle is reviewable too
+  const isReviewable = subject.status === 'completed' || subject.status === 'idle'
+  if (!isReviewable && !isFinished(subject.status)) return fail(`hq_review: ${who(subject)} has not finished (it is ${subject.status})`)
+  if (!isReviewable) return fail(`hq_review: ${who(subject)} did not complete (it ${subject.status === 'killed' ? 'was stopped' : 'failed'}), so there is no work to review`)
 
   const roles = data.team?.roles ?? []
   const reviewerId = typeof input.reviewer === 'string' && input.reviewer ? input.reviewer : roles.find(r => /review/i.test(r.id))?.id
