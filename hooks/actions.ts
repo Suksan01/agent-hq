@@ -107,7 +107,7 @@ export async function handlePageAction($: EngineInterface, action: PageAction, d
 export type SpawnOutcome = { ok: true; agentId?: string } | { ok: false; error: string }
 
 /** Starts one agent through `$.agent.spawn`: the one path the page and the lead's tools both use. */
-export async function spawnAgent($: EngineInterface, spec: { subagentType: string; name: string; prompt: string; description: string }): Promise<SpawnOutcome> {
+export async function spawnAgent($: EngineInterface, spec: { subagentType: string; name: string; prompt: string; description: string; model?: string }): Promise<SpawnOutcome> {
   const result = await $.agent.spawn(spec).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }))
   // a hook or permission rule can refuse the spawn without throwing
   if ('error' in result) return { ok: false, error: result.error }

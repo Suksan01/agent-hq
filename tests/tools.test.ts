@@ -95,6 +95,21 @@ test('hq_assign starts the agent as the team role, remembers its files for the g
   expect(s.memory.events).toEqual([{ agent: 'new1', kind: 'action', text: 'assigned frontend-dev-1: Build the search page' }])
 })
 
+test('hq_assign runs one task on another model when asked, and on the role\'s own model otherwise', async () => {
+  const s = setup()
+
+  expect((await hqAssign(s.$, { role: 'frontend-dev', task: 'Rename the prop', model: 'haiku' }, s.deps)).isError).toBeUndefined()
+  expect((await hqAssign(s.$, { role: 'frontend-dev', task: 'Build it' }, s.deps)).isError).toBeUndefined()
+
+  expect(s.calls.spawn[0]).toMatchObject({ name: 'frontend-dev-1', model: 'haiku' })
+  expect(s.calls.spawn[1]).not.toHaveProperty('model') // the role's model decides
+  for (const model of ['', 'haiku; echo x', 'a'.repeat(81), 7]) {
+    const refused = await hqAssign(s.$, { role: 'frontend-dev', task: 'x', model }, s.deps)
+    expect([model, refused.isError, refused.text]).toEqual([model, true, expect.stringContaining('the "model" must be an alias')])
+  }
+  expect(s.calls.spawn).toHaveLength(2)
+})
+
 test('hq_assign reads a brief_file the assistant wrote into the task, and refuses one outside the briefs folder', async () => {
   const s = setup()
   const read: string[] = []

@@ -43,6 +43,7 @@ export const TOOL_SPECS: ToolSpec[] = [
         done: { type: 'string', description: 'How the agent knows it is finished.' },
         limits: { type: 'string', description: 'What the agent must leave alone.' },
         name: { type: 'string', description: 'A name for the agent; default is the next free "<role>-<n>".' },
+        model: { type: 'string', description: 'A model for this one task, overriding the role\'s: "haiku" for mechanical work its brief fully specifies, a stronger one for a task a member got stuck on. Leave out to use the role\'s model.' },
       },
       required: ['role'],
     },
@@ -157,7 +158,7 @@ async function linkBoardTask($: EngineInterface, name: string, task: string, isR
   }
 }
 
-type SpawnSpec = { subagentType: string; name: string; prompt: string; description: string }
+type SpawnSpec = { subagentType: string; name: string; prompt: string; description: string; model?: string }
 type Started =
   | { ok: true; role: string; name: string; task: string; files: string[]; agentId?: string; team: HqTeam | null; refused?: { spec: SpawnSpec; reason: string } }
   | { ok: false; error: string }
@@ -176,6 +177,7 @@ function leadStarts(spec: SpawnSpec, reason: string, kept: string, board?: strin
     `subagent_type: ${spec.subagentType}`,
     `name: ${spec.name} (exactly this)`,
     `description: ${spec.description}`,
+    ...(spec.model ? [`model: ${spec.model}`] : []),
     fenceUntrusted('prompt (the text inside the fence, verbatim)', spec.prompt),
   ].join('\n')
 }
@@ -190,7 +192,7 @@ async function startAssigned($: EngineInterface, input: unknown, deps: ToolDeps)
   if (!parsed.ok) return { ok: false, error: parsed.error }
   // recorded before the agent starts: its first tool call may come before spawn returns, and the guard must already know its scope
   await deps.recordAssignment(parsed.name, { role: parsed.role, name: parsed.name, task: parsed.task, ...(parsed.files.length > 0 ? { paths: parsed.files } : {}), at: await deps.now() })
-  const spec = { subagentType: data.team ? `agent-hq:${parsed.role}` : parsed.role, name: parsed.name, prompt: parsed.prompt, description: firstLine(parsed.task, 60) }
+  const spec = { subagentType: data.team ? `agent-hq:${parsed.role}` : parsed.role, name: parsed.name, prompt: parsed.prompt, description: firstLine(parsed.task, 60), ...(parsed.model ? { model: parsed.model } : {}) }
   const started = await spawnAgent($, spec)
   const assigned = { ok: true as const, role: parsed.role, name: parsed.name, task: parsed.task, files: parsed.files, team: data.team }
   // refused: the assignment stays, so the guard scopes the agent the lead starts under this name

@@ -9,10 +9,11 @@ import { labelOf, nowLine } from './view'
 import type { HqData } from './view'
 
 /** `task` and `files` are the checked input again, for whoever records the assignment. */
-export type AssignResult = { ok: true; role: string; name: string; prompt: string; task: string; files: string[] } | { ok: false; error: string }
+export type AssignResult = { ok: true; role: string; name: string; prompt: string; task: string; files: string[]; model?: string } | { ok: false; error: string }
 
 const GENERAL = { id: 'general-purpose', title: 'General agent', count: 10 }
 const NAME = /^[A-Za-z0-9_-]{1,48}$/
+const MODEL = /^[A-Za-z0-9._[\]-]{1,80}$/ // an alias (haiku) or an id (claude-opus-5-5[1m])
 const MAX_TASK = 4000
 const MAX_NOTE = 1000 // `done` and `limits`
 const MAX_FILES = 50
@@ -62,6 +63,12 @@ export function parseAssign(input: unknown, team: HqTeam | null, agents: Record<
     files = input.files as string[]
   }
 
+  let model: string | undefined
+  if (input.model !== undefined && input.model !== null) {
+    if (typeof input.model !== 'string' || !MODEL.test(input.model.trim())) return { ok: false, error: 'the "model" must be an alias such as "haiku" or a model id' }
+    model = input.model.trim()
+  }
+
   const everyone = Object.values(agents)
   const live = everyone.filter(a => a.id !== MAIN && !isFinished(a.status) && a.role === (team ? `agent-hq:${role.id}` : role.id))
   if (live.length >= role.count) return { ok: false, error: `${role.title} is fully staffed (${live.length} of ${role.count} at work); hire another with hq_hire, or wait for one to finish` }
@@ -84,7 +91,7 @@ export function parseAssign(input: unknown, team: HqTeam | null, agents: Record<
     // a team member that can write keeps its full report in a file, so its reply to the lead stays short
     ...(team && options.report !== false && !isReadOnlyRole(role as HqTeamRole) ? [`## Report\nWrite your full report to \`${reportPathOf(role.id, name)}\`, then reply in at most ${REPLY_LINES} lines as your role's reporting rules say.`] : []),
   ]
-  return { ok: true, role: role.id, name, prompt: sections.join('\n\n'), task, files }
+  return { ok: true, role: role.id, name, prompt: sections.join('\n\n'), task, files, ...(model ? { model } : {}) }
 }
 
 const clip = (text: string) => (text.length > MAX_LINE ? `${text.slice(0, MAX_LINE - 1)}…` : text)
