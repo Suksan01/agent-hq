@@ -12,7 +12,7 @@ import type { EngineInterface } from 'claude-code'
 import { applyPlanTicks, mergeList, parsePlan, readList, writeList } from '../hooks/tasklist'
 import type { TaskList } from '../hooks/tasklist'
 
-const work = (over: Record<string, unknown> = {}) => ({ role: 'senior-dev', step: 'build', workMs: 60_000, inputTokens: 10, outputTokens: 20, cacheReadTokens: 30, cacheWriteTokens: 40, model: 'claude-sonnet-5-5', ...over })
+const work = (over: Record<string, unknown> = {}) => ({ role: 'senior-dev', step: 'build', workMs: 60_000, inputTokens: 10, outputTokens: 20, cacheReadTokens: 30, cacheWriteTokens: 40, model: 'claude-sonnet-5-5', lastAt: null, ...over })
 const task = (n: number, over: Record<string, unknown> = {}) => ({ n, title: `Task ${n}`, status: 'waiting', doneBy: null, startedAt: null, doneAt: null, work: {}, events: [], ...over })
 const OPTS = { plan: 'docs/plans/x.md', approvedAt: 1, now: 9, price: (w: { model: string | null }) => (w.model === 'mystery-model-9' ? null : 0.01) }
 const listOf = (tasks: unknown[], over: Record<string, unknown> = {}) => ({ version: 1, plan: 'docs/plans/x.md', approvedAt: 1_761_300_000_000, tasks, removed: { workMs: 0, costUsd: 0 }, ...over }) as TaskList
@@ -180,6 +180,7 @@ test('readList says no list, with a reason, for every kind of invalid file (AC12
       ['task work not an object', badTask({ work: 'lots' })],
       ['work time negative', badTask({ work: { 'a-1': work({ workMs: -5 }) } })],
       ['work time not a number', badTask({ work: { 'a-1': work({ workMs: 'long' }) } })],
+      ['work lastAt not a time', badTask({ work: { 'a-1': work({ lastAt: 'soon' }) } })],
       ['removed missing', JSON.stringify({ version: 1, plan: 'p.md', approvedAt: 1, tasks: [] })],
     ]
     for (const [label, text] of invalid) {
@@ -191,6 +192,16 @@ test('readList says no list, with a reason, for every kind of invalid file (AC12
       expect(out.kind, label).toBe('invalid')
       expect(out.reason, label).toBeTruthy()
     }
+})
+
+test('a list saved before lastAt loads with lastAt null, and a saved lastAt is kept', async () => {
+    const d = disk()
+    d.files.set(d.path, JSON.stringify(listOf([task(1, { work: { 'a-1': work({ lastAt: undefined }), 'b-1': work({ lastAt: 4242 }), 'c-1': work({ lastAt: null }) } })])))
+
+    const out = await readList(d.$, d.path)
+
+    const rows = out.list?.tasks[0]?.work
+    expect([rows?.['a-1']?.lastAt, rows?.['b-1']?.lastAt, rows?.['c-1']?.lastAt]).toEqual([null, 4242, null])
 })
 
 test('readList ignores a list with an unknown version, and says why (AC12)', async () => {
