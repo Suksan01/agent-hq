@@ -1,6 +1,6 @@
 {
   "name": "agent-hq",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "description": "Agent team command center: plan-progress style bars above the prompt, and a sidebar with the agent tree, each agent's now/next/last task, todo tracks and animated mascots.",
   "author": {
     "name": "Suksan01"

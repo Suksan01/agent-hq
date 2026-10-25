@@ -44,7 +44,7 @@ export async function postAction(action, { fetch = globalThis.fetch, retries = 2
  * An EventSource cannot say why it ended, so each time it ends for good `probe` asks the server (an authenticated GET, by
  * default /state) and a 403 three times in a row means the login cookie is lost: reconnecting stops and `onError('login-lost')`
  * is called (every other call is `onError()`).
- * `named` handles the stream's named events (event name -> handler), such as the hub's `approval` and `approval-withdrawn`.
+ * `named` handles the stream's named events (event name -> handler), none yet.
  * @param {{ onMessage?: (event: MessageEvent) => void, onOpen?: () => void, onError?: (reason?: 'login-lost') => void, named?: Record<string, (event: MessageEvent) => void> }} handlers
  * @returns {() => void} closes the stream and stops reconnecting
  */

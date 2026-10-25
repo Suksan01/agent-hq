@@ -84,7 +84,7 @@ test('a permission ask waits in the inbox until the tool call is decided, then l
   await s.clock.advance(1000)
 
   expect(verdict.decision).toBe('ask')
-  expect(last(s.snapshots)?.inbox).toEqual([{ agent: 'a1', since: expect.any(Number), what: 'Bash: rm' }])
+  expect(last(s.snapshots)?.inbox).toEqual([{ agent: 'a1', since: expect.any(Number), what: 'Bash: rm', card: { tool: 'Bash', fields: [{ key: 'command', text: 'rm -rf build' }], sizes: [], isHidden: false, reason: expect.any(String) } }])
   expect(last(s.statuses)).toContain('1 needs you')
 
   await call({ tool: 'Bash', command: 'rm -rf build', agentId: 'a1', tool_use_id: 'u1' })
@@ -102,7 +102,7 @@ test('a query that is not a real call (no tool_use_id) and an ask of the lead ar
   await $.tool.check({ tool: 'Edit', input: { file_path: 'a.ts' }, tool_use_id: 'u7' } as never) // the lead's own ask
   await s.clock.advance(1000)
 
-  expect(last(s.snapshots)?.inbox).toEqual([{ agent: 'main', since: expect.any(Number), what: 'Edit: a.ts' }])
+  expect(last(s.snapshots)?.inbox).toEqual([{ agent: 'main', since: expect.any(Number), what: 'Edit: a.ts', card: expect.objectContaining({ tool: 'Edit', isHidden: false }) }])
   s.finish()
 })
 

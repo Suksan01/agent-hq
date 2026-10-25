@@ -50,6 +50,7 @@ export const TOOL_SPECS: ToolSpec[] = [
         skills: { type: 'array', items: { type: 'string' }, description: 'The skills this task needs, loaded before it starts (at most 5), e.g. ["tdd"] for a code change: members rarely load them on their own. Usually one of the role\'s skills; an unknown name only fails the member\'s Skill call.' },
         plan_task: { type: 'integer', description: 'The number of the plan task (from hq_plan) this work is for; it must be in the list. Leave out when the work is not a plan task.' },
         model: { type: 'string', description: 'A model for this one task, overriding the role\'s: "haiku" for mechanical work its brief fully specifies, a stronger one for a task a member got stuck on. Leave out to use the role\'s model.' },
+        worktree: { type: 'boolean', description: 'Run the member in its own git worktree, so members can work in parallel on the same files; it commits there and you merge. The mod\'s own start cannot carry isolation, so with this set the tool does not start the member: it answers with the exact Agent call (with isolation "worktree") for you to make. Cannot be combined with "files" (the guard checks file scopes against this checkout).' },
       },
       required: ['role'],
     },
@@ -169,12 +170,16 @@ type BoardCall = (call: { tool: 'TaskCreate' | 'TaskUpdate'; [field: string]: un
 const firstLine = (text: string, max: number) => text.split('\n')[0]?.trim().slice(0, max) ?? ''
 
 const MAX_BOARD_REASON = 120
+const WORKTREE_REASON = 'a worktree needs the Agent tool\'s isolation, which Agent HQ\'s own start cannot carry'
+const WORKTREE_BRIEF = '## Worktree\nYou work in your own git worktree, on its own branch. Commit your work there (never push or merge); the lead merges it. Your files are not the other members\' files.'
 
 /**
  * The board task for an assignment: created, then owned by the agent and, once it runs, marked in progress. Its id, or
  * why there is none (a session without the task tools rejects the call by name), for the lead to read.
  */
-async function linkBoardTask($: EngineInterface, name: string, task: string, isRunning: boolean): Promise<{ id: string } | { reason: string }> {
+async function linkBoardTask($: EngineInterface, name: string, task: string, isRunning: boolean): Promise<{ id: string } | { reason: string } | { noTool: true }> {
+  // deferred tools may be missing from the list, so an unlisted TaskCreate is still tried; a list that cannot be read says nothing
+  const listed = await (async () => (await $.tool.list()).some(t => t.name === 'TaskCreate'))().catch(() => undefined)
   try {
     const subject = firstLine(task, SUBJECT_MAX) || `Work for ${name}`
     // the session's own task tools, so the board (and the plugin's hook that mirrors it) see them like Claude's own calls
@@ -185,11 +190,12 @@ async function linkBoardTask($: EngineInterface, name: string, task: string, isR
     return { id }
   } catch (error) {
     // the board is a convenience: a failure here never undoes a started agent
+    if (listed === false) return { noTool: true }
     return { reason: firstLine(error instanceof Error ? error.message : String(error), MAX_BOARD_REASON) || 'TaskCreate failed' }
   }
 }
 
-type SpawnSpec = { subagentType: string; name: string; prompt: string; description: string; model?: string }
+type SpawnSpec = { subagentType: string; name: string; prompt: string; description: string; model?: string; isolation?: 'worktree' }
 type Started =
   | { ok: true; role: string; name: string; task: string; files: string[]; agentId?: string; team: HqTeam | null; refused?: { spec: SpawnSpec; reason: string } }
   | { ok: false; error: string }
@@ -202,13 +208,16 @@ type Started =
 function leadStarts(spec: SpawnSpec, reason: string, kept: string, board?: string | null): string {
   return [
     // as one JSON string: a refusal text with line breaks cannot add lines that read like the call's own
-    `${spec.name} has NOT started yet: the session refused Agent HQ's start (${JSON.stringify(reason)}).`,
-    `Unless the person refused this start, make this Agent call now${kept ? `; ${kept}` : ''}.`,
+    spec.isolation
+      ? `${spec.name} has NOT started yet: it runs in its own worktree, and Agent HQ's own start cannot carry that.`
+      : `${spec.name} has NOT started yet: the session refused Agent HQ's start (${JSON.stringify(reason)}).`,
+    `${spec.isolation ? 'Make' : 'Unless the person refused this start, make'} this Agent call now${kept ? `; ${kept}` : ''}.`,
     ...(board ? [`After the call, set board task #${board} to in_progress.`, `If you do not make this call, delete board task #${board}.`] : []),
     `subagent_type: ${spec.subagentType}`,
     `name: ${spec.name} (exactly this)`,
     `description: ${spec.description}`,
     ...(spec.model ? [`model: ${spec.model}`] : []),
+    ...(spec.isolation ? [`isolation: ${spec.isolation}`] : []),
     fenceUntrusted('prompt (the text inside the fence, verbatim)', spec.prompt),
   ].join('\n')
 }
@@ -222,10 +231,16 @@ async function startAssigned($: EngineInterface, input: unknown, deps: ToolDeps,
   const root = await deps.root?.().catch(() => undefined)
   const parsed = parseAssign(input, data.team, data.agents, assignedNames(data), { ...(maxTask ? { maxTask } : {}), ...(root ? { root } : {}) })
   if (!parsed.ok) return { ok: false, error: parsed.error }
+  const asked = isRecord(input) ? input.worktree : undefined
+  if (asked !== undefined && asked !== null && typeof asked !== 'boolean') return { ok: false, error: '"worktree" must be true or false' }
+  const worktree = asked === true
+  // the guard compares a member's absolute paths with the lead's project folder, so inside a worktree every write would be denied
+  if (worktree && parsed.files.length > 0) return { ok: false, error: '"worktree" cannot be combined with "files": the guard checks file scopes against this checkout, not the member\'s worktree' }
   // recorded before the agent starts: its first tool call may come before spawn returns, and the guard must already know its scope
   await deps.recordAssignment(parsed.name, { role: parsed.role, name: parsed.name, task: parsed.task, ...(parsed.files.length > 0 ? { paths: parsed.files } : {}), at: await deps.now() })
-  const spec = { subagentType: data.team ? `agent-hq:${parsed.role}` : parsed.role, name: parsed.name, prompt: parsed.prompt, description: firstLine(parsed.task, 60), ...(parsed.model ? { model: parsed.model } : {}) }
-  const started = await spawnAgent($, spec)
+  const spec = { subagentType: data.team ? `agent-hq:${parsed.role}` : parsed.role, name: parsed.name, prompt: worktree ? `${parsed.prompt}\n\n${WORKTREE_BRIEF}` : parsed.prompt, description: firstLine(parsed.task, 60), ...(parsed.model ? { model: parsed.model } : {}), ...(worktree ? { isolation: 'worktree' as const } : {}) }
+  // spawnAgent cannot carry isolation: a worktree member is started by the lead's own Agent call
+  const started = worktree ? { ok: false as const, error: WORKTREE_REASON } : await spawnAgent($, spec)
   const assigned = { ok: true as const, role: parsed.role, name: parsed.name, task: parsed.task, files: parsed.files, team: data.team }
   // refused: the assignment stays, so the guard scopes the agent the lead starts under this name
   if (!started.ok) return { ...assigned, refused: { spec, reason: started.error } }
@@ -268,6 +283,13 @@ async function withBrief(input: unknown, deps: ToolDeps): Promise<{ input: unkno
   return { input: { ...input, task }, maxTask: MAX_BRIEF_TASK }
 }
 
+/** The sentence on the board: its task, the plain note of a session with no task tools, or why the board failed. */
+function boardNote(linked: Awaited<ReturnType<typeof linkBoardTask>>): string {
+  if ('id' in linked) return ` Board task #${linked.id}.`
+  if ('noTool' in linked) return ' This session has no task board; the assignment is tracked on the Agent HQ sidebar and live page, and its status still updates there.'
+  return ` (The task board could not be updated: ${linked.reason.replace(/\.$/, '')}.)`
+}
+
 /** hq_assign: check the input, start the agent, remember its scope for the guard, and put it on the board. */
 export async function hqAssign($: EngineInterface, given: unknown, deps: ToolDeps): Promise<ToolAnswer> {
   const briefed = await withBrief(given, deps)
@@ -300,7 +322,7 @@ export async function hqAssign($: EngineInterface, given: unknown, deps: ToolDep
   const title = roleTitle(started.team, started.team ? `agent-hq:${started.role}` : started.role)
   return {
     text: [
-      `Started ${called} as ${title}.${'id' in linked ? ` Board task #${linked.id}.` : ` (The task board could not be updated: ${linked.reason.replace(/\.$/, '')}.)`}`,
+      `Started ${called} as ${title}.${boardNote(linked)}`,
       started.files.length > 0 ? `It may change only: ${started.files.join(', ')}.` : 'No file scope was set.',
       'Its result arrives when it finishes; hq_status shows where it stands.',
     ].join(' '),

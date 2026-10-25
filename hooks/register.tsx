@@ -15,8 +15,6 @@ import { EMPTY_FEED, addEvents, statusEvents, stepEvents } from './feed'
 import type { NewEvent } from './feed'
 import { buildSnapshot } from './live'
 import { parseSuggestions, suggestPrompt } from './suggest'
-import { ALLOWED, APPROVAL_MS, DENIED, HELPER_TIMEOUT_MS, LINK_NOTICE_MS, answerOf, approvalRequest, canHold, isApprovalsReleased, pageCount } from './pageapproval'
-import { maskSecrets } from './secrets'
 import { addBubble, bubbleText, liveBubbles, placeTalk, recipientOf, talkLine } from './talk'
 import { configureLock, withListLock } from './lock'
 import { createReport, reportToast } from './report'
@@ -29,11 +27,11 @@ import { applyPlanTicks, parsePlan, readList, writeList } from './tasklist'
 import type { TaskList } from './tasklist'
 import { addTurnToTask, settleForNewSession } from './taskwork'
 import { describeCall, endActivity, hasRunningCall, liveActivities, startActivity } from './activity'
-import { addAsk, buildInbox, describeAsk, dropAsksOf, removeAsk, statusText, trackWaiting } from './inbox'
+import { addAsk, buildInbox, cardOf, describeAsk, dropAsksOf, pageCount, removeAsk, statusText, trackWaiting } from './inbox'
 import { announceXp, createLedger, creditActivity, creditTestRun, xpStoreOf, xpSummaries } from './xpstore'
 import { ASSIGN_TOOL, HIRE_TOOL, LEAD_TOOLS_NOTE, HQ_PLAN_TOOL, REVIEW_TOOL, STATUS_TOOL, TOOL_SPECS, hqAssign, hqHire, hqPlan, hqReview, hqStatus, keepResult, readBriefFile, textOfContent } from './tools'
 import type { ToolAnswer, ToolDeps } from './tools'
-import { BandView, SidebarView, bandRasters, bandTrackWidth, folderOf, hasBand, labelOf, sidebarRasters, textTrack, withAside } from './view'
+import { BandView, SidebarView, bandRasters, bandTrackWidth, folderOf, hasBand, sidebarRasters, textTrack, withAside } from './view'
 import type { BandActions, HqActions, HqData, Raster } from './view'
 
 const PANE = 'agent-hq'
@@ -556,6 +554,15 @@ async function clearDone($: EngineInterface) {
   await syncStatus($)
 }
 
+/** A decided call no longer waits on the person: its ask leaves the inbox and the page. */
+async function endAsk($: EngineInterface, toolUseId: string | undefined) {
+  if (!toolUseId || !(await read($, asks))[toolUseId]) return
+  await update($, asks, all => removeAsk(all, toolUseId))
+    .then(() => syncStatus($))
+    .then(() => requestLive($))
+    .catch(() => {})
+}
+
 /** Writes the page's snapshot when it changed; the server pushes each write to open pages at once. */
 async function writeLive($: EngineInterface) {
   if (!web) return
@@ -659,19 +666,14 @@ function startWeb($: EngineInterface): Promise<string> {
 type Setting = { key: string; isDefaultOn: boolean; on: Key; off: Key; usage: Key }
 // $.store keys, each a boolean the person set; unset means its default
 const NEXT_TASKS: Setting = { key: 'nextTasks', isDefaultOn: true, on: 'web.nextOn', off: 'web.nextOff', usage: 'web.nextUsage' }
-const PAGE_APPROVALS: Setting = { key: 'pageApprovals', isDefaultOn: false, on: 'web.approvalsOn', off: 'web.approvalsOff', usage: 'web.approvalsUsage' }
-const WEB_SETTINGS: Readonly<Record<string, Setting>> = { next: NEXT_TASKS, approvals: PAGE_APPROVALS } // /hq web <word> [on|off]
-
-/** Page approvals ship in 0.8.0 (hooks/pageapproval.ts): until then, never in force. */
-const areApprovalsReleased = async ($: EngineInterface) => isApprovalsReleased(await $.session.id().catch(() => ''))
+const WEB_SETTINGS: Readonly<Record<string, Setting>> = { next: NEXT_TASKS } // /hq web <word> [on|off]
 
 async function isSettingOn($: EngineInterface, setting: Setting): Promise<boolean> {
-  if (setting === PAGE_APPROVALS && !(await areApprovalsReleased($))) return false
   const stored = await $.store.get(setting.key)
   return typeof stored === 'boolean' ? stored : setting.isDefaultOn
 }
 
-/** `/hq web next|approvals [on|off]`: sets it, and says which is in force. */
+/** `/hq web next [on|off]`: sets it, and says which is in force. */
 async function settingCommand($: EngineInterface, setting: Setting, word: string): Promise<{ text: string }> {
   if (word !== '' && word !== 'on' && word !== 'off') return { text: t(lang, setting.usage) }
   if (word !== '') await $.store.set(setting.key, word === 'on')
@@ -728,74 +730,6 @@ async function clearSuggestions($: EngineInterface) {
   await requestLive($)
 }
 
-// ---------- page approvals (hooks/pageapproval.ts) ----------
-// the permission mode each loop was last seen in (main, or an agent id), from the classic hooks that carry it; a mod's
-// classic.PreToolUse gets no mode. shortcut: a switch mid-turn is seen once the next tool call ends
-const modes = new Map<string, string>()
-let isApprovalOpen = false // one approval at a time
-
-function noteMode(e: { permission_mode?: string; agent_id?: string }) {
-  if (typeof e.permission_mode === 'string') modes.set(e.agent_id ?? MAIN, e.permission_mode)
-}
-
-type Ask = { tool: string; input: unknown; tool_use_id?: string; agentId?: string; ceiling?: string; approver?: string }
-type Verdict = { decision: 'allow' | 'ask' | 'deny'; reason?: string; setting?: string; hook?: string }
-
-/**
- * An ask offered on the live page first: tool.check waits while web/approve.mjs waits for the person's answer there.
- * Only an ask is held, one at a time; only their Allow or Deny changes it. No answer, "Ask in terminal now", a helper
- * that failed or timed out, and Esc (which aborts the run) all leave the ask, so the engine's dialog follows.
- */
-async function askOnPage<V extends Verdict>($: EngineInterface, e: Ask, verdict: V): Promise<V | Verdict> {
-  if (verdict.decision !== 'ask' || isApprovalOpen) return verdict
-  isApprovalOpen = true // taken before the first await, so a second ask meanwhile goes to the dialog
-  try {
-    if (!(await areApprovalsReleased($))) return verdict
-    const loop = e.agentId ?? MAIN
-    const reason = verdict.reason ? maskSecrets(verdict.reason) : undefined
-    const facts = {
-      decision: verdict.decision,
-      approver: e.approver,
-      isOn: await isSettingOn($, PAGE_APPROVALS),
-      pages: await openPages($),
-      toolUseId: e.tool_use_id,
-      tool: e.tool,
-      ceiling: e.ceiling,
-      mode: modes.get(loop),
-      input: e.input,
-      reason,
-    }
-    if (!canHold(facts) || !web || !e.tool_use_id) return verdict
-    const row = (await read($, agents))[loop]
-    const current = await read($, team)
-    const role = loop === MAIN ? (current?.lead.title ?? null) : row ? labelOf(row, current, lang).role : null
-    const request = approvalRequest({
-      id: e.tool_use_id,
-      agent: row ? who(row) : loop,
-      role,
-      tool: e.tool,
-      input: e.input,
-      reason: reason ?? null,
-      setting: verdict.setting ?? null,
-      hook: verdict.hook ?? null,
-      cwd: await $.session.cwd(),
-      lang,
-      at: await $.clock.now(),
-    })
-    $.ui.toast(t(lang, 'approval.waiting'), { timeoutMs: APPROVAL_MS })
-    const ran = await $.process.run(['node', `${$.plugin.root}/web/approve.mjs`, '--state', web.statePath], { stdin: request, timeoutMs: HELPER_TIMEOUT_MS })
-    const answer = ran.exitCode === 0 ? answerOf(ran.stdout) : null
-    if (answer === 'allow') return { decision: 'allow', reason: ALLOWED }
-    if (answer === 'deny') return { decision: 'deny', reason: DENIED }
-    return verdict
-  } catch (error) {
-    $.ui.log(`Agent HQ: the page approval ended without an answer (${error instanceof Error ? error.message : String(error)})`, { to: 'debug' })
-    return verdict
-  } finally {
-    isApprovalOpen = false
-  }
-}
-
 /** A new one-time login link for the running page, and how many pages are open (`server.mjs --login` asks the hub). */
 async function freshLogin($: EngineInterface, statePath: string): Promise<{ url: string; pages: number }> {
   const ran = await $.process.run(['node', `${$.plugin.root}/web/server.mjs`, '--login', '--state', statePath], { timeoutMs: 10_000 })
@@ -804,16 +738,6 @@ async function freshLogin($: EngineInterface, statePath: string): Promise<{ url:
   if (ran.exitCode !== 0 || line?.kind !== 'url') throw new Error(ran.stderr.trim().split('\n').pop() || 'the page did not give a new link')
   const pages = heard.find(h => h?.kind === 'pages')
   return { url: line.url, pages: pages?.kind === 'pages' ? pages.count : 0 } // a hub that does not say: none open
-}
-
-// what each /hq web reply says instead of its link, while page approvals are on
-const NO_LINK: Record<'web.alreadyOpen' | 'web.opened' | 'web.running', Key> = { 'web.alreadyOpen': 'web.alreadyOpenNoLink', 'web.opened': 'web.openedNoLink', 'web.running': 'web.runningNoLink' }
-
-/** A /hq web reply; while page approvals are on, its login link goes in a notice instead (a browser already opened needs none). */
-function linkReply($: EngineInterface, isGuarded: boolean, key: keyof typeof NO_LINK, params: Record<string, string>): { text: string } {
-  if (!isGuarded) return { text: t(lang, key, params) }
-  if (key !== 'web.opened') $.ui.toast(t(lang, 'web.linkNotice', { url: params.url ?? '' }), { timeoutMs: LINK_NOTICE_MS })
-  return { text: t(lang, NO_LINK[key], params) }
 }
 
 /** Opens a URL in the default browser: `open` on macOS, `xdg-open` elsewhere. */
@@ -887,17 +811,6 @@ async function askTrust($: EngineInterface, isExplicit: boolean): Promise<{ text
   const answer = await $.ui.ask(question, { options: [no, yes], header: t(lang, 'dialog.teamFile') }).catch(() => null)
   if (answer === no) declinedTrust.set(source.path, text)
   return answer === yes ? approveTeam($, text) : null
-}
-
-/**
- * `/hq web approvals on` from a run that is not the person's own: through the engine's dialog (No first) where the engine
- * cannot attest the run, never from a plugin, a schedule or another session. Turning them off is open to every run.
- */
-async function approvalsOnFrom($: EngineInterface, origin: PromptOrigin): Promise<{ text: string }> {
-  if (!ASKING_ORIGINS.has(origin.kind)) return { text: t(lang, 'approvals.notYours', { origin: origin.kind === 'plugin' ? t(lang, 'trust.aPlugin') : origin.kind }) }
-  const [no, yes] = [t(lang, 'dialog.no'), t(lang, 'approvals.yes')]
-  const answer = await $.ui.ask(t(lang, 'approvals.question'), { options: [no, yes], header: t(lang, 'approvals.header') }).catch(() => null)
-  return answer === yes ? settingCommand($, PAGE_APPROVALS, 'on') : { text: t(lang, PAGE_APPROVALS.off) }
 }
 
 /** `/hq trust`: at once from the person's own run, through the dialog from a run the engine cannot attest, never otherwise. */
@@ -1054,10 +967,8 @@ export const register: Register = (on, options) => {
     const [verb, ...words] = e.args.trim().split(/\s+/)
     if (verb?.toLowerCase() === 'lang') return langCommand($, words.join(' '))
     const setting = verb?.toLowerCase() === 'web' ? WEB_SETTINGS[words[0]?.toLowerCase() ?? ''] : undefined
-    if (setting === PAGE_APPROVALS && !(await areApprovalsReleased($))) return { text: t(lang, 'web.approvalsComing') }
     if (setting) {
       const word = (words[1] ?? '').toLowerCase()
-      if (setting === PAGE_APPROVALS && word === 'on' && !PERSON_ORIGINS.has(e.origin.kind)) return approvalsOnFrom($, e.origin)
       const answer = await settingCommand($, setting, word)
       if (setting === NEXT_TASKS && word === 'off') await clearSuggestions($)
       return answer
@@ -1078,12 +989,9 @@ export const register: Register = (on, options) => {
           if (isFirstRun) return { url: startUrl, pages: 0 } // the link the new server printed is unused yet
           throw error
         })
-        // with page approvals on, a login link must not reach the model: a reply lands in the transcript, and an agent with
-        // a browser could log in and allow its own ask. The link then shows in a notice only (toasts never reach it)
-        const isGuarded = await isSettingOn($, PAGE_APPROVALS)
         const tabs = pages === 1 ? t(lang, 'web.oneTab') : t(lang, 'web.tabs', { n: pages })
-        if (pages > 0) return linkReply($, isGuarded, 'web.alreadyOpen', { tabs, url })
-        return linkReply($, isGuarded, (await openInBrowser($, url)) ? 'web.opened' : 'web.running', { url })
+        if (pages > 0) return { text: t(lang, 'web.alreadyOpen', { tabs, url }) }
+        return { text: t(lang, (await openInBrowser($, url)) ? 'web.opened' : 'web.running', { url }) }
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error)
         return { text: t(lang, 'web.failed', { reason }) }
@@ -1318,25 +1226,28 @@ export const register: Register = (on, options) => {
       const toolUseId = e.tool_use_id
       await $.clock
         .now()
-        .then(since => update($, asks, all => addAsk(all, toolUseId, { agent: e.agentId ?? MAIN, since, what: describeAsk(e.tool, e.input) })))
+        .then(since => update($, asks, all => addAsk(all, toolUseId, { agent: e.agentId ?? MAIN, since, what: describeAsk(e.tool, e.input), card: cardOf(e.tool, e.input, verdict.reason) })))
         .then(() => syncStatus($))
         .then(() => requestLive($))
         .catch(error => $.ui.log(`Agent HQ: could not note a permission ask (${error instanceof Error ? error.message : String(error)})`, { to: 'debug' }))
     }
-    return askOnPage($, e, verdict)
+    return verdict
   }).catch(($, e, next) => next(e)) // the hook failed: the engine's own verdict stands (next replays it)
 
-  // the permission mode each loop runs in, for page approvals: these classic events carry it, a mod's PreToolUse does not
-  on('classic.UserPromptSubmit', async ($, e, next) => {
-    noteMode(e)
-    return next(e)
-  }).catch(($, e, next) => next(e))
-  on('classic.PostToolUse', async ($, e, next) => {
-    noteMode(e)
-    return next(e)
-  }).catch(($, e, next) => next(e))
+  // a call the person denied may never reach tool.call, so its ask would stay on the page until the turn ends: a failed
+  // call and a denied one (PermissionDenied) end their ask too
   on('classic.PostToolUseFailure', async ($, e, next) => {
-    noteMode(e)
+    await endAsk($, e.tool_use_id)
+    return next(e)
+  }).catch(($, e, next) => next(e))
+  on('classic.PermissionDenied', async ($, e, next) => {
+    await endAsk($, e.tool_use_id)
+    return next(e)
+  }).catch(($, e, next) => next(e))
+
+  // the session ends: no ask can still wait on a dialog, so none stays in the state file the page reads
+  on('session.end', async ($, e, next) => {
+    await update($, asks, () => ({})).then(() => writeLive($)).catch(() => {})
     return next(e)
   }).catch(($, e, next) => next(e))
 

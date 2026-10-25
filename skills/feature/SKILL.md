@@ -156,9 +156,10 @@ For each task that is ready (its dependencies done):
    When the person adopted HeroUI, a UI task's brief has the member load `heroui-react` and look up every component
    with the HeroUI MCP (`get_component_docs`) before it uses it; otherwise the brief names the project's own library's
    components.
-3. **Keep parallel members apart**: hq_assign starts every member in this checkout (it has no worktree option), so run
-   tasks in parallel only when they share no files, touch no lockfile or shared config, and need no dev server or test
-   run of their own at the same time; run the rest one after another. Never two members on the same files.
+3. **Keep parallel members apart**: give parallel tasks `worktree: true` in hq_assign (without `files`). It answers with
+   the Agent call (with `isolation: "worktree"`) for you to make. The member commits in its own worktree, and you
+   merge its branch. Without the option members share this checkout: run those one after
+   another unless they share no files or lockfile and need no dev server or test run at the same time.
 4. **Review** as soon as it reports `DONE` or `DONE_WITH_CONCERNS`, before anyone else's work lands; its reply is a
    short status block, and its report file has the detail when you need it. On `BLOCKED` or `NEEDS_CONTEXT`, answer
    it with SendMessage (the missing context or a ruling) or split the task instead. First run `git status`: every accepted task and

@@ -1,10 +1,7 @@
 // The hub: the one HTTP server the browser talks to. It serves the page, logs the browser in, collects every Claude Code
 // session's state into one stream, and forwards the page's requests to the session they are for. Runs inside whichever
 // session server won the election (see server.mjs). Session servers talk to it on /hub/* with the registry secret.
-// It also holds the page approvals (approvals.mjs): web/approve.mjs waits on POST /hub/approval, the pages get SSE `approval`
-// and `approval-withdrawn` events and answer on POST /approval/<id>. Dormant unless `config.approvals` (AGENT_HQ_APPROVALS=1
-// in the hub's environment): then both routes are 404, so the helper says `ask`, and no approval ever reaches a page. And it keeps `pages.json` ({ count, at }: the pages open,
-// each showing every session) in the live directory beside the state files, rewritten whenever a page connects or leaves and
+// It keeps `pages.json` ({ count, at }: the pages open, each showing every session) in the live directory beside the state files, rewritten whenever a page connects or leaves and
 // when the hub starts, for the mod to read.
 // No dependencies.
 
@@ -13,7 +10,6 @@ import { readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { checkAction } from './queue.mjs'
-import { APPROVAL_ID, checkRequest, createApprovals, MAX_INPUT } from './approvals.mjs'
 import { hostIsLocal, isString, json, localRequest, plain, readJson, same, SECURITY_HEADERS } from './http.mjs'
 import { cleanLiveDir } from './cleanup.mjs'
 import { watchJson } from './watch.mjs'
@@ -87,8 +83,6 @@ export function createHub({ liveDir, webDir, secret, config }) {
   }
 
   const send = (res, text) => res.write(`data: ${text.replace(/[\r\n]/g, '')}\n\n`)
-  const sendEvent = (res, name, data) => res.write(`event: ${name}\ndata: ${JSON.stringify(data).replace(/[\r\n]/g, '')}\n\n`)
-  const approvals = createApprovals({ emit: (name, data) => { for (const res of clients) sendEvent(res, name, data) } })
 
   /** pages.json in the live directory: how many pages are open. Written whole (temp file renamed over it), user-only. */
   function writePages() {
@@ -204,7 +198,6 @@ export function createHub({ liveDir, webDir, secret, config }) {
       // with the open page count: /hq web opens no tab while one shows the page (it shows every session)
       return json(res, 200, { code: mintCode(), pages: clients.size })
     }
-    if (pathname === '/hub/approval' && req.method === 'POST' && config.approvals) return holdApproval(req, res)
     if (pathname === '/hub/register' && req.method === 'POST') {
       return readJson(req, res, info => {
         const problem = register(info)
@@ -213,32 +206,6 @@ export function createHub({ liveDir, webDir, secret, config }) {
       })
     }
     plain(res, 404, 'not found')
-  }
-
-  /** web/approve.mjs waits here (the answer is { decision }) until a page answers, it times out, or the helper goes away. */
-  function holdApproval(req, res) {
-    readJson(req, res, body => {
-      const { session, ...request } = body ?? {}
-      const target = sessions.get(session)
-      if (!target?.alive) return json(res, 404, { error: 'unknown or stopped session' })
-      const problem = checkRequest(request)
-      if (problem) return json(res, 400, { error: problem })
-      const held = approvals.hold(request, basename(target.cwd) || target.cwd, decision => json(res, 200, { decision }))
-      if (typeof held === 'string') return json(res, 409, { error: held === 'busy' ? 'another approval is open' : 'this approval was already settled' })
-      res.on('close', () => { if (!res.writableEnded) held.gone() })
-    }, MAX_INPUT + 4096)
-  }
-
-  /** A page's answer to the open approval: the cookie (checked by the caller), the page's exact origin, a same-origin fetch, JSON. */
-  function answerApproval(req, res, id) {
-    const port = server.address().port
-    const origin = req.headers.origin
-    const own = [`http://127.0.0.1:${port}`, `http://localhost:${port}`]
-    if (!own.includes(origin) || origin !== `http://${req.headers.host}` || req.headers['sec-fetch-site'] !== 'same-origin') return plain(res, 403, 'forbidden')
-    readJson(req, res, body => {
-      const status = approvals.answer(id, body)
-      json(res, status, status === 200 ? { ok: true } : { error: { 400: 'decision must be allow, deny or ask', 403: 'forbidden', 404: 'no such approval', 409: 'already answered or withdrawn' }[status] })
-    })
   }
 
   /** The page's request: checked here, then handed to the session it is for, and answered once that session queued it. */
@@ -288,14 +255,10 @@ export function createHub({ liveDir, webDir, secret, config }) {
       res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }).end(envelope())
     } else if (url.pathname === '/action' && req.method === 'POST') {
       takeAction(req, res)
-    } else if (config.approvals && url.pathname.startsWith('/approval/') && req.method === 'POST' && APPROVAL_ID.test(url.pathname.slice('/approval/'.length))) {
-      answerApproval(req, res, url.pathname.slice('/approval/'.length))
     } else if (url.pathname === '/events') {
       if (clients.size >= config.maxClients) return plain(res, 429, 'too many pages are open')
       res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', connection: 'keep-alive' })
       send(res, envelope())
-      const waiting = approvals.current()
-      if (waiting) sendEvent(res, 'approval', waiting)
       clients.add(res)
       writePages()
       req.on('close', () => {

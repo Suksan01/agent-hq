@@ -106,7 +106,12 @@ the text you trusted:
 The lead (the main session) gets five tools, offered as `mcp__agent-hq__hq_assign`, `hq_status`, `hq_hire`, `hq_review` and `hq_plan`:
 
 - **`hq_assign`**: start a member on a scoped job. Input: `role`, `task`, and optionally `files` (globs the member may
-  change), `done` (what finished means), `limits` (what to leave alone) and `name`. The member receives a brief with
+  change), `done` (what finished means), `limits` (what to leave alone), `name` and `worktree`
+  (`true` runs the member in its own git worktree: the tool then does not start it, but answers with the Agent call, with
+  `isolation: "worktree"`, for the lead to make; the member commits there and the lead merges; it cannot be combined with
+  `files`, as the guard checks scopes against the project folder, not the worktree). Until the lead makes that call the
+  member's name stays reserved, as after a refused start. In a session without a TaskCreate tool, `hq_assign` says the job
+  is tracked on the sidebar and live page instead of reporting a board failure. The member receives a brief with
   Goal / Files / Done when / Do not touch sections, the job goes on the task board with the member as owner, and the
   files scope is handed to the rule guard. If the session refuses the mod's start (auto mode does, as a plugin's start
   carries no request from you), the board task and scope stay set and the tool answers with the exact Agent call
@@ -231,7 +236,14 @@ held on an approval. They are listed on the live page as the **inbox** (who, sin
 turn, and `needs you` is the number of inbox items. Agents that are idle between turns or held do not count as
 working, and the status line is empty when there is nothing to show. A teammate idle between turns is in the inbox for
 its first 10 minutes only; an agent held on an approval and an open dialog stay until they are answered, and a
-dialog's ask leaves when its agent's turn ends.
+dialog's ask leaves when its agent's turn ends (and at once when the call is allowed, denied or fails).
+
+**Permission asks on the page are view only.** Each open ask also shows on the live page as a card: who asks, the tool,
+the fields that decide it (`command`, `file_path`, `url`, `pattern`, `description`; hidden characters shown as
+`⟦U+XXXX⟧`), only the names and sizes of the rest (a file's contents, an edit's strings), and why it asked. A secret in
+those fields, or more than 2 KB of them, hides them, and at most the newest 5 asks carry a card. The card says to answer
+in the terminal: the page has no Allow or Deny, and nothing it sends can answer an ask. The dialog is the only authority
+and shows the real command, so trust it over the page. `/hq web` gives the login link in its reply.
 
 ## Nicknames, sounds and XP
 
