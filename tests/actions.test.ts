@@ -733,7 +733,7 @@ test('with only time passing, a finished member stays on the page, paused; a hel
 
   await s.poll(2 * 60_000 + POLL_MS)
 
-  const agents = s.snapshot()?.agents ?? []
+  const agents = (s.snapshot()?.agents ?? []) as { id: string; isPaused?: boolean }[] // the test's snapshot type is the minimal one
   expect(agents.map(a => a.id).sort()).toEqual(['d1', MAIN, 'w1'])
   expect(agents.filter(a => a.isPaused).map(a => a.id)).toEqual(['d1'])
   s.finish()

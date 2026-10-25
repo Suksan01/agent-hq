@@ -2,7 +2,6 @@ import { expect, test } from 'claude-code/testing'
 import type { AgentInfo } from 'claude-code'
 
 import { MAX_PAUSED, buildSnapshot } from '../hooks/live'
-import { IDLE_LIMIT_MS } from '../hooks/inbox'
 import { MAIN, createTask, mergeAgents, updateTask } from '../hooks/model'
 import { parseTeam } from '../hooks/team'
 import type { HqData } from '../hooks/view'
