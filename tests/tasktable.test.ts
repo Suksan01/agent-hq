@@ -8,8 +8,8 @@
 //    1 column x 1 row, whose cells change from one 125 ms animation frame to the next (it is not a text glyph);
 //  - Who: the member on a working or review task (the holder of its latest event), `doneBy` on a done task, `—` on a waiting one;
 //  - Min: whole minutes of work, `<1` under a minute, `—` where nothing is counted; ≈ $: costOf (hooks/prices.ts) summed to two decimals,
-//    `—` where nothing is priced, a trailing `+` where some member's model has no price; the total row says `Total <done>/<count>`;
-//  - more tasks than fit (8 rows, as the prototype): working, then review, then waiting, then done rows first, a `+N more` line, the total row always last;
+//    `—` where nothing is priced, a trailing `+` where some member's model has no price; the total row says `Total <bar> <done>/<count>`;
+//  - more tasks than fit (8 rows, as the prototype): working, then review, then waiting, then done rows first, a `+N more (list of what is hidden)` line, the total row after the rows (a dim legend line may follow it);
 //  - strings in hooks/i18n.ts under `tasktable.*` (task, who, min, total, more) in en and th;
 //  - with a list the Tasks section ("TASK BOARD") gives way to the table; with no list the sidebar is as it is today.
 import { expect, mock, test } from 'claude-code/testing'
@@ -258,6 +258,35 @@ test('+N more says what it hides, in plan order of status, and only the statuses
   const ui = await mountTable($, on, listOf(...many), 60)
 
   expect((await linesOf(ui)).find(l => l.key === 'tasks-more')?.text).toBe('+2 more (2 done)')
+  await ui.unmount()
+})
+
+const MANY_HIDDEN = () =>
+  listOf(
+    ...Array.from({ length: 9 }, (_, i) => task(i + 1, { status: 'working', work: { [`dev-${i}`]: work(1) }, events: [ev(`dev-${i}`, i)] })),
+    task(10, { status: 'review', work: { 'rev-1': work(1) }, events: [ev('rev-1', 20)] }),
+    task(11),
+    doneTask(12),
+  )
+
+test('+N more with a long list of hidden statuses is cut to the sidebar width', async ($, on) => {
+  const ui = await mountTable($, on, MANY_HIDDEN(), 40)
+
+  const more = (await linesOf(ui)).find(l => l.key === 'tasks-more')?.text ?? ''
+
+  expect(more).toMatch(/^\+\d+ more \(\d+ /) // the list of hidden statuses follows
+  expect(textWidth(more)).toBeLessThanOrEqual(40)
+  expect(more).toContain('…')
+  await ui.unmount()
+})
+
+test('in Thai +N more with a long list of hidden statuses is cut to the sidebar width too', { options: { language: 'thai' } }, async ($, on) => {
+  const ui = await mountTable($, on, MANY_HIDDEN(), 30)
+
+  const more = (await linesOf(ui)).find(l => l.key === 'tasks-more')?.text ?? ''
+
+  expect(more).toMatch(THAI)
+  expect(textWidth(more)).toBeLessThanOrEqual(30)
   await ui.unmount()
 })
 

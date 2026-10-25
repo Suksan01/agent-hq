@@ -152,7 +152,7 @@ export function TaskTable(els: Els, data: HqData, draw: (key: string) => RenderE
           ? line(`tasks-row-${r.x.n}`, body(String(r.x.n), r.x.title, r.who, r.min, r.usd), draw(`task-spin-${r.x.n}`) ?? <Text color={tones.running}>●</Text>)
           : line(`tasks-row-${r.x.n}`, [glyphOf(r.x.status), ...body(String(r.x.n), r.x.title, r.who, r.min, r.usd, r.x.status === 'waiting')]),
       )}
-      {hidden > 0 && line('tasks-more', [{ text: t(lang, 'tasktable.more', { n: hidden, list: hiddenBy.join(', ') }), dim: true }])}
+      {hidden > 0 && line('tasks-more', [{ text: fitText(t(lang, 'tasktable.more', { n: hidden, list: hiddenBy.join(', ') }), data.columns), dim: true }])}
       <Text key="task-rule-total" dimColor>
         {'─'.repeat(Math.max(1, data.columns))}
       </Text>
