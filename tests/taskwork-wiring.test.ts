@@ -109,6 +109,15 @@ test('a member\'s turn lands on its linked task in tasks.json: time, tokens, cac
   expect(taskOf(s.list(), 3)?.work).toEqual({})
 })
 
+test('a member\'s turn stamps lastAt with the clock\'s time when it completes', async ($, on) => {
+  const s = await boot($, on, { [LIST_FILE]: JSON.stringify(saved('working')) })
+  await s.clock.advance(5_000)
+
+  await s.turn('d1', 1000)
+
+  expect(taskOf(s.list(), 2)?.work['dev-1']).toMatchObject({ lastAt: 6_000 }) // boot's clock started at 1000
+})
+
 test('turns of the same member add up in the file', async ($, on) => {
   const s = await boot($, on, { [LIST_FILE]: JSON.stringify(saved('working')) })
 

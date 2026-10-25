@@ -84,6 +84,14 @@ test('mergeList keeps the work of a task with the same number and takes the new 
   expect(one?.events).toEqual([{ at: 5, kind: 'start', who: 'senior-dev-1' }])
 })
 
+test('mergeList keeps lastAt on the work of a task that stays', () => {
+  const old = listOf([task(1, { status: 'working', work: { 'senior-dev-1': work({ lastAt: 4242 }) } })])
+
+  const merged = mergeList(old, [{ n: 1, title: 'Task 1', done: false }], OPTS)
+
+  expect(merged.tasks[0]?.work['senior-dev-1']?.lastAt).toBe(4242)
+})
+
 test('mergeList starts a new number waiting, next to the kept ones, in the new plan order', () => {
   const old = listOf([task(1, { work: { 'senior-dev-1': work() } })])
 
@@ -234,6 +242,16 @@ test('writeList writes a file that readList reads back as the same list,', async
 
     expect((await readList(d.$, d.path)).list).toEqual(saved)
     expect(JSON.parse(d.files.get(d.path) ?? 'null').version).toBe(1)
+})
+
+test('writeList then readList keeps each member\'s lastAt', async () => {
+  const d = disk()
+    const saved = listOf([task(1, { work: { 'a-1': work({ lastAt: 4242 }), 'b-1': work({ lastAt: null }) } })])
+
+    await writeList(d.$, d.path, saved)
+
+    const rows = (await readList(d.$, d.path)).list?.tasks[0]?.work
+    expect([rows?.['a-1']?.lastAt, rows?.['b-1']?.lastAt]).toEqual([4242, null])
 })
 
 test('writeList replaces an earlier file whole', async () => {

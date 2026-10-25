@@ -12,7 +12,7 @@ const MAX_TITLE = 200 // a title is untrusted text from the plan file
 export type TaskStatus = 'waiting' | 'working' | 'review' | 'done'
 const STATUSES: readonly string[] = ['waiting', 'working', 'review', 'done']
 
-export type TaskWork = { role: string; step: string; workMs: number; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; model: string | null; /** When a turn was last counted onto this row; null for a member just linked, and for a file saved before this field. */ lastAt: number | null }
+export type TaskWork = { role: string; step: string; workMs: number; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; model: string | null; /** The time of the member's latest turn on this task, whatever it counted (a turn with no time or tokens still stamps it); null for a member just linked, and for a file saved before this field. */ lastAt: number | null }
 /** Work was counted for a member: time, or any token of any kind. Nothing counted is a member just linked, not an unpriced one. */
 export const isCounted = (w: Pick<TaskWork, 'workMs' | 'inputTokens' | 'outputTokens' | 'cacheReadTokens' | 'cacheWriteTokens'>) => w.workMs > 0 || w.inputTokens + w.outputTokens + w.cacheReadTokens + w.cacheWriteTokens > 0
 

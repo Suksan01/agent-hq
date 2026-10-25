@@ -72,7 +72,7 @@ test('a member\'s turn adds exactly its time and tokens to its row on the linked
   expect(taskOf(next, 2).status).toBe('working')
 })
 
-test('a counted turn stamps the row with the turn\'s time; a member not counted keeps no stamp', () => {
+test('a linked member\'s turn stamps its row with the turn\'s time, even a turn that counted nothing; the lead stamps none', () => {
   const list = listOf(task(2, { status: 'working', work: { 'dev-1': work({ lastAt: 100 }) }, events: [{ at: 5, kind: 'start', who: 'dev-1' }, { at: 6, kind: 'start', who: 'dev-2' }] }))
 
   const next = addTurnToTask(list, 'dev-1', { durationMs: 1000, usage: usage() }, AT)
@@ -81,6 +81,14 @@ test('a counted turn stamps the row with the turn\'s time; a member not counted 
   expect(taskOf(next, 2).work['dev-1']?.lastAt).toBe(AT)
   expect(taskOf(fresh, 2).work['dev-2']?.lastAt).toBe(AT) // a row made by its first turn
   expect(taskOf(addTurnToTask(list, undefined, { durationMs: 1000 }, AT), 2).work['dev-1']?.lastAt).toBe(100) // the lead counts on none
+})
+
+test('a turn with no time and no usage still stamps lastAt and adds nothing else', () => {
+  const list = listOf(task(2, { status: 'working', work: { 'dev-1': work({ lastAt: 100 }) }, events: [{ at: 5, kind: 'start', who: 'dev-1' }] }))
+
+  const next = addTurnToTask(list, 'dev-1', { durationMs: 0 }, AT)
+
+  expect(taskOf(next, 2).work['dev-1']).toEqual(work({ lastAt: AT }))
 })
 
 test('turns add up, one after the other', () => {
