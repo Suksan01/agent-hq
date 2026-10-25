@@ -6,9 +6,10 @@ import { GlassTile, Icon, html } from './spacekit.js'
 import { has, t } from './i18n.js'
 import React from './vendor/libs.js'
 
-const { useState } = React
+const { useEffect, useState } = React
 const NONE = '—'
 const MINUTE = 60_000
+const TICK_MS = 30_000 // how often a table with a working task is drawn again, so "quiet" shows although no snapshot comes
 /** A working task with no activity for this long gets the quiet spinner (and is said to be quiet to a screen reader). */
 export const QUIET_MS = 10 * MINUTE
 
@@ -68,6 +69,12 @@ export function quietMinutes(row, now) {
   const ms = Math.max(0, now - row.lastActiveAt)
   return ms >= QUIET_MS ? String(Math.floor(ms / MINUTE)) : null
 }
+
+/** The time "last active" and "quiet" are measured at: the page's clock (the mod stops sending snapshots when nobody works), the snapshot's own when offline (as last seen). */
+export const panelNow = (snapshot, isOnline, clock = Date.now) => (isOnline ? clock() : (snapshot?.at ?? clock()))
+
+/** Does the table need a timer: only while a task is working (a quiet one is the only thing that changes with time). */
+export const needsTick = list => Boolean(list?.rows?.some(row => row.status === 'working'))
 
 /** How much of the plan is done, 0 to 100. */
 export const donePercent = total => (total.count > 0 ? Math.round((total.done / total.count) * 100) : 0)
@@ -146,17 +153,24 @@ function Table({ list, isStill, now }) {
 }
 
 /** The panel for a session's snapshot (`undefined` before the first one); draws nothing while there is no list. */
-export function TasksPanel({ snapshot, isOnline }) {
+export function TasksPanel({ snapshot, isOnline, clock = Date.now }) {
   const state = panelState(snapshot, { isOnline })
-  if (state === 'hidden') return null
   const list = snapshot?.taskList
+  const [, setTick] = useState(0)
+  const isTicking = isOnline && needsTick(list)
+  useEffect(() => {
+    if (!isTicking) return undefined
+    const timer = setInterval(() => setTick(n => n + 1), TICK_MS)
+    return () => clearInterval(timer)
+  }, [isTicking])
+  if (state === 'hidden') return null
   const hasTable = state === 'ready' || state === 'offline'
   return html`<${GlassTile} edge="bottom" soft className="tk-panel" role="region" aria-label=${t('tasks.title')}>
     <header className="tk-head"><span className="sk-label">${t('tasks.title')}</span>${hasTable ? html`<span className="tk-count">${t('tasks.done', { done: list.total.done, count: list.total.count })}</span>` : null}</header>
     ${hasTable ? html`<div className="tk-progress" role="progressbar" aria-label=${t('tasks.progress')} aria-valuemin="0" aria-valuemax=${list.total.count} aria-valuenow=${list.total.done} aria-valuetext=${t('tasks.done', { done: list.total.done, count: list.total.count })}><span style=${{ width: `${donePercent(list.total)}%` }}></span></div>` : null}
     ${state === 'offline' ? html`<p className="tk-offline" role="status">${t('tasks.offline')}</p>` : null}
     ${state === 'loading' || state === 'empty' ? html`<p className="tk-note" role="status">${t(`tasks.${state}`)}</p>` : null}
-    ${hasTable ? html`<${Table} list=${list} isStill=${state === 'offline'} now=${snapshot.at ?? 0} />` : null}
+    ${hasTable ? html`<${Table} list=${list} isStill=${state === 'offline'} now=${panelNow(snapshot, isOnline, clock)} />` : null}
     ${hasTable ? html`<p className="tk-foot">${[t('tasks.footnote'), ...footnoteKeys(list).map(key => t(key))].join(' · ')}</p>` : null}
   <//>`
 }

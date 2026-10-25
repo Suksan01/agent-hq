@@ -14,7 +14,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import { STRINGS } from './i18n.js'
-import { QUIET_MS, agoMinutes, costText, donePercent, footnoteKeys, memberLine, minText, nextOpen, panelState, quietMinutes, timeline, totalMinText, whoText } from './tasks.js'
+import { QUIET_MS, agoMinutes, costText, donePercent, footnoteKeys, memberLine, minText, needsTick, nextOpen, panelNow, panelState, quietMinutes, timeline, totalMinText, whoText } from './tasks.js'
 
 const MIN = 60_000
 const THAI = /[฀-๿]/
@@ -253,4 +253,28 @@ test('the quiet spinner is dimmed, the detail and member lines show last active,
     assert.match(STRINGS.en[`tasks.${key}`], /\{n\}/)
     assert.match(STRINGS.th[`tasks.${key}`], THAI)
   }
+})
+
+test('quiet is measured on the page clock, so a working task whose snapshot is old still gets flagged; offline keeps the last seen time', () => {
+  const at = 1_000 * MIN // the last snapshot: the mod sends none while nobody works
+  const snapshot = { at, taskList: { rows: [{ status: 'working', lastActiveAt: at - MIN }] } }
+  const later = () => at + 30 * MIN
+  const row = snapshot.taskList.rows[0]
+
+  assert.equal(quietMinutes(row, snapshot.at), null, 'frozen at the snapshot time it never shows')
+  assert.equal(quietMinutes(row, panelNow(snapshot, true, later)), '31', 'the page clock moves on')
+  assert.equal(panelNow(snapshot, false, later), at, 'offline: as last seen')
+  assert.equal(panelNow({}, false, later), later(), 'no snapshot time: the clock')
+  assert.equal(agoMinutes(at + 5 * MIN, panelNow(snapshot, true, () => at)), '<1', 'a clock behind the stamp never shows negative')
+  assert.equal(needsTick(snapshot.taskList), true)
+  assert.equal(needsTick({ rows: [{ status: 'done' }, { status: 'waiting' }] }), false, 'no timer without a working task')
+  assert.equal(needsTick(null), false)
+})
+
+test('the panel draws again on a slow timer while a task works, and clears it', () => {
+  const source = read('./tasks.js')
+
+  assert.match(source, /setInterval\(\(\) => setTick\(n => n \+ 1\), TICK_MS\)/)
+  assert.match(source, /return \(\) => clearInterval\(timer\)/)
+  assert.match(source, /isTicking = isOnline && needsTick\(list\)/)
 })
