@@ -336,12 +336,15 @@ opt-in for in-app prototypes in `/agent-hq:feature`) as the component library:
   `claude plugin install impeccable@impeccable`), and only on the person's yes. A plugin installed mid-session is
   listed only after `/reload-plugins`, so write the skill into the team file after that. A role with a `tools` list
   keeps `Skill` in it, since members load the skill with the Skill tool.
-- **Impeccable rule**: add it only together with the skill, never alone. Members cannot type slash commands: they load
-  `impeccable:impeccable` with the Skill tool and pass the command as its argument (for example `init`). For a builder
-  (frontend, UI, UX, designer, prototype): "Load `impeccable:impeccable` with `init` once per project, `shape` when
-  you start a design and `polish` before you report done. HeroUI supplies the components; Impeccable decides how they
-  look and read." For a review or QA role: "Load `impeccable:impeccable` with `critique` or `audit` and report the
-  results as findings; make no edits and never run `polish`."
+- **Impeccable rule**: add it only together with the skill, never alone. Members cannot type slash commands or ask the
+  person: they load `impeccable:impeccable` with the Skill tool and pass the command as its argument. For a builder
+  (frontend, UI, UX, designer, prototype): "Load `impeccable:impeccable` with `polish` before you report done. HeroUI
+  supplies the components; Impeccable decides how they look and read." For a review or QA role: "Load
+  `impeccable:impeccable` with `audit` and report the results as findings; make no edits and never run `polish`."
+- **Impeccable lead rule**: when the team has such a role, add to the lead's rules: "Run `impeccable:impeccable` with
+  `init` once per project and `shape` before a design task, with the person, and point the brief at the PRODUCT.md or
+  design brief it produced." `init`, `shape` and `critique` interview the person and `critique` needs sub-agents, so
+  they belong to the lead, not to a member.
 - **HeroUI skill**: add the official HeroUI skill when this session lists it, `heroui-react` for web and `heroui-native` for
   React Native. When it is missing, offer to install it, the Claude skill only
   (`npx skills add heroui-inc/heroui --skill heroui-react -a claude-code`, `--skill heroui-native` for React Native),

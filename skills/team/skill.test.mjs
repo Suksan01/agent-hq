@@ -26,13 +26,20 @@ test('UI roles get Impeccable by default, gated on the person, with a rule split
   assert.match(section, /`impeccable:impeccable`/)
   assert.match(section, /claude plugin marketplace add pbakaus\/impeccable/)
   assert.match(section, /claude plugin install impeccable@impeccable/)
-  assert.match(section, /only on the person's yes/)
-  assert.match(section, /\/reload-plugins/)
+  const install = section.match(/\*\*Impeccable skill\*\*:.*?(?= \*\*Impeccable rule\*\*)/)[0] // not the HeroUI line
+  assert.match(install, /only on the person's yes/)
+  assert.match(install, /\/reload-plugins/)
+  assert.match(install, /`Skill`/)
   assert.match(section, /Skill tool/)
-  assert.match(section, /builder .*`init` once per project, `shape` when you start a design and `polish` before you report done/)
+  const builder = section.match(/For a builder [^"]*"([^"]*)"/)[1]
+  assert.match(builder, /`polish` before you report done/)
+  assert.doesNotMatch(builder, /`init`|`shape`/)
   const reviewer = section.match(/For a review or QA role: "([^"]*)"/)[1]
-  assert.match(reviewer, /`critique` or `audit`/)
-  assert.doesNotMatch(reviewer.replace(/never run `polish`/, ''), /polish/) // the reviewer never runs polish
+  assert.match(reviewer, /`audit`/)
+  assert.doesNotMatch(reviewer.replace(/never run `polish`/, ''), /critique|polish/)
+  const lead = section.match(/\*\*Impeccable lead rule\*\*: [^"]*"([^"]*)"/)[1]
+  assert.match(lead, /`init` once per project/)
+  assert.match(lead, /`shape`/)
 })
 
 test('the Team Assistant can write the spec and plan files, and only those', () => {
