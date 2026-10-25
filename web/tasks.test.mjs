@@ -201,3 +201,16 @@ test('parallel work shows the first member and +n for the others with counted wo
   assert.deepEqual(whoText({ who: null, work: [] }), { text: '—', title: '' })
   assert.deepEqual(whoText({ who: 'dev-1' }), { text: 'dev-1', title: '' }, 'an older snapshot without work entries')
 })
+
+test('the cost column is wide enough and never wraps: its header, rows and total carry tk-c-cost; Min stays narrow', () => {
+  const source = read('./tasks.js')
+  const css = read('./space.css')
+
+  assert.equal(costText({ costUsd: 123.45, isPartial: true }), '$123.45+')
+  assert.match(source, /<td className="tk-c-num tk-c-cost">\$\{costText\(row\)\}<\/td>/)
+  assert.match(source, /<td className="tk-c-num tk-c-cost">\$\{costText\(list\.total\)\}<\/td>/)
+  assert.match(source, /<th className="tk-c-num tk-c-cost">/)
+  assert.match(css, /\.tk-table \.tk-c-cost\s*\{[^}]*width:\s*64px[^}]*white-space:\s*nowrap/)
+  assert.match(css, /\.tk-table \.tk-c-num\s*\{[^}]*width:\s*44px/)
+  assert.equal(STRINGS.en['tasks.colCost'], '≈', 'each cell carries its own $')
+})

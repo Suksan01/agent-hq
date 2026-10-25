@@ -617,6 +617,7 @@
 .tk-table th:nth-child(2), .tk-c-n { width: 24px; color: var(--tk-dim); }
 .tk-table .tk-c-who { width: 62px; color: var(--sk-text-2); overflow-wrap: anywhere; font-size: 12px; }
 .tk-table .tk-c-num { width: 44px; text-align: right; }
+.tk-table .tk-c-cost { width: 64px; white-space: nowrap; } /* "$12.34+" at 13px mono is about 55px */
 .tk-table td { padding: 7px 4px; vertical-align: top; }
 .tk-c-title { overflow-wrap: anywhere; }
 .tk-row { border-bottom: 1px solid var(--sk-line); transition: background .2s; }

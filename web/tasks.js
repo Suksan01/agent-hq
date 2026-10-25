@@ -104,7 +104,7 @@ function Row({ row, isOpen, isStill, onToggle }) {
       <td className="tk-c-title"><button type="button" className="tk-title" aria-expanded=${isOpen} aria-controls=${isOpen ? id : undefined} onClick=${e => { e.stopPropagation(); onToggle() }}><${Chevron} /><span>${row.title}</span></button></td>
       <td className="tk-c-who" title=${who.title || undefined}>${who.text}</td>
       <td className="tk-c-num">${minText(row)}</td>
-      <td className="tk-c-num">${costText(row)}</td>
+      <td className="tk-c-num tk-c-cost">${costText(row)}</td>
     </tr>
     ${isOpen ? html`<${Detail} row=${row} id=${id} />` : null}
   </tbody>`
@@ -113,12 +113,12 @@ function Row({ row, isOpen, isStill, onToggle }) {
 function Table({ list, isStill }) {
   const [open, setOpen] = useState(null)
   return html`<table className="tk-table">
-    <thead><tr><th><span className="tk-sr">${t('tasks.colStatus')}</span></th><th>#</th><th>${t('tasks.colTask')}</th><th className="tk-c-who">${t('tasks.colWho')}</th><th className="tk-c-num">${t('tasks.colMin')}</th><th className="tk-c-num">${t('tasks.colCost')}</th></tr></thead>
+    <thead><tr><th><span className="tk-sr">${t('tasks.colStatus')}</span></th><th>#</th><th>${t('tasks.colTask')}</th><th className="tk-c-who">${t('tasks.colWho')}</th><th className="tk-c-num">${t('tasks.colMin')}</th><th className="tk-c-num tk-c-cost">${t('tasks.colCost')}</th></tr></thead>
     ${list.rows.map(row => html`<${Row} key=${row.n} row=${row} isStill=${isStill} isOpen=${open === row.n} onToggle=${() => setOpen(nextOpen(open, row.n))} />`)}
     <tfoot><tr>
       <td colSpan="4">${t('tasks.total')}</td>
       <td className="tk-c-num">${totalMinText(list.total)}</td>
-      <td className="tk-c-num">${costText(list.total)}</td>
+      <td className="tk-c-num tk-c-cost">${costText(list.total)}</td>
     </tr></tfoot>
   </table>`
 }

@@ -51,7 +51,7 @@ export const STRINGS = {
     'approval.seeTerminal': 'Too large or sensitive: see the terminal', 'approval.because': 'Claude Code asks because: {reason}',
     'unit.s': '{n}s', 'unit.m': '{n}m', 'unit.h': '{n}h',
     'tasks.title': 'Tasks', 'tasks.loading': 'Loading tasks…', 'tasks.empty': 'The plan has no tasks yet.', 'tasks.offline': 'Offline: showing the tasks as last seen.',
-    'tasks.footnote': '≈ estimate from list prices, not your bill', 'tasks.footPartial': '+ some prices are unknown', 'tasks.footNoPrice': '— no price', 'tasks.footRemoved': 'The total includes removed tasks', 'tasks.progress': 'Tasks done', 'tasks.colStatus': 'Status', 'tasks.colTask': 'Task', 'tasks.colWho': 'Who', 'tasks.colMin': 'Min', 'tasks.colCost': '≈ $',
+    'tasks.footnote': '≈ estimate from list prices, not your bill', 'tasks.footPartial': '+ some prices are unknown', 'tasks.footNoPrice': '— no price', 'tasks.footRemoved': 'The total includes removed tasks', 'tasks.progress': 'Tasks done', 'tasks.colStatus': 'Status', 'tasks.colTask': 'Task', 'tasks.colWho': 'Who', 'tasks.colMin': 'Min', 'tasks.colCost': '≈',
     'tasks.total': 'Total', 'tasks.done': '{done}/{count} done', 'tasks.noWork': 'Nobody has worked on this yet.', 'tasks.minutes': '{n} min', 'tasks.tokens': '{n} tokens',
     'tasks.status.done': 'Done', 'tasks.status.working': 'Working', 'tasks.status.review': 'In review', 'tasks.status.waiting': 'Waiting',
     'tasks.step.tests': 'tests', 'tasks.step.build': 'build', 'tasks.step.review': 'review', 'tasks.step.fix': 'fix',
