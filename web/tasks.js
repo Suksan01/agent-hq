@@ -144,7 +144,7 @@ function Row({ row, isOpen, isStill, now, agents, onToggle }) {
     <tr className="tk-row" onClick=${onToggle}>
       <td className="tk-c-mark" title=${quiet === null ? word('tasks.status', row.status) : `${word('tasks.status', row.status)}, ${t('tasks.quiet', { n: quiet })}`}><${Mark} status=${row.status} isStill=${isStill} isQuiet=${quiet !== null} /><span className="tk-sr">${word('tasks.status', row.status)}${quiet === null ? '' : `, ${t('tasks.quiet', { n: quiet })}`}</span></td>
       <td className="tk-c-n">${row.n}</td>
-      <td className="tk-c-title"><button type="button" className="tk-title" aria-expanded=${isOpen} aria-controls=${isOpen ? id : undefined} onClick=${e => { e.stopPropagation(); onToggle() }}><${Chevron} /><span>${row.title}</span></button>${who.text === NONE ? null : html`<span className="tk-who" title=${who.title || undefined}>${who.text}</span>`}</td>
+      <td className="tk-c-title"><button type="button" className="tk-title" aria-expanded=${isOpen} aria-controls=${isOpen ? id : undefined} onClick=${e => { e.stopPropagation(); onToggle() }}><${Chevron} /><span>${row.title}</span></button>${who.text === NONE ? null : html`<span className="tk-who" title=${who.title || undefined}><span className="tk-sr">${t('tasks.colWho')}: </span>${who.text}</span>`}</td>
       <td className="tk-c-num tk-c-min">${minText(row)}</td>
       <td className="tk-c-num tk-c-cost">${costText(row)}</td>
     </tr>

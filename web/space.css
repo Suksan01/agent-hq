@@ -621,7 +621,7 @@
 .tk-table .tk-c-num { width: 44px; text-align: right; }
 .tk-table .tk-c-cost { width: 72px; white-space: nowrap; text-align: right; } /* "$123.45+" and "$137.57+" are 62px of mono at 13px: they fit inside the padding and the right edges line up */
 .tk-panel { container-type: inline-size; }
-@container (max-width: 300px) { .tk-table .tk-c-min { display: none; } } /* a narrow panel: Min is in each task's detail */
+@container (max-width: 300px) { .tk-table .tk-c-min { width: 0; padding: 0; overflow: hidden; font-size: 0; visibility: hidden; } } /* a narrow panel: Min folds to a zero-width column (not display: none: an open detail row spans five columns, and a missing one would take half of the title's room); it is in each task's detail */
 .tk-table td { padding: 7px 4px; vertical-align: top; }
 .tk-c-title { overflow-wrap: anywhere; }
 .tk-row { border-bottom: 1px solid var(--sk-line); transition: background .2s; }

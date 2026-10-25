@@ -324,7 +324,7 @@ test('the who column is gone: who sits under the title, and no rule styles a hea
   const source = read('./tasks.js')
   const css = read('./space.css')
 
-  assert.doesNotMatch(source, /tk-c-who|colWho/)
+  assert.doesNotMatch(source, /tk-c-who/)
   assert.match(source, /<span className="tk-who"/)
   assert.doesNotMatch(css, /\.tk-c-who/, 'the old rule also hit the Who heading: 12px, grey, no uppercase')
   assert.match(css, /\.tk-who\s*\{[^}]*display:\s*block/)
@@ -337,8 +337,9 @@ test('the title keeps its room: no who column, Min folds away in a narrow panel,
 
   assert.deepEqual([fixed.num, fixed.cost], [44, 72])
   assert.match(css, /\.tk-panel\s*\{[^}]*container-type:\s*inline-size/)
-  assert.match(css, /@container \(max-width: 300px\)\s*\{\s*\.tk-table \.tk-c-min\s*\{\s*display:\s*none/)
-  assert.doesNotMatch(css, /@container[^{]*\{[^}]*tk-c-cost[^}]*display:\s*none/, 'the cost is never folded away')
+  assert.match(css, /@container \(max-width: 300px\)\s*\{\s*\.tk-table \.tk-c-min\s*\{\s*width:\s*0/)
+  assert.doesNotMatch(css, /@container[^\n]*\.tk-c-min\s*\{[^}]*display:\s*none/, 'display: none leaves an empty auto column under an open detail row')
+  assert.doesNotMatch(css, /@container[^\n]*tk-c-cost/, 'the cost is never folded away')
   // 24 (status) + 24 (#) + 44 (Min) + 72 (cost) leave a 320px table 156px for the title cell, 142px for its text after the chevron
   assert.ok(320 - 24 - 24 - fixed.num - fixed.cost - 14 >= 140)
   assert.ok(260 - 24 - 24 - fixed.cost - 14 >= 100, 'at 320px the panel is about 260px; with Min folded the text has at least 100px')
@@ -360,4 +361,12 @@ test('a member counts as working only by its name: a nickname or id equal to ano
   assert.equal(quietMinutes(task, now, [agent({ nickname: 'dev-1' })]), '40', 'a nickname is not a name')
   assert.equal(quietMinutes(task, now, [agent({ id: 'dev-1' })]), '40', 'nor is an id')
   assert.equal(quietMinutes(task, now, [agent({ name: 'dev-1' })]), null, 'its name is')
+})
+
+test('the who line under the title is labelled for a screen reader, in en and th', () => {
+  const source = read('./tasks.js')
+
+  assert.match(source, /<span className="tk-who"[^>]*><span className="tk-sr">\$\{t\('tasks\.colWho'\)\}: <\/span>\$\{who\.text\}<\/span>/)
+  assert.equal(STRINGS.en['tasks.colWho'], 'Who')
+  assert.match(STRINGS.th['tasks.colWho'], THAI)
 })
