@@ -4,7 +4,6 @@
 import type { Tone } from './cells'
 import type { LiveEvent } from './feed'
 import type { InboxItem } from './inbox'
-import { IDLE_LIMIT_MS } from './inbox'
 import type { AgentUsage } from './usage'
 import { botState, paletteOf, speciesOf, spriteFrames } from './sprites'
 import { MAIN, isFinished, progressOf } from './model'
@@ -45,6 +44,8 @@ export type LiveAgent = {
   activity: { text: string; since: number } | null
   /** What it is doing, in a sentence (hooks/says.ts): what it said with hq_doing, else its step, its assignment, or the lead's line; null when none. */
   says: string | null
+  /** Not working and not waiting on the person (idle, done, failed, stopped): the page lists it under "Paused". Never the lead. */
+  isPaused: boolean
   startedAt: number
   endedAt: number | null
   /** Tokens and working time so far (the engine reports no price); null before the agent finished a turn. */
@@ -101,8 +102,10 @@ export type LiveSnapshot = {
   events: LiveEvent[]
   /** What waits on the person: permission asks and agents held on an approval, longest waiting first. */
   inbox: InboxItem[]
-  /** Members that left the page (see FINISHED_GRACE_MS) and are only counted: completed, and failed or stopped. */
+  /** Always zero now: no member leaves the page for being finished or idle (see MAX_PAUSED); kept so an older page still reads it. */
   folded: { done: number; failed: number }
+  /** Seats of the team no member holds yet (never started this session): the page lists them as paused. Empty without a team. */
+  seats: { name: string; role: string; roleTitle: string }[]
   /** The talk bubbles showing now (hooks/talk.ts): on `agent`'s card, to or from `other` (`main` for the lead); the page draws exactly these. */
   bubbles: HqBubble[]
   /** What the person could send the lead next (hooks/suggest.ts), drafted after its last answered turn; null when none. */
@@ -115,19 +118,27 @@ export type LiveExtras = {
   events?: readonly LiveEvent[]
   inbox?: readonly InboxItem[]
   usage?: Readonly<Record<string, AgentUsage>>
-  /** Since when each held or idle agent waits (see ./inbox trackWaiting): an idle one past IDLE_LIMIT_MS leaves the page. */
+  /** Since when each held or idle agent waits (see ./inbox trackWaiting). */
   waitingSince?: Readonly<Record<string, number>>
   suggestions?: HqSuggestions | null
 }
 
-/** A finished member stays on the page this long after it ended, then leaves it and is only counted. */
-export const FINISHED_GRACE_MS = 2 * 60_000
+/** How many paused members (newest first) stay in the snapshot; older ones are dropped so it stays small. */
+export const MAX_PAUSED = 50
 
-/** Is this member off the page at `at`: ended longer than the grace ago, or idle past the limit? Never the lead. */
-function isFolded(agent: HqAgent, at: number, waitingSince: Readonly<Record<string, number>>): boolean {
-  if (agent.id === MAIN) return false
-  if (isFinished(agent.status)) return at - (agent.endedAt ?? agent.startedAt) > FINISHED_GRACE_MS
-  return agent.status === 'idle' && at - (waitingSince[agent.id] ?? agent.startedAt) > IDLE_LIMIT_MS
+/** Not working and not waiting on the person. The lead is never paused. */
+const isPaused = (agent: HqAgent) => agent.id !== MAIN && agent.status !== 'running' && agent.status !== 'pending' && agent.status !== 'waiting'
+
+/** The paused members past the newest MAX_PAUSED, by when they ended (else started). */
+function pausedOverCap(data: HqData): Set<string> {
+  const paused = Object.values(data.agents).filter(isPaused).sort((x, y) => (y.endedAt ?? y.startedAt) - (x.endedAt ?? x.startedAt))
+  return new Set(paused.slice(MAX_PAUSED).map(x => x.id))
+}
+
+/** Every seat of the team (role id and count, named as hq_assign names them) that no agent holds yet. */
+function seatsOf(data: HqData): LiveSnapshot['seats'] {
+  const taken = new Set(Object.values(data.agents).map(x => x.name))
+  return (data.team?.roles ?? []).flatMap(r => Array.from({ length: r.count }, (_, i) => ({ name: `${r.id}-${i + 1}`, role: r.id, roleTitle: r.title }))).filter(s => !taken.has(s.name))
 }
 
 /** Roles the page offers, each with how many of it are at work now (a role's count caps that). */
@@ -188,8 +199,7 @@ function taskListOf(list: TaskList | null | undefined): LiveTaskList | null {
 
 export function buildSnapshot(data: HqData, at: number, notice: LiveSnapshot['notice'] = null, extras: LiveExtras = {}): LiveSnapshot {
   const lang = data.lang ?? 'en'
-  const gone = Object.values(data.agents).filter(a => isFolded(a, at, extras.waitingSince ?? {}))
-  const goneIds = new Set(gone.map(a => a.id))
+  const goneIds = pausedOverCap(data)
   const agents = treeRows(data).filter(({ agent }) => !goneIds.has(agent.id)).map(({ agent, work }): LiveAgent => {
     const isMain = agent.id === MAIN
     const label = labelOf(agent, data.team, lang)
@@ -223,6 +233,7 @@ export function buildSnapshot(data: HqData, at: number, notice: LiveSnapshot['no
       lastTool: agent.lastTool ?? null,
       activity: activityOf(data, agent.id),
       says: sayingOf(agent, data, lang)?.text ?? null,
+      isPaused: isPaused(agent),
       startedAt: agent.startedAt,
       endedAt: agent.endedAt ?? null,
       usage: extras.usage?.[agent.id] ?? null,
@@ -245,7 +256,8 @@ export function buildSnapshot(data: HqData, at: number, notice: LiveSnapshot['no
     lastAction: extras.lastAction ?? 0,
     events: [...(extras.events ?? [])],
     inbox: [...(extras.inbox ?? [])],
-    folded: { done: gone.filter(a => a.status === 'completed').length, failed: gone.filter(a => a.status === 'failed' || a.status === 'killed').length },
+    folded: { done: 0, failed: 0 },
+    seats: seatsOf(data),
     bubbles: [...(data.bubbles ?? [])],
     suggestions: extras.suggestions ?? null,
   }
