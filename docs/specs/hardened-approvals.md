@@ -1,6 +1,6 @@
 # Hardened page approvals (0.8.0): view only
 
-Status: build (draft)
+Status: build (approved)
 Skipped: prototype (small UI change, the card already exists)
 
 ## Direction

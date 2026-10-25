@@ -30,7 +30,7 @@ Card shape: each open ask in the state file's inbox may carry `card` `{ tool, fi
   `describeAsk` words without `card`), `web/net.js` (drop the two handlers), `web/i18n.js` (en and th: view-only line,
   "too large or sensitive: see the terminal"; remove the old keys). ACs: 6, 11, 12, 13. Done: suite green.
   Deps: 2, 3.
-- [ ] 5. **RV** security review of the finished diff (tasks 1-4 and 6), checklist: no route or queue kind can decide
+- [x] 5. **RV** security review of the finished diff (tasks 1-4 and 6), checklist: no route or queue kind can decide
   (AC1/AC2); text nodes only, U+202E and zero-width shown marked (AC12); masked and capped input (AC4); en and th
   complete (AC11); no orphans (AC8 grep); state-file permissions; denied-call path handled (AC14); CHANGELOG and README
   true; tsc clean. Output: APPROVED or findings.
