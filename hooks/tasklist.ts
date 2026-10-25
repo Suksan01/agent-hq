@@ -12,7 +12,7 @@ const MAX_TITLE = 200 // a title is untrusted text from the plan file
 export type TaskStatus = 'waiting' | 'working' | 'review' | 'done'
 const STATUSES: readonly string[] = ['waiting', 'working', 'review', 'done']
 
-export type TaskWork = { role: string; step: string; workMs: number; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; model: string | null }
+export type TaskWork = { role: string; step: string; workMs: number; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; model: string | null; /** The time of the member's latest turn on this task, whatever it counted (a turn with no time or tokens still stamps it); null for a member just linked, and for a file saved before this field. */ lastAt: number | null }
 /** Work was counted for a member: time, or any token of any kind. Nothing counted is a member just linked, not an unpriced one. */
 export const isCounted = (w: Pick<TaskWork, 'workMs' | 'inputTokens' | 'outputTokens' | 'cacheReadTokens' | 'cacheWriteTokens'>) => w.workMs > 0 || w.inputTokens + w.outputTokens + w.cacheReadTokens + w.cacheWriteTokens > 0
 
@@ -109,6 +109,7 @@ function workFault(w: unknown): string | undefined {
   if (!isRaw(w)) return 'is not an object'
   if (typeof w.role !== 'string' || typeof w.step !== 'string') return 'needs a role and a step'
   if (![w.workMs, w.inputTokens, w.outputTokens, w.cacheReadTokens, w.cacheWriteTokens].every(isCount)) return 'has a time or token count that is not a number of 0 or more'
+  if (w.lastAt !== undefined && !isStamp(w.lastAt)) return 'has a lastAt that is not a time or null' // missing: a file saved before the field
   return isNameOrNull(w.model) ? undefined : 'has a model that is not text'
 }
 
@@ -149,7 +150,8 @@ export function parseList(source: string): { list: TaskList; reason?: undefined 
     if (numbers.has(n)) return { list: null, reason: `task number ${n} appears twice` }
     numbers.add(n)
   }
-  return { list: raw as unknown as TaskList }
+  const tasks = (raw.tasks as ListTask[]).map(t => ({ ...t, work: Object.fromEntries(Object.entries(t.work).map(([who, w]) => [who, { ...w, lastAt: w.lastAt ?? null }])) }))
+  return { list: { ...(raw as unknown as TaskList), tasks } }
 }
 
 const MISSING = /ENOENT|no such file|not found/i

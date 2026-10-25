@@ -54,7 +54,7 @@ export type LiveAgent = {
 }
 
 /** One member's work on a task, for the page's detail; `costUsd` is null where its model has no price. */
-export type LiveTaskWork = { who: string; role: string; step: string; workMs: number; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; costUsd: number | null }
+export type LiveTaskWork = { who: string; role: string; step: string; workMs: number; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; costUsd: number | null; lastAt: number | null }
 export type LiveTaskRow = {
   n: number
   title: string
@@ -64,6 +64,8 @@ export type LiveTaskRow = {
   doneBy: string | null
   startedAt: number | null
   doneAt: number | null
+  /** The latest time a turn was counted on this task by any member, null when none was. */
+  lastActiveAt: number | null
   workMs: number
   costUsd: number | null
   isPartial: boolean
@@ -151,7 +153,7 @@ const sumCosts = (costs: (number | null)[]) => (costs.every(c => c === null) ? n
 
 function taskRow(task: ListTask): LiveTaskRow {
   const events = [...task.events].sort((a, b) => a.at - b.at)
-  const work = Object.entries(task.work).map(([who, w]): LiveTaskWork => ({ who, role: w.role, step: w.step, workMs: w.workMs, inputTokens: w.inputTokens, outputTokens: w.outputTokens, cacheReadTokens: w.cacheReadTokens, cacheWriteTokens: w.cacheWriteTokens, costUsd: costOf({ ...w, model: w.model ?? undefined }) }))
+  const work = Object.entries(task.work).map(([who, w]): LiveTaskWork => ({ who, role: w.role, step: w.step, workMs: w.workMs, inputTokens: w.inputTokens, outputTokens: w.outputTokens, cacheReadTokens: w.cacheReadTokens, cacheWriteTokens: w.cacheWriteTokens, costUsd: costOf({ ...w, model: w.model ?? undefined }), lastAt: w.lastAt ?? null }))
   const holder = events.at(-1)?.who ?? work.at(-1)?.who ?? null
   const who = task.status === 'done' ? task.doneBy : task.status === 'waiting' ? null : holder
   return {
@@ -162,6 +164,7 @@ function taskRow(task: ListTask): LiveTaskRow {
     doneBy: task.status === 'done' ? task.doneBy : null,
     startedAt: task.startedAt,
     doneAt: task.doneAt,
+    lastActiveAt: work.reduce<number | null>((max, w) => (w.lastAt === null ? max : Math.max(max ?? w.lastAt, w.lastAt)), null),
     workMs: work.reduce((s, w) => s + w.workMs, 0),
     costUsd: sumCosts(work.map(w => w.costUsd)),
     isPartial: work.some(w => w.costUsd === null && isCounted(w)), // a member just linked, with nothing counted yet, is not an unpriced one
