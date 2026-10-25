@@ -338,13 +338,17 @@ opt-in for in-app prototypes in `/agent-hq:feature`) as the component library:
   keeps `Skill` in it, since members load the skill with the Skill tool.
 - **Impeccable rule**: add it only together with the skill, never alone. Members cannot type slash commands or ask the
   person: they load `impeccable:impeccable` with the Skill tool and pass the command as its argument. For a builder
-  (frontend, UI, UX, designer, prototype): "Load `impeccable:impeccable` with `polish` before you report done. HeroUI
-  supplies the components; Impeccable decides how they look and read." For a review or QA role: "Load
-  `impeccable:impeccable` with `audit` and report the results as findings; make no edits and never run `polish`."
+  (frontend, UI, UX, designer, prototype): "Load `impeccable:impeccable` with `polish` before you report done. If
+  `polish` needs a decision, stop and send the question to the lead with SendMessage; never guess a design principle or
+  change copy claims. HeroUI supplies the components; Impeccable decides how they look and read." For a review or QA
+  role: "Load `impeccable:impeccable` with `audit` and report the results as findings; make no edits, never run `polish`
+  and do not launch the app unless the brief says so." The skill runs a Bash script on every load, so keep `Bash` in
+  the tools of every such role that has a tools list.
 - **Impeccable lead rule**: when the team has such a role, add to the lead's rules: "Run `impeccable:impeccable` with
-  `init` once per project and `shape` before a design task, with the person, and point the brief at the PRODUCT.md or
-  design brief it produced." `init`, `shape` and `critique` interview the person and `critique` needs sub-agents, so
-  they belong to the lead, not to a member.
+  `init` once per project and `shape` before a design task, with the person, and point the brief at PRODUCT.md, and
+  DESIGN.md if one exists." The lead runs `init` first, so the skill's binary is installed before members load it.
+  `init`, `shape` and `critique` interview the person and `critique` needs sub-agents, so they belong to the lead, not
+  to a member.
 - **HeroUI skill**: add the official HeroUI skill when this session lists it, `heroui-react` for web and `heroui-native` for
   React Native. When it is missing, offer to install it, the Claude skill only
   (`npx skills add heroui-inc/heroui --skill heroui-react -a claude-code`, `--skill heroui-native` for React Native),

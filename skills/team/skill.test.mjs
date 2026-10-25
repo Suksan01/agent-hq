@@ -34,12 +34,16 @@ test('UI roles get Impeccable by default, gated on the person, with a rule split
   const builder = section.match(/For a builder [^"]*"([^"]*)"/)[1]
   assert.match(builder, /`polish` before you report done/)
   assert.doesNotMatch(builder, /`init`|`shape`/)
+  assert.match(builder, /send the question to the lead with SendMessage/) // it cannot ask the person
   const reviewer = section.match(/For a review or QA role: "([^"]*)"/)[1]
   assert.match(reviewer, /`audit`/)
   assert.doesNotMatch(reviewer.replace(/never run `polish`/, ''), /critique|polish/)
+  assert.match(section, /keep `Bash` in\s+the tools/) // the skill runs a script on every load
+  assert.match(reviewer, /do not launch the app/)
   const lead = section.match(/\*\*Impeccable lead rule\*\*: [^"]*"([^"]*)"/)[1]
   assert.match(lead, /`init` once per project/)
   assert.match(lead, /`shape`/)
+  assert.match(lead, /DESIGN\.md if one exists/)
 })
 
 test('the Team Assistant can write the spec and plan files, and only those', () => {
