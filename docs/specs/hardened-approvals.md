@@ -1,237 +1,163 @@
-# Hardened page approvals (0.8.0)
+# Hardened page approvals (0.8.0): view only
 
-Status: spec (draft)
+Status: spec (approved)
+Skipped: prototype (small UI change, the card already exists)
 
 ## Direction
 
-Approving an agent's permission ask on the live page needs a passkey check (WebAuthn with user verification, Touch ID
-on a Mac). The page registers the passkey once; the hub verifies each approval's signature with Node's own crypto, no
-new dependency. An agent can read every file but cannot press Touch ID.
+The live page **shows** each permission ask the engine puts to the person (agent, tool, exact input) and says to answer
+it in the terminal. The page has no Allow or Deny button, and nothing it sends can decide an ask: the terminal dialog is
+the only authority. The dormant approval code (0.7.0) goes. An agent that fakes or edits the page changes only what the
+page shows, never an outcome.
 
-Rejected: a code shown only in the terminal (the person must look at the terminal anyway), and view-only cards
-(drops the feature).
+Rejected: **Touch ID / WebAuthn.** The agent is the same OS user, so it can edit `web/approve.mjs` (spawned fresh per
+ask), serve a fake page and phish the registration with a software key, and a fake page can show one command while
+Touch ID signs another (security review, 3 CRITICAL). Also rejected earlier: a code shown only in the terminal.
 
-## The person's answers
+## Threat model (the person's answers, kept)
 
-- Threat: a prompt-injected agent of this session on this Mac, with Read and Bash (reads any file, runs curl against
-  localhost, reads hub.json), must never approve its own ask, forge an approval card or log into the page.
+- A prompt-injected agent of this session on this Mac, with Read and Bash (reads any file, runs curl against localhost,
+  reads hub.json), must never approve its own ask, forge an approval card or log into the page. Under view-only,
+  "approve" has no path at all; a forged card or a login can mislead the eyes, not the outcome (Risks).
 - Out of scope: other OS users, malware outside Claude, approving from another device on the network.
 
-## What the spec must settle
+## Flows
 
-- **Registration is the weak point.** An agent can run the WebAuthn ceremony with a software key it made itself, so
-  registering a passkey needs a proof only the person has (for example a one-time code shown only in the terminal).
-- **The stored public key is writable.** The agent runs as the same OS user and can overwrite any file, so the
-  registered key must live where it cannot be swapped unseen (the mod's memory per session, or `$.store` if agents
-  cannot write it: unconfirmed).
-- **Attack surface today** (senior-dev-2's report, `.claude/agent-hq/reports/senior-dev/senior-dev-2.md`): the hub secret
-  in hub.json gives the cookie (`web/hub.mjs:44`), `/hub/code` mints login codes (`hub.mjs:202`), the `/events` stream
-  carries card tokens (`web/approvals.mjs:58`), `/approval/<id>` accepts forged Origin/Host/Sec-Fetch-Site headers
-  (`hub.mjs:232-241`), and the secret also forges cards (`/hub/approval`), sessions (`/hub/register`) and lead text
-  (`/action`).
-- **Two failing wiring tests are test bugs** (same report): the "decider host" case cannot be produced by a hook mock
-  (move it to `canHold` unit coverage), and the "cannot attest" case needs `AskUserQuestion` allowed in the test.
+**An ask arrives.** Path chosen: the state file the page already reads, not `/hub/approval` or SSE. Why: no new route,
+no token, no helper process, nothing for an agent to call that could decide.
+1. Engine `tool.check` returns `ask`. The mod's hook (`hooks/register.tsx`, `on('tool.check')`) already records it with
+   `addAsk` (`hooks/inbox.ts`); now the entry also carries `input` and `reason` (masked, see below), and the hook returns
+   the engine's verdict **unchanged**.
+2. `requestLive` writes the state file; the hub's file watch (`web/hub.mjs` `watchJson`, `/state`, `/events` envelope)
+   sends it to the page as today. Fields are only added to the snapshot (`hooks/live.ts`).
+3. The page (`web/live.js`, `web/approval.js`, `web/approvalmarks.js`) shows a card per open ask: who (agent and role),
+   the tool, the exact input as text with hidden characters made visible (`approvalmarks.js` stays), the reason, how long
+   it has waited, and one fixed line: "Answer it in the terminal" (the inbox already says so).
+4. The person answers in the terminal. `removeAsk` runs in the `finally` of the mod's `tool.call` hook
+   (`register.tsx:1152`): that covers an allowed call, one that errors, and one that throws. `requestLive` writes the
+   state and the card disappears. **Gap:** a call the person *denies* may never reach `tool.call`, and today the only
+   cleanup is `dropAsksOf` when the loop's turn ends (`register.tsx:1234`), so a denied call can leave its card up
+   while the agent keeps working (`tests/inbox-wiring.test.ts:78` covers the allowed path only). Not verified against
+   the engine. The build must test a denied ask; if the card stays, also call `removeAsk` from the
+   `classic.PostToolUseFailure`/permission-denied hook (so those mode hooks stay if they carry it).
 
----
+**Input shown (least exposure).** Only the fields that decide the ask: `command`, `file_path`, `url`, `pattern`,
+`description`. For `Write.content`, `Edit` strings and notebook cells: key names and sizes only. Each is masked with
+`maskSecrets` (fail-closed, as `isShowable` at `pageapproval.ts:88`; a heuristic, not a guarantee). A secret hit, or over
+2 KB, shows no input, only "Too large or sensitive to show here: see the terminal". At most 5 open asks carry an input
+(`envelope()` re-sends every snapshot); older ones keep the `describeAsk` words. The state file is written 0600 where
+`$.fs.write` allows (hygiene only: the same user can read it) and the asks are cleared at session end.
 
-# Spec
+**`/hq web approvals`:** removed, not a toggle. The card is always shown while a page is open (a setting would only be
+a second place to be wrong). `/hq web next` and its `Setting` helpers stay. The bare `/hq web approvals` is then an
+unknown word, answered as any unknown `/hq` word is today.
 
-## 1. Goal and who it's for
+## Removal (exactly what goes)
 
-The person who runs Claude Code with an Agent HQ team on their own Mac. Their words (brainstorm): a prompt-injected
-agent of this session, with Read and Bash, must never approve its own ask, forge an approval card or log into the page.
-Goal: answering a permission ask on the live page is possible again (it ships dormant since 0.7.0,
-`hooks/pageapproval.ts:9-11`) and only the person's Touch ID can allow.
+- `hooks/pageapproval.ts`: `APPROVALS_RELEASED`, `APPROVALS_TEST_SESSION`, `isApprovalsReleased`, `canHold`,
+  `approvalRequest`, `answerOf`, timing constants, `ALLOWED`/`DENIED`. Two small pieces move to `hooks/inbox.ts`:
+  `pageCount` (still read for the suggestions rule, `register.tsx:625`) and the mask-and-size check (2 KB).
+- `hooks/register.tsx`: `askOnPage`, `modes`/`noteMode` and the classic `UserPromptSubmit`/`PostToolUse` mode hooks if
+  nothing else uses them, `isApprovalOpen`, `areApprovalsReleased`, `PAGE_APPROVALS`, `approvalsOnFrom`, the
+  `web.approvalsComing` branch, `linkReply`/`NO_LINK`/`isGuarded` (the login link goes back to the `/hq web` reply, as in
+  0.7.2 with approvals off).
+- `web/approve.mjs`, `web/approvals.mjs`, `web/approve.test.mjs`.
+- `web/hub.mjs`: `/hub/approval` (`holdApproval`), `/approval/<id>` (`answerApproval`), `approvals`, the `approval` and
+  `approval-withdrawn` SSE events, `config.approvals`. `web/server.mjs`: the `AGENT_HQ_APPROVALS` line (54).
+- Page: `answerApproval` and `approval`/`answer` state in `web/livestate.js`, the `named` approval handlers (`web/net.js`
+  stays; only the two handlers go), the Allow/Deny/countdown/arming code in `web/approval.js`, the `ApprovalCard` props
+  `onAnswer` (`web/live.js:210`).
+- Tests: `tests/page-approval-wiring.test.ts` (with the two failing tests), `tests/page-approval-dormant.test.ts`,
+  `tests/page-approval.test.ts` (the `pageCount` case moves), the approval cases in `web/server.test.mjs` and any
+  approval case in `web/live.test.mjs`/`browser.test.mjs`.
+- `hooks/i18n.ts` and `web/i18n.js`, English and Thai: `web.approvals*`, `approval.waiting`, `approvals.*`,
+  `web.linkNotice`, page `approval.allow/deny/left/failed/gone`. Added: the view-only line and the "see the terminal"
+  text.
 
-Design rule: **the hub is untrusted transport.** The hub, its secret, its cookie and its endpoints can all be reached by
-the agent, so none of them may decide an approval. The decision is checked by code the agent cannot write to or read
-the memory of: the mod (holds the key and the challenge) and `web/approve.mjs`, which the mod spawns and feeds on stdin.
+**Must stay (0.7.x sessions share the hub):** `hub.json {port,pid,secret}` and its 0600 write; `/hub/ping`, `/hub/code`,
+`/hub/register`, `/hub/forward`; `/state`, `/events`, `/action`; `pages.json {count,at}`; state-file and queue formats;
+the `AGENT_HQ_URL`/`AGENT_HQ_PAGES` lines. A 0.7.x mod never holds an ask (unless `AGENT_HQ_APPROVALS=1`, outside this threat model), a 0.7.x hub ignores
+the new state fields (no card), a 0.8.0 hub serves a 0.7.x session unchanged. A 0.8.0 page reading a 0.7.x state file
+(no `input`, no `reason`) falls back to the `describeAsk` words. The old `pageApprovals` key in users' `$.store` is left
+alone and harmless.
 
-## 2. Flows
+## States of the card
 
-Names below: MOD = `hooks/register.tsx` + `hooks/pageapproval.ts`; HUB = `web/hub.mjs`; APPR = `web/approvals.mjs`;
-HELPER = `web/approve.mjs`; SRV = `web/server.mjs`; PAGE = `web/index.html` + `web/approval.js` (+ a new
-`web/passkey.js`) + `web/i18n.js`.
+- **Shown:** agent, tool, input (marked), reason, waiting time, "Answer it in the terminal".
+- **Input hidden:** secret or over 2 KB: the "see the terminal" text instead of the input.
+- **Answered:** the call ended; the card is gone on the next state push (no confirmation, the terminal said it).
+- **Withdrawn:** the loop ended, Esc, or the agent finished (`dropAsksOf`, `liveAsks`): the card is gone.
+- **Timeout:** none. The dialog has no timeout and the card lives as long as the ask; the waiting time just grows.
+- **No page open:** nothing to show, nothing sent; the dialog is unchanged. A page opened later shows the open asks
+  from the state file.
+- **Page offline/logged out:** the page's existing states ("open the page again with /hq web").
 
-### 2.1 Register the passkey (once per session, see 3.1)
-1. The person types `/hq web approvals on` (MOD, origin gate as today). With no key registered the reply says so and
-   MOD mints a 8-digit one-time registration code in memory (expires in 2 minutes, 3 tries) and shows it in a toast
-   (`$.ui.toast`, `LINK_NOTICE_MS`): toasts never reach the transcript, the reply or any file.
-2. The PAGE shows the registration screen (needs the login cookie, HUB `GET /state` `/events`). The person types the code
-   and presses Register: PAGE runs `navigator.credentials.create` (ES256, `userVerification: "required"`,
-   `authenticatorAttachment: "platform"`, rpId `localhost`), reads `response.getPublicKey()` (SPKI DER, base64).
-3. PAGE `POST /register-passkey {code, credentialId, publicKey}` (HUB, cookie + same-origin checks as `/action`).
-4. HUB relays it to MOD as a new action kind `passkey` (`web/queue.mjs` checkKind, SRV `/hub/forward`, then the
-   `AGENT_HQ_ACTION` line MOD already reads; `hooks/actions.ts`). MOD compares the code (constant time), checks the key
-   parses as an EC P-256 SPKI with Node `crypto` (in HELPER, see 2.2; MOD only stores the string), keeps
-   `{credentialId, publicKey}` in its own memory, forgets the code and tells the page (state file) and the person (toast).
-5. An agent that runs the ceremony with a software key fails at step 4: it lacks the code (only in the toast / person's
-   eyes). Three wrong codes or 2 minutes burn the code; a new `/hq web approvals on` mints another.
+## Acceptance criteria
 
-### 2.2 An ask is held and the person approves or denies
-1. Engine `tool.check` -> MOD `askOnPage` (existing conditions in `canHold`, plus: a key is registered).
-2. MOD builds a card `{id, nonce(32 random bytes), agent, tool, input, reason, ...}` and spawns HELPER with that request
-   **and the public key + origin on stdin** (never read from disk).
-3. HELPER `POST /hub/approval` (HUB `holdApproval`, APPR `hold`); HUB emits SSE `approval` with the card, the nonce and
-   the one-time token (as today, `approvals.mjs:58`).
-4. PAGE shows the card. Allow: PAGE computes `challenge = SHA-256(canonical JSON of {id, tool, input, reason, nonce,
-   decision:"allow"})` from the card it displays, runs `navigator.credentials.get` (`userVerification: "required"`) and
-   `POST /approval/<id> {token, decision:"allow", assertion}`. Deny: `{token, decision:"deny"}`, no touch needed.
-5. HUB passes the answer on to HELPER unchecked for authority (APPR keeps token, order and busy rules). HELPER recomputes
-   the challenge **from the request it received from MOD**, then verifies with `node:crypto` (`verify` SHA-256 over
-   `authData || SHA-256(clientDataJSON)` with the stored SPKI key): `clientDataJSON.type == "webauthn.get"`,
-   `.challenge` equals ours, `.origin` equals `http://localhost:<hub port>`, `authData` rpIdHash is SHA-256("localhost"),
-   flags UP and UV set, signature counter above the last seen (when non-zero). Only then HELPER prints `allow`.
-   Anything else prints `ask` (the engine's dialog follows). `deny` is accepted unsigned: it only makes things safer.
-6. MOD maps the line as today (`answerOf`, `ALLOWED`/`DENIED`).
-Because HELPER re-derives the challenge from MOD's own copy, a hub or page that altered the card (tool, input) cannot
-get a valid allow.
+- AC1 Given a 0.8.0 hub, then its route table equals the allowed list (`/`, page files, `/vendor/*`, `/state`,
+  `/events`, `/action`, `/hub/ping|code|register|forward`), `/approval/<id>` and `/hub/approval` answer 404, and the queue
+  kinds equal spawn, lead, message, stop and finished.
+- AC2 Given a state file and queue lines containing `{"decision":"allow"}`, when `tool.check` runs for an allow, an ask
+  and a deny, then each verdict is deep-equal to the engine's (`decider`, `reason`, `rule` included) and no approval
+  helper is run.
+- AC3 Given an edited page or a fake page on the hub's port, then no code path from page or state file reaches a
+  verdict (the behavioural test of AC2 is the proof; the terminal's answer is the outcome).
+- AC4 Given an ask with a Bash command, when the card shows, then its tool, agent, role and deciding fields equal the
+  ask's in masked, marked form (hidden characters as `⟦U+XXXX⟧`); `Write.content` shows key names and sizes only; a
+  secret or over-2 KB input shows the "see the terminal" text; at most 5 cards carry an input.
+- AC5 Given the dialog is answered or the loop ends, then the card is gone from the next state push; given no page is
+  open, then no event is sent and pages opened later show the open asks; at session end the asks are cleared.
+- AC6 Given the page, then it has no Allow, Deny or countdown element and says to answer in the terminal.
+- AC7 Given a worktree of tag v0.7.2 as the fixture for both its hub and its mod, when its session server registers
+  with a 0.8.0 hub (and a 0.8.0 server with the v0.7.2 hub), then register, heartbeat, forward and `/hq web` work, and `hub.json`, `pages.json` and
+  state files parse as before.
+- AC8 Given `grep -rni "approval" hooks web tests README.md`, then it finds only `describeAsk`, the inbox "waiting on
+  approval" strings (`inbox.held`), the team-file trust code (`hooks/approval.ts`, `trust.*`), the new card strings, the kept
+  `web/approval.js`, `web/approvalmarks.js` and `ApprovalCard`, and CHANGELOG.
+- AC9 Given the old tests, then the files in the removal list are gone, `claude plugin test .` has no failure, and the
+  two former failures no longer exist as tests.
+- AC10 Given `/hq web` runs, then the reply carries the login link (as 0.7.2 with approvals off).
+- AC11 Given `en` and `th`, then both tables have every new key with the same placeholders.
+- AC12 Given any ask text (agent, tool, input, reason), when the page renders the card, then it is set as text nodes
+  only (no `innerHTML`, no HTML, no link; only the svg icons use `dangerouslySetInnerHTML`, `web/spacekit.js:49,87`),
+  checked by a render test with `<img onerror>`, U+202E (right-to-left override) and zero-width characters in the input:
+  each shows as visible marked text (`⟦U+202E⟧`, `⟦U+200B⟧`, the HTML as literal characters), never as active text that
+  hides or reorders the command.
+- AC13 Given a 0.7.x state file with no `input` or `reason`, when the 0.8.0 page renders, then it shows the
+  `describeAsk` words without error.
+- AC14 Given a call that is allowed, denied by the person, or that errors, when it is decided, then its ask and card
+  are gone on the next state write (not only when the loop ends); a test per case.
 
-### 2.3 No passkey, no WebAuthn, timeout
-- **No passkey registered:** `canHold` is false: no card, the dialog asks as today. `/hq web approvals on` still sets
-  the setting and says "register a passkey on the page". The page shows the registration screen, not a card.
-- **Browser without WebAuthn / no platform authenticator / user cancels the touch:** PAGE shows the "cannot approve
-  here" state; the card can only Deny or "Ask in terminal now" (answer `ask`). No fallback to a password or a code:
-  nothing weaker than Touch ID may allow.
-- **Timeout (60 s, `APPROVAL_MS`):** APPR settles `ask`, withdraws the card; the dialog follows. Esc kills HELPER and the
-  hub withdraws the card (as today).
-
-### 2.4 `/hq web approvals on|off|(bare)`
-- `on` from the person's own run (`PERSON_ORIGINS`): sets the setting; if no key, starts 2.1. From
-  `unclassified`/`auto-continuation`: the dialog first (`approvalsOnFrom`), unchanged. Plugin, schedule, other session:
-  refused (`approvals.notYours`), unchanged.
-- `off`: open to every run, as today; also forgets the registered key and the code.
-- Bare: says on/off and whether a passkey is registered.
-- The setting is only a convenience switch now, not a security boundary: see 3.1.
-- `APPROVALS_RELEASED` becomes `true`; the env gate `AGENT_HQ_APPROVALS` (SRV:54) and the `web.approvalsComing` reply
-  go; `APPROVALS_TEST_SESSION` is removed once the tests run on the real path.
-
-## 3. Data
-
-### 3.1 Where the public key lives
-In the mod's memory for the session (the same place as its other plain session state, never a file). Why: `$.store`
-is "a JSON file of the plugin's own under the user's Claude Code configuration directory" (engine types, `store`): the
-agent runs as the same OS user and can overwrite it with Write or Bash, so a key there can be swapped unseen. Nor may
-the key sit in hub memory, state files, `pages.json` or `hub.json`: the secret holder can write all of those. The key
-reaches HELPER only on its stdin from MOD. Cost: register again each session (one code, one touch).
-`$.store` keeps only the boolean `pageApprovals`; tampering with it is harmless (turning it on with no key holds
-nothing; turning it off falls back to the dialog).
-
-### 3.2 hub.json and its secret
-Stays `{port, pid, secret}`, mode 0600 (`web/registry.mjs`): older session servers in other running sessions still read
-it. Its power shrinks: (a) the browser cookie is no longer `HMAC(secret)` (`hub.mjs:44`) but random per hub run, held
-in hub memory (a hub takeover now asks the browser to log in again); (b) `/hub/approval` and `/hub/register` stay but
-decide nothing; (c) `/hub/code` stays (needed by `/hq web`), so an agent can still reach a logged-in page: it gets
-view-only plus the `/action` kinds (see open question 1), never an approval.
-The page URL printed by `AGENT_HQ_URL` uses `localhost`, not `127.0.0.1`: WebAuthn rejects an IP as rpId. HUB already
-accepts both hosts (`hostIsLocal`); the cookie is per host so the person logs in on the new URL.
-
-### 3.3 Must not break
-`hub.json` shape; `pages.json {count, at}` (`pageCount`); state file and `*.queue.jsonl` formats and the
-replay-once rule (`lastAction`); the `AGENT_HQ_URL`/`AGENT_HQ_PAGES` lines (`parseChannelLine`) with only the host
-changed; SSE `approval` / `approval-withdrawn` (fields only added: `nonce`); the helper's one-line `allow|deny|ask`
-stdout; `$.store` keys `pageApprovals`, `languageAsked`; 0.7.x servers joining a 0.8.0 hub and the reverse
-(`/hub/*` routes keep their names; an old hub without the new fields yields `ask`).
-
-## 4. States
-
-Approval card (PAGE): **loading** (SSE connecting: "Connecting..."); **empty** (no ask: nothing shown, inbox as today);
-**waiting** (agent, tool, exact input, countdown, Allow with a Touch ID icon, Deny, Ask in terminal); **touching**
-(system sheet open; buttons disabled); **error** (assertion failed or signature rejected: "Not verified, answer in the
-terminal", the dialog follows); **timeout** ("Time is up, asked in the terminal"); **denied** (confirmation, card
-closes); **allowed** (confirmation); **withdrawn** (the ask ended elsewhere); **no WebAuthn** (Allow absent, reason
-shown, Deny and terminal remain); **busy** (second ask goes to the dialog, no card).
-Registration screen: **loading**; **empty/no key** (code field, Register); **registering** (system sheet);
-**wrong code** (tries left); **code expired** (ask the person to rerun `/hq web approvals on`); **error** (ceremony
-failed or cancelled, retry); **registered** (key shown by a short fingerprint, also in the toast); **no WebAuthn**
-(explains; approvals stay in the terminal); **logged out** (the existing "open the page again with /hq web").
-All strings in `hooks/i18n.ts` (toasts, replies) and `web/i18n.js` (page), English and Thai.
-
-## 5. Acceptance criteria
-
-- AC1 Given approvals on and a registered key, when the person taps Allow and completes Touch ID, then the ask is
-  allowed with `ALLOWED` and the tool runs.
-- AC2 Given a held ask, when the person taps Deny, then the ask is denied with `DENIED`, no touch asked.
-- AC3 Given a held ask, when 60 s pass, esc is pressed or "Ask in terminal now" is tapped, then the verdict stays `ask`
-  and the dialog follows, the card is withdrawn.
-- AC4 Given no registered key, when an ask arrives, then no card is shown and the dialog asks; the page shows the
-  registration screen.
-- AC5 Given a browser without WebAuthn, when a card shows, then Allow is absent and only Deny / terminal work.
-- AC6 (hub.json read) Given an agent reads hub.json and computes `HMAC(secret, "agent-hq session cookie")`, when it
-  sends that cookie to the hub, then it gets 403 (the cookie is random per run).
-- AC7 (login by `/hub/code`) Given an agent mints a code with the secret and logs in, when it reads `/events` for the
-  token and posts `/approval/<id>` with `allow`, then the ask is not allowed: HELPER prints `ask` (no valid assertion).
-- AC8 (forged headers) Given a script sets Origin, Host and Sec-Fetch-Site to the page's values, when it posts an
-  `allow` without a valid assertion, or with one signed by another key or for another challenge, then HELPER prints
-  `ask` and nothing is allowed.
-- AC9 (forged card) Given an agent posts `/hub/approval` with a made-up card, when anyone answers it, then no real ask
-  resolves and no allow reaches MOD; given it holds the single slot, then the next real ask goes to the dialog at once.
-- AC10 (fake session) Given an agent registers a session via `/hub/register`, when it answers cards for it, then no
-  allow is produced for any real ask.
-- AC11 (software-key registration) Given an agent completes the ceremony with a key it made, when it posts
-  `/register-passkey` without the code, or with a wrong code three times, then MOD stores no key and the code is burnt.
-- AC12 (key swap) Given an agent edits `$.store`, hub.json, the state file or the queue file, when an ask is held,
-  then HELPER still verifies against the key MOD passed on stdin; no file edit changes the key.
-- AC13 (code secrecy) Given a registration code was minted, when the agent reads the transcript, the reply, the state
-  file, the queue file, the debug log and `pages.json`, then the code appears in none.
-- AC14 (direct helper) Given an agent runs `node web/approve.mjs` itself, when it prints, then it never prints `allow`
-  without a valid assertion over a MOD-supplied challenge and key.
-- AC15 (altered card) Given the hub or page changes the tool or input shown, when the person touches Allow, then the
-  signature does not match MOD's challenge and HELPER prints `ask`.
-- AC16 (replay) Given a valid assertion for an earlier ask, when it is posted for another id or nonce, or again, then it
-  is refused.
-- AC17 (store flag) Given an agent sets `pageApprovals` true in the store file, when no key is registered, then nothing
-  is held; given it sets it false, then asks go to the dialog.
-- AC18 (turn on) Given a plugin, schedule or other-session run, when it sends `/hq web approvals on`, then it is
-  refused (`approvals.notYours`); an unattested run is asked first with No first, as today.
-- AC19 (links) Given approvals are on, when `/hq web` runs, then the reply carries no login link (toast only), as today.
-- AC20 (test bug 1) Given the wiring test "an ask a host answers" is removed, then `tests/page-approval.test.ts` has a
-  `canHold` row with `decider: 'host'` that is not held, and `claude plugin test .` has no failure for it.
-- AC21 (test bug 2) Given the "cannot attest" wiring test sets `s.box.verdict = { decision: 'allow' }` after `boot`,
-  then it passes (answers "No", dismissed, "Yes, turn them on").
-- AC22 (compat) Given a 0.7.x session server joins a 0.8.0 hub, when it registers and forwards, then it works and
-  `hub.json`, `pages.json` and the state files parse as before.
-- AC23 (strings) Given `en` and `th` tables, when the i18n test runs, then both have every new key with the same
-  placeholders.
-
-## 6. Project rules
+## Project rules
 
 | Rule | Check |
 |---|---|
-| Types | `npx -p typescript@5.6.3 tsc -p . --noUnusedLocals` clean (README) |
-| Tests | `claude plugin test .` and `node --test web/server.test.mjs` (hub, approvals, helper tests: `web/approve.test.mjs`) green; new tests: signature verify (valid, wrong key, wrong challenge, wrong origin, replay, UP/UV missing), registration code, each AC above |
-| Mod valid | `claude plugin validate .` |
-| Thai and English | every string in `hooks/i18n.ts` and `web/i18n.js`; `tests/i18n.test.ts` parity |
-| README | its list of commands / capabilities names the passkey registration and Touch ID approval |
-| CHANGELOG | a 0.8.0 entry (Added, Changed: URL host `localhost`, cookie no longer survives a hub takeover) |
+| Tests | `claude plugin test .`, `node --test web/server.test.mjs`, `claude plugin validate .`; new tests for AC1-AC7, AC10, AC12-AC14 |
+| Types | `npx -p typescript@5.6.3 tsc -p . --noUnusedLocals` clean (catches orphans left by the removal) |
+| Thai and English | strings in `hooks/i18n.ts` and `web/i18n.js`; `tests/i18n.test.ts` parity |
+| README | its lists of commands and capabilities no longer mention page approvals; the card is described as view-only |
+| CHANGELOG | 0.8.0: Added "live page shows open permission asks (view only)"; Removed "page approvals (never shipped enabled)" |
 | Version | `.claude-plugin/plugin.json` and `marketplace.json` to 0.8.0 at release |
-| Size | no new dependency; keep files under 800 lines (`web/server.test.mjs` is already a test exception) |
 
-## 7. Risks
+## Risks
 
-- This is authentication: a security review by the review role is required twice, on this spec before building and on
-  the finished diff before merge; no merge without it (QA writes the attack tests AC6-AC17 as scripts against a real hub).
-- `localhost` may resolve to `::1` first while the hub listens on 127.0.0.1 only: browsers fall back, but test it; do not
-  widen the listener without review.
-- rpId `localhost` is shared by every localhost site; a credential is per rpId, so another local page can ask for a
-  touch but cannot produce a signature over our challenge.
-- A forged card can still show the person false text and cost a pointless touch, and an agent with a login can deny
-  real asks; both fail safe (no allow).
-- Per-session registration costs one touch and a code every session; on the safe side by design.
-- Hand-written clientDataJSON / authData parsing: use fixtures from a real browser, reject on any unexpected field.
+- Residual: a faked card (agent edits the state file or serves a fake page) can show the person a wrong command or a false
+  ask. It cannot change an outcome; the terminal dialog is the only authority and shows the real command. The page and
+  the README say so: never answer from the page's text.
+- The card puts exact inputs (masked) in the state file, readable by any agent of the session; an agent already sees its
+  own inputs, but a member can now read another's pending input. The 2 KB cap, the 5-card cap, deciding-fields-only and `maskSecrets` (heuristic) limit it.
+- The removal touches many files: orphans are the main risk (tsc `--noUnusedLocals`, AC8).
+- Security review by the review role is still required on the finished diff (state file and hub routes change).
 
-## 8. Out of scope
+## Out of scope
 
-Other OS users, other devices and malware outside Claude (the person's answers). Also: remote or phone approval,
-password / code fallbacks, hardware keys other than the platform authenticator, persisting the key across sessions,
-approving from the terminal dialog itself.
+Other OS users, malware outside Claude, other devices; any way to answer from the page; passkeys, codes or other
+authentication; hardening `hub.json`, the login cookie and `/action` (they decide nothing about asks now; `/action`
+can still message the lead, as in 0.7.x).
 
-## 9. Open questions for the person
+## Decisions (the person's answers)
 
-1. A logged-in agent (via the secret) can still use `/action` (message the lead, start or stop agents). Accept in 0.8.0
-   (approvals are what the threat is about), or make `/action` also need a touch?
-2. Register a key every session (safe, as specified), or persist it in `$.store` guarded by a fingerprint you confirm
-   at session start (convenient, but a swapped key is only caught if you look)?
-3. Deny without a touch (as specified), or require the touch for both?
-4. Moving the page to `localhost` logs your browser out once and changes the printed link: acceptable?
-5. A Mac without Touch ID (password-only prompt) still satisfies "user verification": acceptable, or Touch ID only?
+1. `/hq web approvals` is removed, not kept as a toggle.
+2. The card shows the deciding fields (`command`, `file_path`, `url`, `pattern`, `description`); file contents
+   (`Write.content`, `Edit` strings, notebook cells) only as key names and sizes.
+3. Hardening `/action` is a separate job, later, and out of scope here.
