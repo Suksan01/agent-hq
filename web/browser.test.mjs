@@ -129,3 +129,43 @@ test('the Tasks panel: a progressbar with its text, the status in words beside a
   await page.eval(`document.querySelectorAll('.tk-panel .tk-title')[1].click()`)
   await until(async () => (await expanded()) === 'false', 5000, 'aria-expanded false after a second click')
 })
+
+test('the Tasks table: every row has as many cells as the header, counting colSpan, and the detail spans the whole width, also with Min folded', { skip, timeout: slow(60_000) }, async t => {
+  const world = newWorld(t)
+  const { alpha, alphaMod } = await twoSessions(world)
+  const row = (n, status, over = {}) => ({ n, title: `Task ${n}`, status, who: null, doneBy: null, startedAt: null, lastActiveAt: null, workMs: 0, costUsd: null, isPartial: false, work: [], events: [], ...over })
+  const rows = [row(1, 'done', { who: 'dev-1', workMs: 60_000, costUsd: 1.5, work: [{ who: 'dev-1', role: 'dev', step: 'build', workMs: 60_000, inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: 1.5, lastAt: null }] }), row(2, 'waiting')]
+  const taskList = { rows, total: { done: 1, count: 2, workMs: 60_000, costUsd: 1.5, isPartial: false }, removed: { workMs: 0, costUsd: 0 } }
+  alphaMod.make = mark => ({ ...buildSnapshot({ team: 'Alpha Team', mark }), taskList })
+  alphaMod.write(1)
+  const page = await launchBrowser(world)
+  await page.open(alpha.url)
+  await until(() => page.eval(`!!document.querySelector('.tk-panel .tk-title')`), 15_000, 'the Tasks panel')
+  await page.eval(`document.querySelectorAll('.tk-panel .tk-title')[0].click()`)
+  await until(() => page.eval(`!!document.querySelector('.tk-panel .tk-detail')`), 5000, 'the open detail row')
+
+  const measure = () => page.eval(`(() => {
+    const table = document.querySelector('.tk-table')
+    const tableW = table.getBoundingClientRect().width
+    const span = tr => [...tr.cells].reduce((n, c) => n + c.colSpan, 0)
+    const shown = tr => [...tr.cells].filter(c => c.getBoundingClientRect().width > 0)
+    const width = tr => shown(tr).reduce((w, c) => w + c.getBoundingClientRect().width, 0)
+    const rows = [...table.querySelectorAll('tr')].map(tr => ({ kind: tr.closest('thead') ? 'head' : tr.closest('tfoot') ? 'foot' : tr.classList.contains('tk-detail') ? 'detail' : 'row', cells: span(tr), shown: shown(tr).length, fills: Math.abs(width(tr) - tableW) <= 1, title: Math.round(tr.querySelector('.tk-c-title')?.getBoundingClientRect().width ?? 0) }))
+    return { tableW, rows }
+  })()`)
+
+  const wide = await measure()
+  const head = wide.rows.find(r => r.kind === 'head')
+  assert.ok(wide.rows.length >= 5, 'a header, two rows, a detail and a total')
+  for (const r of wide.rows) assert.equal(r.cells, head.cells, `${r.kind}: ${r.cells} cells against the header's ${head.cells}`)
+  for (const r of wide.rows) assert.ok(r.fills, `${r.kind} fills the table (wide)`)
+
+  await page.send('Emulation.setDeviceMetricsOverride', { width: 320, height: 900, deviceScaleFactor: 1, mobile: true })
+  await until(async () => (await measure()).rows.find(r => r.kind === 'head').shown < head.cells, 8000, 'Min to fold away in the narrow panel')
+  const narrow = await measure()
+  for (const r of narrow.rows) assert.equal(r.cells, head.cells, `${r.kind} keeps its cells when narrow`)
+  for (const r of narrow.rows) assert.ok(r.fills, `${r.kind} still fills the table with Min folded (narrow)`)
+  const titleRow = narrow.rows.find(r => r.kind === 'row')
+  assert.ok(titleRow.title >= 140, `the title cell keeps its room beside an open detail row (${titleRow.title}px, not half)`)
+  assert.ok(narrow.rows.find(r => r.kind === 'detail').shown === 1, 'the detail is one cell spanning the width')
+})
