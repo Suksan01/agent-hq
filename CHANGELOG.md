@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.8.0 (2026-10-25)
 
 ### Added
 - **hq_assign `worktree: true`.** Runs a member in its own git worktree: the tool answers with the Agent call (carrying `isolation: "worktree"`) for the lead to make, and the brief tells the member to commit there for the lead to merge. It cannot be combined with `files` (the guard checks scopes against the project folder). The feature skill uses it for parallel tasks.
