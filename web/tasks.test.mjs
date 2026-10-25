@@ -14,7 +14,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import { STRINGS } from './i18n.js'
-import { costText, donePercent, footnoteKeys, memberLine, minText, nextOpen, panelState, timeline, totalMinText, whoText } from './tasks.js'
+import { QUIET_MS, agoMinutes, costText, donePercent, footnoteKeys, memberLine, minText, nextOpen, panelState, quietMinutes, timeline, totalMinText, whoText } from './tasks.js'
 
 const MIN = 60_000
 const THAI = /[฀-๿]/
@@ -137,7 +137,7 @@ test('the total row shows whole minutes and a cost even with no work counted, as
 test('the status cell says the status in words for a screen reader, in en and th', () => {
   const source = read('./tasks.js')
 
-  assert.match(source, /<td className="tk-c-mark"[^>]*>.*<span className="tk-sr">\$\{word\('tasks\.status', row\.status\)\}<\/span>/, 'a tk-sr span with the status word in the status cell')
+  assert.match(source, /<td className="tk-c-mark"[^>]*>.*<span className="tk-sr">\$\{word\('tasks\.status', row\.status\)\}/, 'a tk-sr span with the status word in the status cell')
   assert.match(read('./space.css'), /\.tk-sr\s*\{[^}]*clip: rect\(0 0 0 0\)/, 'tk-sr hides it visually only')
   for (const status of ['done', 'working', 'review', 'waiting']) assert.match(STRINGS.th[`tasks.status.${status}`], THAI)
 })
@@ -213,4 +213,43 @@ test('the cost column is wide enough and never wraps: its header, rows and total
   assert.match(css, /\.tk-table \.tk-c-cost\s*\{[^}]*width:\s*64px[^}]*white-space:\s*nowrap/)
   assert.match(css, /\.tk-table \.tk-c-num\s*\{[^}]*width:\s*44px/)
   assert.equal(STRINGS.en['tasks.colCost'], '≈', 'each cell carries its own $')
+})
+
+test('"last active" counts whole minutes, never goes negative, and says nothing without a stamp', () => {
+  const now = 100 * MIN
+
+  assert.equal(agoMinutes(now - 5 * MIN, now), '5')
+  assert.equal(agoMinutes(now - 5.9 * MIN, now), '5')
+  assert.equal(agoMinutes(now - 20_000, now), '<1')
+  assert.equal(agoMinutes(now + 7 * MIN, now), '<1', 'a stamp in the future is not negative')
+  assert.equal(agoMinutes(null, now), null)
+  assert.equal(agoMinutes(undefined, now), null, 'a snapshot of an older mod')
+  assert.equal(agoMinutes(Number.NaN, now), null)
+})
+
+test('only a working task quiet for QUIET_MS or more is flagged; done, review, waiting and unknown never are', () => {
+  const now = 500 * MIN
+  const row = (status, lastActiveAt) => ({ status, lastActiveAt })
+
+  assert.equal(quietMinutes(row('working', now - QUIET_MS), now), '10', 'exactly the threshold')
+  assert.equal(quietMinutes(row('working', now - QUIET_MS + 1), now), null, 'just under it')
+  assert.equal(quietMinutes(row('working', now - 45 * MIN), now), '45')
+  assert.equal(quietMinutes(row('working', now + MIN), now), null, 'a future stamp is not quiet')
+  assert.equal(quietMinutes(row('working', null), now), null, 'unknown is not flagged')
+  assert.equal(quietMinutes({ status: 'working' }, now), null)
+  for (const status of ['done', 'waiting', 'review']) assert.equal(quietMinutes(row(status, now - 60 * MIN), now), null, `${status} is never flagged`)
+})
+
+test('the quiet spinner is dimmed, the detail and member lines show last active, and the words are in en and th', () => {
+  const source = read('./tasks.js')
+
+  assert.match(read('./space.css'), /\.tk-mark\.is-quiet\s*\{[^}]*opacity/)
+  assert.match(source, /isQuiet=\$\{quiet !== null\}/)
+  assert.match(source, /t\('tasks\.quiet', \{ n: quiet \}\)/, 'a screen reader hears the quiet minutes')
+  assert.match(source, /t\('tasks\.lastActive'/)
+  assert.match(source, /t\('tasks\.ago'/)
+  for (const key of ['lastActive', 'ago', 'quiet']) {
+    assert.match(STRINGS.en[`tasks.${key}`], /\{n\}/)
+    assert.match(STRINGS.th[`tasks.${key}`], THAI)
+  }
 })
