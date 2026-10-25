@@ -6,7 +6,7 @@
 
 export const STRINGS = {
   en: {
-    'status.working': 'Working', 'status.waiting': 'Needs you', 'status.done': 'Done', 'status.failed': 'Failed', 'status.idle': 'Idle', 'status.stopped': 'Stopped', 'status.lead': 'Lead',
+    'status.working': 'Working', 'status.waiting': 'Needs you', 'status.done': 'Done', 'status.failed': 'Failed', 'status.idle': 'Idle', 'status.stopped': 'Stopped', 'status.lead': 'Lead', 'paused.title': 'Paused', 'paused.notStarted': 'Not started', 'paused.ago': '{time} ago',
     'crew.waiting': 'Waiting', 'lead.allDone': 'All done', 'lead.failure': 'Failure in team',
     'orb.thinking': 'Thinking', 'card.now': 'Now', 'card.next': 'Next', team: 'Team',
     'chips.label': 'Systems', 'toolbar.label': 'Tools', 'menu.label': 'Actions', send: 'Send', close: 'Close',
@@ -50,9 +50,15 @@ export const STRINGS = {
     'approval.hidden': 'Hidden characters are shown as ⟦U+…⟧', 'approval.terminal': 'Answer it in the terminal',
     'approval.seeTerminal': 'Too large or sensitive: see the terminal', 'approval.because': 'Claude Code asks because: {reason}',
     'unit.s': '{n}s', 'unit.m': '{n}m', 'unit.h': '{n}h',
+    'tasks.title': 'Tasks', 'tasks.loading': 'Loading tasks…', 'tasks.empty': 'The plan has no tasks yet.', 'tasks.offline': 'Offline: showing the tasks as last seen.',
+    'tasks.footnote': '≈ estimate from list prices, not your bill', 'tasks.footPartial': '+ some prices are unknown', 'tasks.footNoPrice': '— no price', 'tasks.footRemoved': 'the total includes removed tasks', 'tasks.progress': 'Tasks done', 'tasks.lastActive': 'Last active {n} min ago', 'tasks.ago': '{n} min ago', 'tasks.quiet': 'no activity for {n} min', 'tasks.colStatus': 'Status', 'tasks.colTask': 'Task', 'tasks.colWho': 'Who', 'tasks.colMin': 'Min', 'tasks.colCost': '≈',
+    'tasks.total': 'Total', 'tasks.done': '{done}/{count} done', 'tasks.noWork': 'Nobody has worked on this yet.', 'tasks.minutes': '{n} min', 'tasks.tokens': '{n} tokens',
+    'tasks.status.done': 'Done', 'tasks.status.working': 'Working', 'tasks.status.review': 'In review', 'tasks.status.waiting': 'Waiting',
+    'tasks.step.tests': 'tests', 'tasks.step.build': 'build', 'tasks.step.review': 'review', 'tasks.step.fix': 'fix',
+    'tasks.event.start': 'started', 'tasks.event.review': 'sent to review', 'tasks.event.done': 'done',
   },
   th: {
-    'status.working': 'ทำงานอยู่', 'status.waiting': 'รอคุณ', 'status.done': 'เสร็จแล้ว', 'status.failed': 'ล้มเหลว', 'status.idle': 'ว่าง', 'status.stopped': 'หยุดแล้ว', 'status.lead': 'หัวหน้าทีม',
+    'status.working': 'ทำงานอยู่', 'status.waiting': 'รอคุณ', 'status.done': 'เสร็จแล้ว', 'status.failed': 'ล้มเหลว', 'status.idle': 'ว่าง', 'status.stopped': 'หยุดแล้ว', 'status.lead': 'หัวหน้าทีม', 'paused.title': 'พักอยู่', 'paused.notStarted': 'ยังไม่เริ่ม', 'paused.ago': '{time} ที่แล้ว',
     'crew.waiting': 'รอคุณ', 'lead.allDone': 'เสร็จครบแล้ว', 'lead.failure': 'มีงานล้มเหลวในทีม',
     'orb.thinking': 'กำลังคิด', 'card.now': 'ตอนนี้', 'card.next': 'ถัดไป', team: 'ทีม',
     'chips.label': 'ระบบ', 'toolbar.label': 'เครื่องมือ', 'menu.label': 'คำสั่ง', send: 'ส่ง', close: 'ปิด',
@@ -96,6 +102,12 @@ export const STRINGS = {
     'approval.hidden': 'อักขระที่มองไม่เห็นแสดงเป็น ⟦U+…⟧', 'approval.terminal': 'ตอบในเทอร์มินัล',
     'approval.seeTerminal': 'ใหญ่หรือเป็นความลับเกินไป: ดูในเทอร์มินัล', 'approval.because': 'Claude Code ถามเพราะ: {reason}',
     'unit.s': '{n} วิ', 'unit.m': '{n} นาที', 'unit.h': '{n} ชม.',
+    'tasks.title': 'งาน', 'tasks.loading': 'กำลังโหลดงาน…', 'tasks.empty': 'แผนยังไม่มีงาน', 'tasks.offline': 'ออฟไลน์: แสดงงานตามที่เห็นล่าสุด',
+    'tasks.footnote': '≈ ประมาณการจากราคาตามรายการ ไม่ใช่ยอดที่เรียกเก็บจริง', 'tasks.footPartial': '+ บางรายการไม่ทราบราคา', 'tasks.footNoPrice': '— ไม่มีราคา', 'tasks.footRemoved': 'ยอดรวมนับงานที่ถูกลบออกด้วย', 'tasks.progress': 'งานที่เสร็จ', 'tasks.lastActive': 'ใช้งานล่าสุด {n} นาทีก่อน', 'tasks.ago': '{n} นาทีก่อน', 'tasks.quiet': 'ไม่มีความเคลื่อนไหว {n} นาที', 'tasks.colStatus': 'สถานะ', 'tasks.colTask': 'งาน', 'tasks.colWho': 'ใคร', 'tasks.colMin': 'นาที', 'tasks.colCost': 'ราคา ≈',
+    'tasks.total': 'รวม', 'tasks.done': 'เสร็จ {done}/{count}', 'tasks.noWork': 'ยังไม่มีใครทำงานนี้', 'tasks.minutes': '{n} นาที', 'tasks.tokens': '{n} โทเค็น',
+    'tasks.status.done': 'เสร็จ', 'tasks.status.working': 'กำลังทำ', 'tasks.status.review': 'กำลังตรวจ', 'tasks.status.waiting': 'รอ',
+    'tasks.step.tests': 'ทดสอบ', 'tasks.step.build': 'สร้าง', 'tasks.step.review': 'ตรวจ', 'tasks.step.fix': 'แก้',
+    'tasks.event.start': 'เริ่ม', 'tasks.event.review': 'ส่งตรวจ', 'tasks.event.done': 'เสร็จ',
   },
 }
 

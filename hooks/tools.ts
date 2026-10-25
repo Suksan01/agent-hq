@@ -6,11 +6,14 @@ import type { EngineInterface, ToolSpec } from 'claude-code'
 
 import type { HqAssignment, HqTeam } from '../types'
 import { spawnAgent } from './actions'
-import { parseAssign, statusSummary } from './assign'
+import { linkMember, missingTask, parseAssign, planTaskOf, statusSummary, taskOfMember } from './assign'
 import { planHire } from './hire'
-import { LockTimeout, withLock } from './lock'
+import { LockTimeout, withListLock, withLock } from './lock'
 import type { NewEvent } from './feed'
 import { MAIN, isFinished, who } from './model'
+import { costOf } from './prices'
+import { mergeList, parsePlan } from './tasklist'
+import type { ReadResult, TaskList } from './tasklist'
 import { BRIEFS_DIR, isReadOnlyRole, reportPathOf, roleTitle } from './team'
 import { t } from './i18n'
 import type { Lang } from './i18n'
@@ -21,7 +24,8 @@ export const ASSIGN_TOOL = `${TOOL_PREFIX}hq_assign`
 export const STATUS_TOOL = `${TOOL_PREFIX}hq_status`
 export const REVIEW_TOOL = `${TOOL_PREFIX}hq_review`
 export const HIRE_TOOL = `${TOOL_PREFIX}hq_hire`
-export const isLeadTool = (tool: unknown) => tool === ASSIGN_TOOL || tool === STATUS_TOOL || tool === REVIEW_TOOL || tool === HIRE_TOOL
+export const HQ_PLAN_TOOL = `${TOOL_PREFIX}hq_plan`
+export const isLeadTool = (tool: unknown) => tool === ASSIGN_TOOL || tool === STATUS_TOOL || tool === REVIEW_TOOL || tool === HIRE_TOOL || tool === HQ_PLAN_TOOL
 
 const MAX_TASK = 4000 // parseAssign's limit on a task
 const MAX_ASKED = 1500 // how much of what the member was asked goes into a review brief
@@ -44,6 +48,7 @@ export const TOOL_SPECS: ToolSpec[] = [
         limits: { type: 'string', description: 'What the agent must leave alone.' },
         name: { type: 'string', description: 'A name for the agent; default is the next free "<role>-<n>".' },
         skills: { type: 'array', items: { type: 'string' }, description: 'The skills this task needs, loaded before it starts (at most 5), e.g. ["tdd"] for a code change: members rarely load them on their own. Usually one of the role\'s skills; an unknown name only fails the member\'s Skill call.' },
+        plan_task: { type: 'integer', description: 'The number of the plan task (from hq_plan) this work is for; it must be in the list. Leave out when the work is not a plan task.' },
         model: { type: 'string', description: 'A model for this one task, overriding the role\'s: "haiku" for mechanical work its brief fully specifies, a stronger one for a task a member got stuck on. Leave out to use the role\'s model.' },
         worktree: { type: 'boolean', description: 'Run the member in its own git worktree, so members can work in parallel on the same files; it commits there and you merge. The mod\'s own start cannot carry isolation, so with this set the tool does not start the member: it answers with the exact Agent call (with isolation "worktree") for you to make. Cannot be combined with "files" (the guard checks file scopes against this checkout).' },
       },
@@ -87,8 +92,19 @@ export const TOOL_SPECS: ToolSpec[] = [
         agent: { type: 'string', description: 'The finished agent to review, by name or id.' },
         reviewer: { type: 'string', description: 'The reviewing role id; default is the team role whose id contains "review".' },
         focus: { type: 'string', description: 'What to look at especially.' },
+        plan_task: { type: 'integer', description: 'The number of the plan task (from hq_plan) this review is for; it must be in the list. Leave out to use the reviewed member\'s own task.' },
       },
       required: ['agent'],
+    },
+  },
+  {
+    name: 'hq_plan',
+    description:
+      'Save the approved plan\'s checklist as the task list the sidebar and the live page show. Give the plan file (a .md path inside the project); each line `- [ ] 1. Title` or `- [x] 1. Title` is a task. Saving again after a re-plan keeps the work already counted per task number. Then pass plan_task to hq_assign and hq_review.',
+    inputSchema: {
+      type: 'object',
+      properties: { plan: { type: 'string', description: 'The plan file, relative to the project (e.g. "docs/plans/x.md") or an absolute path inside it.' } },
+      required: ['plan'],
     },
   },
   {
@@ -110,6 +126,7 @@ export const LEAD_TOOLS_NOTE = [
   `- ${ASSIGN_TOOL}: start a team member on a scoped job (role, task, files, done, limits); it goes on the task board. If it (or ${REVIEW_TOOL}) answers with an Agent call, make that call.`,
   `- ${STATUS_TOOL}: where the team stands, in at most 40 lines.`,
   `- ${REVIEW_TOOL}: send a finished member's work to the review role.`,
+  `- ${HQ_PLAN_TOOL}: save the approved plan's checklist as the task list; then pass plan_task to ${ASSIGN_TOOL} and ${REVIEW_TOOL}.`,
   `- ${HIRE_TOOL}: add staff (raise a role's headcount, or create a role) when the person asks or the work needs more people.`,
 ].join('\n')
 
@@ -135,6 +152,11 @@ export type ToolDeps = {
   root?: () => Promise<string>
   /** A project file's text (hq_assign's brief_file, already checked to be under the briefs folder), or null. */
   readBrief?: (path: string) => Promise<string | null>
+  /** The saved task list (hooks/tasklist.ts, bound to the project's tasks.json); a missing, invalid or unreadable one is `{ list: null, kind, reason? }`. */
+  readList?: () => Promise<ReadResult>
+  writeList?: (list: TaskList) => Promise<void>
+  /** A project file's text (hq_plan's plan, an absolute path already checked to be inside the project), or null. */
+  readPlan?: (path: string) => Promise<string | null>
   /** The person's language, for what they read (the feed, the confirmation); the answers the model reads stay English. */
   lang?: Lang
 }
@@ -273,6 +295,8 @@ export async function hqAssign($: EngineInterface, given: unknown, deps: ToolDep
   const briefed = await withBrief(given, deps)
   if ('error' in briefed) return fail(`hq_assign: ${briefed.error}`)
   const input = briefed.input
+  const planned = await planTaskCheck(input, deps)
+  if ('error' in planned) return fail(`hq_assign: ${planned.error}`)
   const asked = isRecord(input) ? (typeof input.name === 'string' && input.name ? input.name : typeof input.role === 'string' ? input.role : '') : ''
   let started: Started
   try {
@@ -282,6 +306,9 @@ export async function hqAssign($: EngineInterface, given: unknown, deps: ToolDep
     throw error
   }
   if (!started.ok) return fail(`hq_assign: ${started.error}`)
+  const plannedN = planned.n
+  // a member put on a task that was in review is fixing it
+  if (plannedN) await updateList($, deps, (list, at) => linkMember(list, plannedN, { status: 'working', who: started.name, role: started.role, step: list.tasks.find(x => x.n === plannedN)?.status === 'review' ? 'fix' : 'build', kind: 'start', at }))
   const linked = await linkBoardTask($, started.name, started.task, !started.refused)
   const board = 'id' in linked ? linked.id : null
   if (started.refused) {
@@ -317,9 +344,81 @@ export function fenceUntrusted(label: string, text: string): string {
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
 
+const isNoList = (reason?: string) => `there is no plan list${reason ? ` (${reason})` : ''}: save the plan with hq_plan first`
+
+/** The plan_task of an hq_assign / hq_review input, checked against the saved list before anything starts; `{}` when none was given. */
+async function planTaskCheck(input: unknown, deps: ToolDeps): Promise<{ n?: number } | { error: string }> {
+  const given = planTaskOf(input)
+  if ('error' in given || given.n === undefined) return given
+  const { list, reason } = (await deps.readList?.()) ?? { list: null }
+  if (!list) return { error: isNoList(reason) }
+  const missing = missingTask(list, given.n)
+  return missing ? { error: missing } : given
+}
+
+/** Reads the saved list fresh, applies `change`, writes it once, all under the lock (two links at once must both land); nothing when there is no list. A failure here never undoes a started agent. */
+async function updateList($: EngineInterface, deps: ToolDeps, change: (list: TaskList, at: number) => TaskList): Promise<void> {
+  try {
+    await withListLock(async () => {
+      const { list } = (await deps.readList?.()) ?? { list: null }
+      if (!list) return // no list: nothing to link, nothing written
+      const next = change(list, await deps.now())
+      if (next !== list) await deps.writeList?.(next)
+    })
+  } catch (error) {
+    // the list is a convenience for the sidebar: the member is already running
+    $.ui.log(`Agent HQ: could not update the task list (${error instanceof Error ? error.message : 'error'})`, { to: 'debug' })
+  }
+}
+
+const PLAN_FORMAT = 'Write each task as a checklist line, `- [ ] 1. Title` (or `- [x] 1. Title` when done), then call hq_plan again.'
+
+/** hq_plan: the plan's checklist becomes the saved task list (a re-plan keeps the work counted per task number). */
+export async function hqPlan(input: unknown, deps: ToolDeps): Promise<ToolAnswer> {
+  const given = isRecord(input) ? input.plan : undefined
+  if (typeof given !== 'string' || given.trim() === '') return fail('hq_plan: give the "plan": the plan file, a .md path inside the project')
+  const root = (await deps.root?.().catch(() => undefined))?.replace(/\/+$/, '')
+  if (!root) return fail('hq_plan: the project folder is not known')
+  const path = given.trim()
+  const relative = path.startsWith(`${root}/`) ? path.slice(root.length + 1) : path
+  if (!relative.endsWith('.md') || relative.startsWith('/') || /[\0\r\n\\]/.test(relative) || relative.split('/').includes('..')) {
+    return fail('hq_plan: "plan" must be a .md file inside the project')
+  }
+  const text = await deps.readPlan?.(`${root}/${relative}`).catch(() => null)
+  if (text === null || text === undefined) return fail(`hq_plan: could not read ${relative}`)
+  const parsed = parsePlan(text)
+  if (parsed.length === 0) return fail(`hq_plan: ${relative} has no task lines, so nothing was saved. ${PLAN_FORMAT}`)
+  let refused: ToolAnswer | null
+  try {
+    refused = await withListLock(async () => {
+      const { list: old, kind, reason } = (await deps.readList?.()) ?? { list: null }
+      // a file that could not be read may still hold saved time and cost: only a missing or invalid one may be rewritten
+      if (!old && kind === 'unreadable') return fail(`hq_plan: ${reason ?? 'the task list could not be read'}; nothing was saved`)
+      const now = await deps.now()
+      await deps.writeList?.(mergeList(old, parsed, { plan: relative, approvedAt: now, now, price: work => costOf({ ...work, model: work.model ?? undefined }) }))
+      return null
+    })
+  } catch (error) {
+    if (error instanceof LockTimeout) return fail(error.message)
+    return fail(`hq_plan: could not save the task list (${error instanceof Error ? error.message : 'error'})`)
+  }
+  if (refused) return refused
+  return { text: `Saved ${parsed.length} ${parsed.length === 1 ? 'task' : 'tasks'} from ${relative}. Pass plan_task (1 to ${Math.max(...parsed.map(x => x.n))}) to hq_assign and hq_review to link work to them.` }
+}
+
+/** The reviewed task goes to review with the reviewer in it: the given plan_task, else the task the reviewed member is on. */
+async function linkReview($: EngineInterface, deps: ToolDeps, given: number | undefined, reviewed: string, reviewer: string, role: string): Promise<void> {
+  await updateList($, deps, (list, at) => {
+    const n = given ?? taskOfMember(list, reviewed)
+    return n === undefined ? list : linkMember(list, n, { status: 'review', who: reviewer, role, step: 'review', kind: 'review', at })
+  })
+}
+
 /** hq_review: a finished agent's work, in a brief, to the review role. */
 export async function hqReview($: EngineInterface, input: unknown, deps: ToolDeps): Promise<ToolAnswer> {
   if (!isRecord(input) || typeof input.agent !== 'string' || input.agent.trim() === '') return fail('hq_review: give the "agent" to review, by name or id')
+  const planned = await planTaskCheck(input, deps)
+  if ('error' in planned) return fail(`hq_review: ${planned.error}`)
   const data = await deps.readData()
   const wanted = input.agent.trim()
   const subject = Object.values(data.agents).find(a => a.id !== MAIN && (a.id === wanted || a.name === wanted))
@@ -374,6 +473,7 @@ export async function hqReview($: EngineInterface, input: unknown, deps: ToolDep
     const running = Object.values(data.agents).find(a => a.role === `agent-hq:${reviewerId}` && !isFinished(a.status))
     if (!running || !/fully staffed/.test(parsed.error)) return fail(`hq_review: ${parsed.error}`)
     const sent = await $.session.send({ to: { agentId: running.id }, text: `Another review for you:\n\n${brief}` })
+    if (sent.isDelivered) await linkReview($, deps, planned.n, subject.name, running.name, running.role.replace(/^agent-hq:/, ''))
     return sent.isDelivered ? { text: `Sent ${who(subject)}'s work to ${who(running)}, who is already reviewing.` } : fail(`hq_review: ${who(running)} did not get it: ${sent.reason}`)
   }
   await deps.recordAssignment(parsed.name, { role: parsed.role, name: parsed.name, task: parsed.task, at: await deps.now() })
@@ -384,6 +484,7 @@ export async function hqReview($: EngineInterface, input: unknown, deps: ToolDep
     return { text: leadStarts(spec, started.error, 'the review assignment is already recorded') }
   }
   await deps.syncAgents()
+  await linkReview($, deps, planned.n, subject.name, parsed.name, parsed.role)
   await deps.record({ agent: started.agentId ?? parsed.name, kind: 'action', text: t(deps.lang ?? 'en', 'feed.review', { who: who(subject), name: parsed.name }) })
   return { text: `Started ${parsed.name} to review ${who(subject)}'s work. Its verdict arrives when it finishes.` }
 }

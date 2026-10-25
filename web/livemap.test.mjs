@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import { sessionNames } from './labels.js'
-import { signatureOf, agentStatus, addRequest, attentionOf, boardSections, countsOf, drawerOf, feedItems, groupsOf, hudOf, inboxItems, keyOf, nicknamed, pctOf, progressOf, sessionsOf, statusOf, suggestionsOf, whoOf } from './livemap.js'
+import { signatureOf, agentIndexes, agentStatus, addRequest, attentionOf, boardSections, countsOf, drawerOf, feedItems, groupsOf, hudOf, inboxItems, keyOf, nicknamed, pctOf, progressOf, sessionsOf, statusOf, suggestionsOf, whoOf } from './livemap.js'
 
 const agent = (id, over = {}) => ({ id, parentId: 'main', name: id, nickname: id.toUpperCase(), role: 'Dev', status: 'running', isMain: false, now: 'Working', next: null, last: null, todos: null, fallback: null, tools: 3, lastTool: 'Edit', activity: null, startedAt: 1000, endedAt: null, xp: null, ...over })
 const session = (id, label, agents, extra = {}) => ({ session: id, label, alive: true, snapshot: { at: 5000, team: { name: `${label} Team`, purpose: 'p', lead: 'Lead' }, agents, tasks: [], roles: [], overall: { done: 1, active: 0, total: 4 }, tasksProgress: { done: 1, active: 1, total: 2 }, events: [], ...extra } })
@@ -260,4 +260,45 @@ test("groups give the lead (only) its session's next steps", () => {
   const [group] = groupsOf(sessionsOf({ v: 2, sessions: [s] }), new Map())
   assert.deepEqual(group.agents.find(a => a.isLead).suggestions, { recap: null, items: ['Review it'], at: 3 })
   assert.equal(group.agents.find(a => !a.isLead).suggestions, undefined)
+})
+
+// ---- the Paused section: paused members leave the main groups
+
+test('paused members leave the diagram and space groups, but the lead, working and needs-you members stay', () => {
+  const s1 = session('s1', 'app', [lead, agent('work'), agent('idle', { status: 'idle', isPaused: true }), agent('done', { status: 'completed', isPaused: true }), agent('ask', { status: 'idle', isPaused: true }), agent('mainpaused', { isPaused: true, isMain: true })], { inbox: [{ agent: 'ask', what: 'Bash: ls' }] })
+  const sessions = sessionsOf({ v: 2, sessions: [s1] })
+
+  const ids = groupsOf(sessions, sessionNames(sessions), () => 0)[0].agents.map(a => a.id)
+
+  assert.deepEqual([...ids].sort(), ['ask', 'main', 'mainpaused', 'work']) // needs-you stays; a lead is never paused
+})
+
+test('an older mod without isPaused or seats draws everyone, and counts still come from every member', () => {
+  const s1 = session('s1', 'app', [lead, agent('a'), agent('b', { status: 'completed' })])
+  const sessions = sessionsOf({ v: 2, sessions: [s1] })
+
+  assert.equal(groupsOf(sessions, sessionNames(sessions), () => 0)[0].agents.length, 3)
+  assert.deepEqual(sessions[0].snapshot.seats, [])
+})
+
+test('counts include paused members: done and failed come from the agents, a zero folded adds nothing', () => {
+  const a = session('a', 'app', [lead, agent('1'), agent('2', { status: 'completed', isPaused: true }), agent('3', { status: 'failed', isPaused: true }), agent('4', { status: 'killed', isPaused: true }), agent('5', { status: 'idle', isPaused: true })], { folded: { done: 0, failed: 0 } })
+
+  assert.deepEqual(countsOf([a]), { working: 1, waiting: 0, done: 1, failed: 2 })
+})
+
+test('a member keeps its avatar index when it pauses: the index counts the whole team, paused members included', () => {
+  const working = session('s1', 'app', [lead, agent('a'), agent('b'), agent('c')])
+  const paused = session('s1', 'app', [lead, agent('a', { status: 'idle', isPaused: true }), agent('b'), agent('c')])
+  const before = groupsOf(sessionsOf({ v: 2, sessions: [working] }), new Map(), () => 0)[0].agents
+  const after = groupsOf(sessionsOf({ v: 2, sessions: [paused] }), new Map(), () => 0)[0].agents
+
+  assert.deepEqual(after.map(a => [a.id, a.index]), before.filter(a => a.id !== 'a').map(a => [a.id, a.index]))
+  assert.equal(agentIndexes(sessionsOf({ v: 2, sessions: [paused] })).get('s1|a'), before.find(a => a.id === 'a').index) // the paused one is still known
+})
+
+test('counts add the folded members past the cap to those still listed, paused ones included', () => {
+  const a = session('a', 'app', [lead, agent('1', { status: 'completed', isPaused: true }), agent('2', { status: 'failed', isPaused: true })], { folded: { done: 39, failed: 16 } })
+
+  assert.deepEqual(countsOf([a]), { working: 0, waiting: 0, done: 40, failed: 17 })
 })

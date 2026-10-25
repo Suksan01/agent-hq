@@ -16,17 +16,20 @@ import type { NewEvent } from './feed'
 import { buildSnapshot } from './live'
 import { parseSuggestions, suggestPrompt } from './suggest'
 import { addBubble, bubbleText, liveBubbles, placeTalk, recipientOf, talkLine } from './talk'
-import { configureLock } from './lock'
+import { configureLock, withListLock } from './lock'
 import { createReport, reportToast } from './report'
 import { soundsForChanges } from './sounds'
 import type { Sound } from './sounds'
 import { soundsOn, themeOf } from './themes'
 import { agentRoles, guardToolCall } from './guard'
 import { addTurn } from './usage'
+import { applyPlanTicks, parsePlan, readList, writeList } from './tasklist'
+import type { TaskList } from './tasklist'
+import { addTurnToTask, settleForNewSession } from './taskwork'
 import { describeCall, endActivity, hasRunningCall, liveActivities, startActivity } from './activity'
 import { addAsk, buildInbox, cardOf, describeAsk, dropAsksOf, pageCount, removeAsk, statusText, trackWaiting } from './inbox'
 import { announceXp, createLedger, creditActivity, creditTestRun, xpStoreOf, xpSummaries } from './xpstore'
-import { ASSIGN_TOOL, HIRE_TOOL, LEAD_TOOLS_NOTE, REVIEW_TOOL, STATUS_TOOL, TOOL_SPECS, hqAssign, hqHire, hqReview, hqStatus, keepResult, readBriefFile, textOfContent } from './tools'
+import { ASSIGN_TOOL, HIRE_TOOL, LEAD_TOOLS_NOTE, HQ_PLAN_TOOL, REVIEW_TOOL, STATUS_TOOL, TOOL_SPECS, hqAssign, hqHire, hqPlan, hqReview, hqStatus, keepResult, readBriefFile, textOfContent } from './tools'
 import type { ToolAnswer, ToolDeps } from './tools'
 import { BandView, SidebarView, bandRasters, bandTrackWidth, folderOf, hasBand, sidebarRasters, textTrack, withAside } from './view'
 import type { BandActions, HqActions, HqData, Raster } from './view'
@@ -395,6 +398,56 @@ async function handleIncoming($: EngineInterface) {
   await requestLive($)
 }
 
+// ---------- the saved task list (docs/specs/task-sidebar.md): .claude/agent-hq/tasks.json, read once and kept here ----------
+
+const TASK_LIST_FILE = '.claude/agent-hq/tasks.json'
+type SavedList = { list: TaskList | null; reason?: string }
+let savedList: SavedList | undefined // undefined until read; every write goes through saveTaskList, so it stays true to the file
+
+/** The list's last state (read from the file the first time; an invalid file is no list, its reason is in the debug log). */
+async function loadTaskList($: EngineInterface): Promise<SavedList> {
+  if (savedList) return savedList
+  const cwd = await $.session.cwd().catch(() => undefined)
+  if (!cwd) return { list: null } // no project folder to read from (not kept: asked again next time)
+  const path = `${cwd}/${TASK_LIST_FILE}`
+  if (!(await $.fs.exists(path).catch(() => true))) return (savedList = { list: null }) // no plan saved yet: the normal state, no reason to log
+  const read = await readList($, path)
+  if (read.reason) $.ui.log(`Agent HQ: ${TASK_LIST_FILE}: ${read.reason}`, { to: 'debug' })
+  if (read.kind !== 'unreadable') savedList = read // a read error may pass: asked again next time, never kept as "no list"
+  return read
+}
+
+async function saveTaskList($: EngineInterface, list: TaskList): Promise<void> {
+  await writeList($, `${await $.session.cwd()}/${TASK_LIST_FILE}`, list)
+  savedList = { list }
+}
+
+/**
+ * Reads the list, changes it and writes it once when it changed; nothing happens with no list. Never throws. It runs under the
+ * task list's own lock (hooks/lock.ts), the one the lead's tools use for their list updates, so a turn's write and an hq_assign link never overwrite each other.
+ */
+function changeTaskList($: EngineInterface, change: (list: TaskList, at: number) => Promise<TaskList> | TaskList): Promise<void> {
+  return withListLock(async () => {
+    const { list } = await loadTaskList($)
+    if (!list) return
+    const next = await change(list, await $.clock.now())
+    if (next !== list && JSON.stringify(next) !== JSON.stringify(list)) await saveTaskList($, next)
+  }, { label: 'updating the task list' }).catch(error => $.ui.log(`Agent HQ: could not update the task list (${error instanceof Error ? error.message : String(error)})`, { to: 'debug' }))
+}
+
+/** The guard's `planFile` for a list: the approved plan's project-relative path; nothing without a list. */
+const planFileOf = (list: TaskList | null) => (list ? { planFile: list.plan } : {})
+
+/** A Write, Edit or Bash command that touches the list's plan file: its ticked boxes become done tasks. */
+const tickFromPlan = ($: EngineInterface, e: { tool: unknown; file_path?: unknown; command?: unknown }) =>
+  changeTaskList($, async (list, at) => {
+    // a Bash command (sed -i, >>) counts when its words name the plan file; Write and Edit when their path is it
+    const isPlan = e.tool === 'Bash' ? typeof e.command === 'string' && e.command.includes(list.plan) : typeof e.file_path === 'string' && (await pathOf($, e.file_path)) === (await pathOf($, list.plan))
+    if (!isPlan) return list
+    const text = await $.fs.read(await pathOf($, list.plan)).catch(() => null)
+    return text === null ? list : applyPlanTicks(list, parsePlan(text), at)
+  })
+
 /** What the lead's tools (./tools) reach back into. */
 const toolDeps = ($: EngineInterface): ToolDeps => ({
   readData: () => readData($, 0, false),
@@ -406,6 +459,9 @@ const toolDeps = ($: EngineInterface): ToolDeps => ({
   record: event => recordEvents($, [event]),
   // the engine allows $.fs only as calls on $, so the reader gets two functions rather than $.fs itself
   root: () => $.session.cwd(),
+  readList: () => loadTaskList($),
+  writeList: list => saveTaskList($, list),
+  readPlan: path => $.fs.read(path).catch(() => null),
   readBrief: async path => readBriefFile({ stat: (p, options) => $.fs.stat(p, options), read: p => $.fs.read(p) }, await pathOf($, path), await pathOf($, BRIEFS_DIR)),
   readTeamFile: async () => {
     const source = await read($, teamSource)
@@ -471,6 +527,7 @@ async function blockedByGuard($: EngineInterface, e: { agentId?: string; tool: u
     input: e as unknown as Record<string, unknown>,
     assignment: row ? ((await read($, assignments))[row.name] ?? null) : null,
     cwd: await $.session.cwd().catch(() => undefined), // without it the guard compares paths as given
+    ...planFileOf((await loadTaskList($)).list), // the approved plan is closed to members (AC21)
   })
   if (!verdict) return null
   const reason = verdict.deny.replace(/^Agent HQ: /, '')
@@ -795,6 +852,7 @@ async function readData($: EngineInterface, columns: number, isForPerson = true)
     assignments: work.assignments,
     bubbles: await read($, bubbles),
     lang,
+    taskList: (await loadTaskList($)).list,
   }
 }
 
@@ -873,7 +931,7 @@ export const register: Register = (on, options) => {
   nameTheme = themeOf(options.nicknameTheme)
   lang = langOf(options.language)
   on('session.start', async ($, e, next) => {
-    configureLock((ms, fn) => $.clock.after(ms, fn)) // times the roster lock (hooks/lock.ts)
+    configureLock((ms, fn) => $.clock.after(ms, fn)) // times both locks, the roster's and the task list's (hooks/lock.ts)
     await $.command.register({
       name: 'hq',
       description: t(lang, 'hq.description'),
@@ -891,6 +949,10 @@ export const register: Register = (on, options) => {
     // awaited, so the team's agent types are listed from the first turn; a bad file is reported, never fatal
     await migrateHomeTrust($).catch(() => {}) // a store that cannot be read just means the home file asks for trust
     await loadTeam($).catch(error => $.ui.toast(t(lang, 'team.couldNotLoad', { reason: error instanceof Error ? error.message : t(lang, 'trust.error') })))
+    // a saved list opens with nobody working: a working task waits until a linked member's turn says otherwise
+    savedList = undefined
+    const { list: saved } = await loadTaskList($)
+    if (saved) savedList = { list: settleForNewSession(saved) } // in memory only: the file is as saved until a turn or a tick changes it
     for (const spec of TOOL_SPECS) await $.tool.register(spec).catch(error => $.ui.log(`Agent HQ: could not offer ${spec.name} (${error instanceof Error ? error.message : 'error'})`, { to: 'debug' }))
     // a hot reload ends the module and the page server with it: bring the page back (same hub port and secret, so an open tab reconnects)
     if (await read($, isWebWanted)) void startWeb($).catch(error => $.ui.log(`Agent HQ: could not restart the live page (${error instanceof Error ? error.message : String(error)})`, { to: 'debug' }))
@@ -1025,6 +1087,7 @@ export const register: Register = (on, options) => {
     if (String(e.tool) === STATUS_TOOL) return answerLeadTool($, e, deps => hqStatus(deps))
     if (String(e.tool) === REVIEW_TOOL) return answerLeadTool($, e, deps => hqReview($, e, deps))
     if (String(e.tool) === HIRE_TOOL) return answerLeadTool($, e, deps => hqHire(e, deps))
+    if (String(e.tool) === HQ_PLAN_TOOL) return answerLeadTool($, e, deps => hqPlan(e, deps))
     // anyone's, lead or member: a coordination tool the guard never refuses
     if (String(e.tool) === DOING_TOOL) return answerDoing($, e).catch(error => ({ result: `hq_doing failed (${error instanceof Error ? error.message : String(error)})`, isError: true as const }))
 
@@ -1098,6 +1161,7 @@ export const register: Register = (on, options) => {
         const trusted = expected !== null && (await read($, teamSource))?.needsApproval !== true
         if (loaded && trusted) $.ui.toast(t(lang, 'team.loaded', { name: loaded.name, n: loaded.roles.length }))
       }
+      if (e.tool === 'Write' || e.tool === 'Edit' || e.tool === 'Bash') await tickFromPlan($, e as { tool: unknown; file_path?: unknown; command?: unknown })
       await syncStatus($)
       await requestLive($)
     })().catch(error => $.ui.log(`Agent HQ: could not note a ${String(e.tool)} call (${error instanceof Error ? error.message : String(error)})`, { to: 'debug' }))
@@ -1119,6 +1183,7 @@ export const register: Register = (on, options) => {
     }
     const loop = e.agentId ?? MAIN
     await update($, usage, all => ({ ...all, [loop]: addTurn(all[loop], e) }))
+      .then(() => (e.agentId === undefined ? undefined : changeTaskList($, async (list, at) => addTurnToTask(list, (await read($, agents))[loop]?.name, e, at))))
       .then(() => requestLive($))
       .catch(error => $.ui.log(`Agent HQ: could not note a turn (${error instanceof Error ? error.message : String(error)})`, { to: 'debug' }))
     // the loop's turn is over (the lead's or a member's), and so is what it said it was doing

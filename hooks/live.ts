@@ -3,8 +3,8 @@
 
 import type { Tone } from './cells'
 import type { LiveEvent } from './feed'
+import { isResting } from './inbox'
 import type { InboxItem } from './inbox'
-import { IDLE_LIMIT_MS } from './inbox'
 import type { AgentUsage } from './usage'
 import { botState, paletteOf, speciesOf, spriteFrames } from './sprites'
 import { MAIN, isFinished, progressOf } from './model'
@@ -17,6 +17,10 @@ import { TONE_OF, fallbackOf, labelOf, mascotTone, nowLine, teamProgress, treeRo
 import type { BarFallback } from './view'
 import { BADGES } from './xp'
 import type { XpSummary } from './xpstore'
+import { costOf } from './prices'
+import { isCounted } from './tasklist'
+import type { ListTask, TaskList } from './tasklist'
+import { AGENT_PREFIX } from './team'
 import { t } from './i18n'
 import type { Lang } from './i18n'
 
@@ -42,12 +46,40 @@ export type LiveAgent = {
   activity: { text: string; since: number } | null
   /** What it is doing, in a sentence (hooks/says.ts): what it said with hq_doing, else its step, its assignment, or the lead's line; null when none. */
   says: string | null
+  /** Not working and not waiting on the person (idle, done, failed, stopped): the page lists it under "Paused". Never the lead. */
+  isPaused: boolean
   startedAt: number
   endedAt: number | null
   /** Tokens and working time so far (the engine reports no price); null before the agent finished a turn. */
   usage: AgentUsage | null
   /** Level, XP and the badges earned (with their titles), or null where nothing is kept. */
   xp: { level: number; xp: number; badges: { id: string; title: string; hint: string }[] } | null
+}
+
+/** One member's work on a task, for the page's detail; `costUsd` is null where its model has no price. */
+export type LiveTaskWork = { who: string; role: string; step: string; workMs: number; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; costUsd: number | null; lastAt: number | null }
+export type LiveTaskRow = {
+  n: number
+  title: string
+  status: string
+  /** The member on a working or review task, the finisher on a done one, nobody on a waiting one. */
+  who: string | null
+  doneBy: string | null
+  startedAt: number | null
+  doneAt: number | null
+  /** The latest time a turn was counted on this task by any member, null when none was. */
+  lastActiveAt: number | null
+  workMs: number
+  costUsd: number | null
+  isPartial: boolean
+  work: LiveTaskWork[]
+  events: { at: number; kind: string; who: string | null }[]
+}
+/** The approved plan's task list as the page's Tasks panel draws it; `total` adds the work of tasks dropped by a re-plan (`removed`), as the sidebar's does; titles are the plan's text, drawn as text, never escaped here. */
+export type LiveTaskList = {
+  rows: LiveTaskRow[]
+  total: { done: number; count: number; workMs: number; costUsd: number | null; isPartial: boolean }
+  removed: TaskList['removed']
 }
 
 export type LiveSnapshot = {
@@ -60,6 +92,8 @@ export type LiveSnapshot = {
   tasksProgress: Progress
   agents: LiveAgent[]
   tasks: { id: string; subject: string; status: string; owner: string | null; blockedBy: string[] }[]
+  /** The saved task list of the approved plan with time and estimated cost per task; null when there is none. */
+  taskList: LiveTaskList | null
   // what the page's "+" can add: the team's roles with how many run now, or a general agent without a team
   roles: { id: string; title: string; count: number; active: number }[]
   notice: { seq: number; ok: boolean; text: string } | null
@@ -70,8 +104,10 @@ export type LiveSnapshot = {
   events: LiveEvent[]
   /** What waits on the person: permission asks and agents held on an approval, longest waiting first. */
   inbox: InboxItem[]
-  /** Members that left the page (see FINISHED_GRACE_MS) and are only counted: completed, and failed or stopped. */
+  /** Paused members dropped by the MAX_PAUSED cap and only counted: completed, and failed or stopped. Zero until the cap is hit. */
   folded: { done: number; failed: number }
+  /** Seats of the team no member holds yet (never started this session): the page lists them as paused. Empty without a team. */
+  seats: { name: string; role: string; roleTitle: string }[]
   /** The talk bubbles showing now (hooks/talk.ts): on `agent`'s card, to or from `other` (`main` for the lead); the page draws exactly these. */
   bubbles: HqBubble[]
   /** What the person could send the lead next (hooks/suggest.ts), drafted after its last answered turn; null when none. */
@@ -84,19 +120,40 @@ export type LiveExtras = {
   events?: readonly LiveEvent[]
   inbox?: readonly InboxItem[]
   usage?: Readonly<Record<string, AgentUsage>>
-  /** Since when each held or idle agent waits (see ./inbox trackWaiting): an idle one past IDLE_LIMIT_MS leaves the page. */
+  /** Since when each held or idle agent waits (see ./inbox trackWaiting). */
   waitingSince?: Readonly<Record<string, number>>
   suggestions?: HqSuggestions | null
 }
 
-/** A finished member stays on the page this long after it ended, then leaves it and is only counted. */
-export const FINISHED_GRACE_MS = 2 * 60_000
+/** How many paused members (newest first) stay in the snapshot; older ones are dropped so it stays small. */
+export const MAX_PAUSED = 50
 
-/** Is this member off the page at `at`: ended longer than the grace ago, or idle past the limit? Never the lead. */
-function isFolded(agent: HqAgent, at: number, waitingSince: Readonly<Record<string, number>>): boolean {
-  if (agent.id === MAIN) return false
-  if (isFinished(agent.status)) return at - (agent.endedAt ?? agent.startedAt) > FINISHED_GRACE_MS
-  return agent.status === 'idle' && at - (waitingSince[agent.id] ?? agent.startedAt) > IDLE_LIMIT_MS
+/**
+ * Not working and not waiting on the person at `at`. An idle member the inbox still lists (see buildInbox: within
+ * IDLE_LIMIT_MS of its waitingSince) is waiting on the person; it is paused once the inbox lets it go. The lead never is.
+ */
+function isPaused(agent: HqAgent, at: number, waitingSince: Readonly<Record<string, number>>): boolean {
+  if (agent.id === MAIN || agent.status === 'running' || agent.status === 'pending' || agent.status === 'waiting') return false
+  return agent.status !== 'idle' || isResting(agent, waitingSince[agent.id] ?? agent.startedAt, at)
+}
+
+/** The paused members past the newest MAX_PAUSED, by when they ended (else started). */
+function pausedOverCap(data: HqData, at: number, waitingSince: Readonly<Record<string, number>>): HqAgent[] {
+  const paused = Object.values(data.agents).filter(x => isPaused(x, at, waitingSince)).sort((x, y) => (y.endedAt ?? y.startedAt) - (x.endedAt ?? x.startedAt))
+  return paused.slice(MAX_PAUSED)
+}
+
+/**
+ * The team's seats nobody holds: per role, `count` minus the agents of that role (whatever their name, hq_assign takes
+ * a custom one), listed by the default names `${role}-${n}` that no agent uses, in order.
+ */
+function seatsOf(data: HqData): LiveSnapshot['seats'] {
+  const names = new Set(Object.values(data.agents).map(x => x.name))
+  return (data.team?.roles ?? []).flatMap(r => {
+    const held = Object.values(data.agents).filter(x => x.role === `${AGENT_PREFIX}${r.id}`).length
+    const free = Array.from({ length: r.count }, (_, i) => `${r.id}-${i + 1}`).filter(name => !names.has(name))
+    return free.slice(0, Math.max(0, r.count - held)).map(name => ({ name, role: r.id, roleTitle: r.title }))
+  })
 }
 
 /** Roles the page offers, each with how many of it are at work now (a role's count caps that). */
@@ -118,10 +175,48 @@ function activityOf(data: HqData, id: string): LiveAgent['activity'] {
   return a ? { text: a.text, since: a.since } : null
 }
 
+const sumCosts = (costs: (number | null)[]) => (costs.every(c => c === null) ? null : costs.reduce<number>((s, c) => s + (c ?? 0), 0))
+
+function taskRow(task: ListTask): LiveTaskRow {
+  const events = [...task.events].sort((a, b) => a.at - b.at)
+  const work = Object.entries(task.work).map(([who, w]): LiveTaskWork => ({ who, role: w.role, step: w.step, workMs: w.workMs, inputTokens: w.inputTokens, outputTokens: w.outputTokens, cacheReadTokens: w.cacheReadTokens, cacheWriteTokens: w.cacheWriteTokens, costUsd: costOf({ ...w, model: w.model ?? undefined }), lastAt: w.lastAt ?? null }))
+  const holder = events.at(-1)?.who ?? work.at(-1)?.who ?? null
+  const who = task.status === 'done' ? task.doneBy : task.status === 'waiting' ? null : holder
+  return {
+    n: task.n,
+    title: task.title,
+    status: task.status,
+    who,
+    doneBy: task.status === 'done' ? task.doneBy : null,
+    startedAt: task.startedAt,
+    doneAt: task.doneAt,
+    lastActiveAt: work.reduce<number | null>((max, w) => (w.lastAt === null ? max : Math.max(max ?? w.lastAt, w.lastAt)), null),
+    workMs: work.reduce((s, w) => s + w.workMs, 0),
+    costUsd: sumCosts(work.map(w => w.costUsd)),
+    isPartial: work.some(w => w.costUsd === null && isCounted(w)), // a member just linked, with nothing counted yet, is not an unpriced one
+    work,
+    events,
+  }
+}
+
+function taskListOf(list: TaskList | null | undefined): LiveTaskList | null {
+  if (!list) return null
+  const rows = list.tasks.map(taskRow)
+  const total = {
+    done: rows.filter(r => r.status === 'done').length,
+    count: rows.length,
+    workMs: rows.reduce((s, r) => s + r.workMs, 0) + list.removed.workMs,
+    costUsd: sumCosts([...rows.map(r => r.costUsd), list.removed.costUsd]),
+    isPartial: list.removed.isPartial === true || rows.some(r => r.isPartial),
+  }
+  return { rows, total, removed: list.removed }
+}
+
 export function buildSnapshot(data: HqData, at: number, notice: LiveSnapshot['notice'] = null, extras: LiveExtras = {}): LiveSnapshot {
   const lang = data.lang ?? 'en'
-  const gone = Object.values(data.agents).filter(a => isFolded(a, at, extras.waitingSince ?? {}))
-  const goneIds = new Set(gone.map(a => a.id))
+  const since = extras.waitingSince ?? {}
+  const gone = pausedOverCap(data, at, since)
+  const goneIds = new Set(gone.map(x => x.id))
   const agents = treeRows(data).filter(({ agent }) => !goneIds.has(agent.id)).map(({ agent, work }): LiveAgent => {
     const isMain = agent.id === MAIN
     const label = labelOf(agent, data.team, lang)
@@ -155,6 +250,7 @@ export function buildSnapshot(data: HqData, at: number, notice: LiveSnapshot['no
       lastTool: agent.lastTool ?? null,
       activity: activityOf(data, agent.id),
       says: sayingOf(agent, data, lang)?.text ?? null,
+      isPaused: isPaused(agent, at, since),
       startedAt: agent.startedAt,
       endedAt: agent.endedAt ?? null,
       usage: extras.usage?.[agent.id] ?? null,
@@ -170,13 +266,15 @@ export function buildSnapshot(data: HqData, at: number, notice: LiveSnapshot['no
     tasksProgress: progressOf(Object.values(data.tasks)),
     agents,
     tasks: Object.values(data.tasks).map(t => ({ id: t.id, subject: t.subject, status: t.status, owner: t.owner ?? null, blockedBy: t.blockedBy })),
+    taskList: taskListOf((data as HqData & { taskList?: TaskList | null }).taskList),
     roles: rolesOf(data),
     notice,
     hideFinished: data.hideFinished,
     lastAction: extras.lastAction ?? 0,
     events: [...(extras.events ?? [])],
     inbox: [...(extras.inbox ?? [])],
-    folded: { done: gone.filter(a => a.status === 'completed').length, failed: gone.filter(a => a.status === 'failed' || a.status === 'killed').length },
+    folded: { done: gone.filter(x => x.status === 'completed').length, failed: gone.filter(x => x.status === 'failed' || x.status === 'killed').length },
+    seats: seatsOf(data),
     bubbles: [...(data.bubbles ?? [])],
     suggestions: extras.suggestions ?? null,
   }

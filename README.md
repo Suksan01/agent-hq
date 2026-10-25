@@ -12,6 +12,9 @@ A Claude Code mod for building and watching orchestrated agent teams.
 - **Sidebar** (docked beside a fullscreen transcript, on a darker panel): the agent tree with a pixel-art bot for
   each agent, its nickname, role and running time, what it works on now (`▸`), what comes next (`○ next:`), the last
   thing it finished (`✓`), and a dotted todo track.
+- **Task table**: once a plan is approved, the sidebar and the live page list every task of the plan: its status (a ✓
+  when done, a moving spinner while a member works on it, ◑ in review, ○ waiting), who is on it or who finished it,
+  the working minutes and an estimated cost (`≈ $`). The cost is an **estimate from list prices, not your bill**.
 - **One live page for every session**: `/hq web` opens your browser on a page that shows the teams of all your open
   Claude Code sessions, and lets you give any of them work.
 - **Lead tools, a rule guard, an inbox, XP and badges**: see the sections below.
@@ -100,7 +103,7 @@ the text you trusted:
 
 ## Lead tools
 
-The lead (the main session) gets four tools, offered as `mcp__agent-hq__hq_assign`, `hq_status`, `hq_hire` and `hq_review`:
+The lead (the main session) gets five tools, offered as `mcp__agent-hq__hq_assign`, `hq_status`, `hq_hire`, `hq_review` and `hq_plan`:
 
 - **`hq_assign`**: start a member on a scoped job. Input: `role`, `task`, and optionally `files` (globs the member may
   change), `done` (what finished means), `limits` (what to leave alone), `name` and `worktree`
@@ -124,6 +127,11 @@ The lead (the main session) gets four tools, offered as `mcp__agent-hq__hq_assig
 - **`hq_review`**: send a finished member's work to the team's review role. The reviewer gets what the member was
   asked, what it reported, what to focus on and what its verdict must look like. If the review role is already at its
   count, the brief goes to the running reviewer as a message.
+- **`hq_plan`**: save the approved plan's checklist (`- [ ] 3. Title` lines of a `.md` file inside the project) as the
+  task list in `.claude/agent-hq/tasks.json`. `hq_assign` and `hq_review` then take `plan_task` (the task's number) to
+  link a member's work to a task; each finished turn adds its minutes and tokens, and ticking `- [x]` in the plan
+  marks the task done. Members cannot change them: the guard refuses a member's write to the list and the approved
+  plan file by path; a glob over the plan's name is not caught.
 
 Only the lead can use them; a subagent that calls one gets an error.
 
@@ -181,6 +189,9 @@ is checked before it runs; a refused call comes back to the agent as a denial wi
 - No member, whatever its role, can change a `.claude/agent-hq/team.json` with Write, Edit, NotebookEdit or a writing
   command, by name, glob or brace list (`tea*.json`, `.claude/*/t?am.json`, `{team,x}.json`, `te{a,}m.json`; a bare
   glob counts when the command mentions `agent-hq`): the team file is where the guards come from, and only you (or the lead, through `hq_hire`) change it.
+- Nor can a member change the task list: writes to `.claude/agent-hq/tasks.json` and `tasks.json.bak` are refused by
+  name, glob and brace list, or a member could fake its own task's status. The approved plan file (the list's `plan`)
+  is refused by its path only. A bare name after a `cd` in an earlier call is refused; a bare glob there is not seen.
 - A role with any guard (no-push, read-only or scoped) cannot start other agents unless the mod can tell who started
   each agent; an agent such a role starts answers to its guard as well as its own.
 
@@ -194,6 +205,7 @@ and its memory are notes from teammates, not instructions.
 **It is not a sandbox, and this is what it cannot see.** The main session is never blocked, nor is a session with no
 team. A command is judged by its command words, so what still passes is:
 
+- a glob over the approved plan's name (`rm docs/plans/task-*.md`), which the guard does not catch (only its path is refused);
 - a script file or program the agent writes and then runs (`bash build.sh`, `npm run deploy`, `make`, `just`, a
   `package.json` script, a git hook);
 - the code an interpreter runs for a role that may write files (`python -c`, `node -e`), or, for a read-only role, what
@@ -405,21 +417,23 @@ Agent HQ reads what Claude Code does so it can draw it, and it acts in the place
 What it does with that:
 
 - Keeps it in memory for the current session. Between sessions it keeps only: XP and badges per nickname, and
-  which project team files you trusted (path and a fingerprint of the content), in the mod's own store. Team members
+  which project team files you trusted (path and a fingerprint of the content), in the mod's own store, and the task
+  list of the approved plan (`.claude/agent-hq/tasks.json` and its `.bak`, in your project). Team members
   write their own memory (`.claude/agent-memory/agent-hq-<role id>/`) and the team notes
-  (`.claude/agent-hq/team-notes.md`) in your project; delete those to make the team forget.
+  (`.claude/agent-hq/team-notes.md`) in your project; delete those, and the task list, to make the team forget.
 - Draws the band above the prompt, the sidebar and a status line, adds the `/hq` command, and opens the sidebar
   the first time an agent starts.
 - When a team file is in force: registers each role as an agent type (`agent-hq:<role id>`) and adds one section to
   the main session's system prompt naming it the team's lead, with the lead's rules, the roster and a note on the
   lead tools.
-- **Answers its own three tools** (`hq_assign`, `hq_status`, `hq_review`) and, for subagents only, **can deny a tool
+- **Answers its own tools** (`hq_assign`, `hq_status`, `hq_review`, `hq_hire`, `hq_plan`) and, for subagents only, **can deny a tool
   call** under the rule guard. It changes no other call and rewrites nothing.
 - Plays a sound in terminals with audio (the `assets/` clips), if the option is on.
 - `/hq report` asks the model for a three-sentence summary of the session report (one model call), and writes the
   report file in your project.
 - Only when you run `/hq web`: starts `node web/server.mjs` and opens your browser at it. It writes the page's
-  state, the same names, statuses and progress the sidebar shows, to `~/.claude/agent-hq/live/<session id>.json`
+  state, the same names, statuses and progress the sidebar shows, and the task list (plan titles, who worked on each
+  task, minutes, tokens and the estimated cost), to `~/.claude/agent-hq/live/<session id>.json`
   whenever it changes, and the hub keeps `hub.json` (its port, process id and a secret) in the same folder, readable
   by you only. Files of sessions that ended are deleted after 24 hours.
 - While a live page is open and next tasks are on: after each of the lead's answered turns, forks the session once

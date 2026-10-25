@@ -102,3 +102,99 @@ test('kill -9 of the hub: the page reconnects by itself within the backoff, with
   assert.ok(backAt < slow(15_000), `back within the backoff (${backAt.toFixed(0)} ms)`)
   console.log(`[browser 2] hub killed: live data on the page again after ${backAt.toFixed(0)} ms, ${events().length} /events requests, 0 refused`)
 })
+
+// ---- 3. the Tasks panel: what a screen reader gets, and the row that opens --------------------------------------------------------
+
+test('the Tasks panel: a progressbar with its text, the status in words beside a hidden icon, and aria-expanded following a click', { skip, timeout: slow(60_000) }, async t => {
+  const world = newWorld(t)
+  const { alpha, alphaMod } = await twoSessions(world)
+  const row = (n, status, over = {}) => ({ n, title: `Task ${n}`, status, who: null, doneBy: null, startedAt: null, doneAt: null, lastActiveAt: null, workMs: 0, costUsd: null, isPartial: false, work: [], events: [], ...over })
+  const taskList = { rows: [row(1, 'done', { who: 'dev-1' }), row(2, 'waiting')], total: { done: 1, count: 2, workMs: 0, costUsd: null, isPartial: false }, removed: { workMs: 0, costUsd: 0 } }
+  alphaMod.make = mark => ({ ...buildSnapshot({ team: 'Alpha Team', mark }), taskList })
+  alphaMod.write(1)
+  const page = await launchBrowser(world)
+  await page.open(alpha.url)
+  await until(() => page.eval(`!!document.querySelector('.tk-panel .tk-title')`), 15_000, 'the Tasks panel')
+
+  const bar = await page.eval(`(() => { const b = document.querySelector('.tk-panel [role=progressbar]'); return b && { now: b.getAttribute('aria-valuenow'), max: b.getAttribute('aria-valuemax'), text: b.getAttribute('aria-valuetext') } })()`)
+  assert.deepEqual(bar, { now: '1', max: '2', text: '1/2 done' })
+  const statusCell = await page.eval(`(() => { const c = document.querySelectorAll('.tk-panel .tk-c-mark')[1]; return { words: c.querySelector('.tk-sr')?.textContent, iconHidden: c.querySelector('.tk-mark')?.getAttribute('aria-hidden') } })()`)
+  assert.deepEqual(statusCell, { words: 'Waiting', iconHidden: 'true' }, 'the status is said in words; the glyph is hidden from a reader')
+
+  const expanded = () => page.eval(`document.querySelectorAll('.tk-panel .tk-title')[1].getAttribute('aria-expanded')`)
+  assert.equal(await expanded(), 'false')
+  await page.eval(`document.querySelectorAll('.tk-panel .tk-title')[1].click()`)
+  await until(async () => (await expanded()) === 'true', 5000, 'aria-expanded true after a click')
+  assert.ok(await page.eval(`!!document.querySelector('.tk-panel .tk-task.is-open')`), 'the open row has its class')
+  await page.eval(`document.querySelectorAll('.tk-panel .tk-title')[1].click()`)
+  await until(async () => (await expanded()) === 'false', 5000, 'aria-expanded false after a second click')
+})
+
+test('the Tasks table: every row has as many cells as the header, counting colSpan, and the detail spans the whole width, also with Min folded', { skip, timeout: slow(60_000) }, async t => {
+  const world = newWorld(t)
+  const { alpha, alphaMod } = await twoSessions(world)
+  const row = (n, status, over = {}) => ({ n, title: `Task ${n}`, status, who: null, doneBy: null, startedAt: null, lastActiveAt: null, workMs: 0, costUsd: null, isPartial: false, work: [], events: [], ...over })
+  const rows = [row(1, 'done', { who: 'dev-1', workMs: 60_000, costUsd: 1.5, work: [{ who: 'dev-1', role: 'dev', step: 'build', workMs: 60_000, inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: 1.5, lastAt: null }] }), row(2, 'waiting')]
+  const taskList = { rows, total: { done: 1, count: 2, workMs: 60_000, costUsd: 1.5, isPartial: false }, removed: { workMs: 0, costUsd: 0 } }
+  alphaMod.make = mark => ({ ...buildSnapshot({ team: 'Alpha Team', mark }), taskList })
+  alphaMod.write(1)
+  const page = await launchBrowser(world)
+  await page.open(alpha.url)
+  await until(() => page.eval(`!!document.querySelector('.tk-panel .tk-title')`), 15_000, 'the Tasks panel')
+  await page.eval(`document.querySelectorAll('.tk-panel .tk-title')[0].click()`)
+  await until(() => page.eval(`!!document.querySelector('.tk-panel .tk-detail')`), 5000, 'the open detail row')
+
+  const measure = () => page.eval(`(() => {
+    const table = document.querySelector('.tk-table')
+    const tableW = table.getBoundingClientRect().width
+    const span = tr => [...tr.cells].reduce((n, c) => n + c.colSpan, 0)
+    const shown = tr => [...tr.cells].filter(c => c.getBoundingClientRect().width > 0)
+    const width = tr => shown(tr).reduce((w, c) => w + c.getBoundingClientRect().width, 0)
+    const rows = [...table.querySelectorAll('tr')].map(tr => ({ kind: tr.closest('thead') ? 'head' : tr.closest('tfoot') ? 'foot' : tr.classList.contains('tk-detail') ? 'detail' : 'row', cells: span(tr), shown: shown(tr).length, fills: Math.abs(width(tr) - tableW) <= 1, title: Math.round(tr.querySelector('.tk-c-title')?.getBoundingClientRect().width ?? 0) }))
+    return { tableW, rows }
+  })()`)
+
+  const wide = await measure()
+  const head = wide.rows.find(r => r.kind === 'head')
+  assert.ok(wide.rows.length >= 5, 'a header, two rows, a detail and a total')
+  for (const r of wide.rows) assert.equal(r.cells, head.cells, `${r.kind}: ${r.cells} cells against the header's ${head.cells}`)
+  for (const r of wide.rows) assert.ok(r.fills, `${r.kind} fills the table (wide)`)
+
+  await page.send('Emulation.setDeviceMetricsOverride', { width: 320, height: 900, deviceScaleFactor: 1, mobile: true })
+  await until(async () => (await measure()).rows.find(r => r.kind === 'head').shown < head.cells, 8000, 'Min to fold away in the narrow panel')
+  const narrow = await measure()
+  for (const r of narrow.rows) assert.equal(r.cells, head.cells, `${r.kind} keeps its cells when narrow`)
+  for (const r of narrow.rows) assert.ok(r.fills, `${r.kind} still fills the table with Min folded (narrow)`)
+  const titleRow = narrow.rows.find(r => r.kind === 'row')
+  assert.ok(titleRow.title >= 140, `the title cell keeps its room beside an open detail row (${titleRow.title}px, not half)`)
+  assert.ok(narrow.rows.find(r => r.kind === 'detail').shown === 1, 'the detail is one cell spanning the width')
+})
+
+test('below 1100px the last Paused row stays clickable: the left column stops above the needs-you and activity stack', { skip, timeout: slow(60_000) }, async t => {
+  const world = newWorld(t)
+  const { alpha, alphaMod } = await twoSessions(world)
+  const paused = [['w1', 'Waits', 'waiting'], ...['p1', 'p2', 'p3', 'p4'].map(id => [id, `Idle ${id}`, 'idle', { isPaused: true }])] // one member needs the person: the stack has its needs-you pill
+  const seats = [{ name: 'qa-2', role: 'qa', roleTitle: 'QA Engineer' }, { name: 'rev-2', role: 'reviewer', roleTitle: 'Code Reviewer' }]
+  alphaMod.make = mark => ({ ...buildSnapshot({ team: 'Alpha Team', mark, agents: paused }), seats })
+  alphaMod.write(1)
+  const page = await launchBrowser(world, { width: 375, height: 812, mobile: true })
+  await page.open(alpha.url)
+  await until(() => page.eval(`!!document.querySelector('.pz-head')`), 15_000, 'the Paused section')
+  await page.eval(`document.querySelector('.pz-head').click()`)
+  await until(() => page.eval(`document.querySelectorAll('.pz-row').length === 6`), 5000, 'four members and two seats listed')
+  assert.ok(await page.eval(`document.querySelector('.hq-right').getBoundingClientRect().height > 0`), 'setup: the stack under the left column is not empty')
+
+  await page.eval(`(() => { const left = document.querySelector('.hq-left'); left.scrollTop = left.scrollHeight })()`)
+  await sleep(300)
+  const hit = await page.eval(`(() => {
+    const rows = document.querySelectorAll('.pz-row')
+    const last = rows[rows.length - 1]
+    const r = last.getBoundingClientRect()
+    const el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
+    const right = document.querySelector('.hq-right').getBoundingClientRect()
+    return { isLast: el?.closest('.pz-row') === last, lastBottom: r.bottom, rightTop: right.top, rightHeight: right.height }
+  })()`)
+
+  assert.ok(hit.isLast, `the last Paused row is what sits under its own centre (its bottom ${hit.lastBottom}, the stack starts at ${hit.rightTop})`)
+  assert.ok(hit.rightHeight > 0 && hit.lastBottom <= hit.rightTop, 'the column ends above the stack')
+})
