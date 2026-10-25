@@ -4,6 +4,7 @@
 
 import { GlassTile, Icon, html } from './spacekit.js'
 import { has, t } from './i18n.js'
+import { agentStatus } from './livemap.js'
 import React from './vendor/libs.js'
 
 const { useEffect, useState } = React
@@ -58,15 +59,27 @@ export function footnoteKeys(list) {
 
 /** Minutes since `at`, as the detail says them: `<1` under a minute; a stamp in the future counts as now; null where none is known. */
 export function agoMinutes(at, now) {
-  if (typeof at !== 'number' || !Number.isFinite(at)) return null
+  if (typeof at !== 'number' || !Number.isFinite(at) || !Number.isFinite(now)) return null
   const ms = Math.max(0, now - at)
   return ms < MINUTE ? '<1' : String(Math.floor(ms / MINUTE))
 }
 
-/** Whole minutes a working task has been quiet, or null: only a working task with a known stamp, quiet for QUIET_MS or more (done, review and waiting are never flagged). */
-export function quietMinutes(row, now) {
-  if (row.status !== 'working' || typeof row.lastActiveAt !== 'number') return null
-  const ms = Math.max(0, now - row.lastActiveAt)
+/** Is one of the task's members (its work entries, or its `who`) an agent the snapshot shows working right now? */
+const hasWorkingMember = (row, agents) => {
+  const names = new Set([row.who, ...(row.work ?? []).map(w => w.who)].filter(Boolean))
+  return agents.some(a => agentStatus(a) === 'working' && [a.name, a.id, a.nickname].some(id => names.has(id)))
+}
+
+/**
+ * Whole minutes a working task has been quiet, or null. Quiet needs all of: it is working; none of its members is working now
+ * (the stamp is set at a turn's end, so a long turn would look idle); and its last activity (`lastActiveAt`, else when it started)
+ * is QUIET_MS or more behind `now`. Done, review and waiting tasks are never flagged, nor one with no usable time.
+ */
+export function quietMinutes(row, now, agents = []) {
+  if (row.status !== 'working' || hasWorkingMember(row, agents)) return null
+  const last = [row.lastActiveAt, row.startedAt].find(at => typeof at === 'number' && Number.isFinite(at))
+  if (last === undefined || !Number.isFinite(now)) return null
+  const ms = Math.max(0, now - last)
   return ms >= QUIET_MS ? String(Math.floor(ms / MINUTE)) : null
 }
 
@@ -107,11 +120,12 @@ function Chevron() {
   return html`<span className="tk-chev" aria-hidden="true">›</span>`
 }
 
-function Detail({ row, id, now }) {
+function Detail({ row, id, now, quiet }) {
   const lines = row.work.map(memberLine)
   const last = agoMinutes(row.lastActiveAt, now)
   return html`<tr className="tk-detail" id=${id}><td colSpan="6">
     ${last === null ? null : html`<p className="tk-last">${t('tasks.lastActive', { n: last })}</p>`}
+    ${quiet === null ? null : html`<p className="tk-last tk-last--quiet">${t('tasks.quiet', { n: quiet })}</p>`}
     ${lines.length === 0 ? html`<p className="tk-none">${t('tasks.noWork')}</p>` : html`<ul className="tk-work">
       ${lines.map((line, i) => html`<li key=${i}>
         <span className="tk-w-who">${line.who}</span><span className="tk-w-role">${line.role}</span><span className="tk-w-step">${word('tasks.step', line.step)}</span>
@@ -122,28 +136,28 @@ function Detail({ row, id, now }) {
   </td></tr>`
 }
 
-function Row({ row, isOpen, isStill, now, onToggle }) {
+function Row({ row, isOpen, isStill, now, agents, onToggle }) {
   const id = `tk-detail-${row.n}`
-  const quiet = quietMinutes(row, now)
+  const quiet = quietMinutes(row, now, agents)
   const who = whoText(row)
   return html`<tbody className=${`tk-task tk-task--${row.status}${isOpen ? ' is-open' : ''}`}>
     <tr className="tk-row" onClick=${onToggle}>
-      <td className="tk-c-mark" title=${word('tasks.status', row.status)}><${Mark} status=${row.status} isStill=${isStill} isQuiet=${quiet !== null} /><span className="tk-sr">${word('tasks.status', row.status)}${quiet === null ? '' : `, ${t('tasks.quiet', { n: quiet })}`}</span></td>
+      <td className="tk-c-mark" title=${quiet === null ? word('tasks.status', row.status) : `${word('tasks.status', row.status)}, ${t('tasks.quiet', { n: quiet })}`}><${Mark} status=${row.status} isStill=${isStill} isQuiet=${quiet !== null} /><span className="tk-sr">${word('tasks.status', row.status)}${quiet === null ? '' : `, ${t('tasks.quiet', { n: quiet })}`}</span></td>
       <td className="tk-c-n">${row.n}</td>
       <td className="tk-c-title"><button type="button" className="tk-title" aria-expanded=${isOpen} aria-controls=${isOpen ? id : undefined} onClick=${e => { e.stopPropagation(); onToggle() }}><${Chevron} /><span>${row.title}</span></button></td>
       <td className="tk-c-who" title=${who.title || undefined}>${who.text}</td>
       <td className="tk-c-num">${minText(row)}</td>
       <td className="tk-c-num tk-c-cost">${costText(row)}</td>
     </tr>
-    ${isOpen ? html`<${Detail} row=${row} id=${id} now=${now} />` : null}
+    ${isOpen ? html`<${Detail} row=${row} id=${id} now=${now} quiet=${quiet} />` : null}
   </tbody>`
 }
 
-function Table({ list, isStill, now }) {
+function Table({ list, isStill, now, agents }) {
   const [open, setOpen] = useState(null)
   return html`<table className="tk-table">
     <thead><tr><th><span className="tk-sr">${t('tasks.colStatus')}</span></th><th>#</th><th>${t('tasks.colTask')}</th><th className="tk-c-who">${t('tasks.colWho')}</th><th className="tk-c-num">${t('tasks.colMin')}</th><th className="tk-c-num tk-c-cost">${t('tasks.colCost')}</th></tr></thead>
-    ${list.rows.map(row => html`<${Row} key=${row.n} row=${row} isStill=${isStill} now=${now} isOpen=${open === row.n} onToggle=${() => setOpen(nextOpen(open, row.n))} />`)}
+    ${list.rows.map(row => html`<${Row} key=${row.n} row=${row} isStill=${isStill} now=${now} agents=${agents} isOpen=${open === row.n} onToggle=${() => setOpen(nextOpen(open, row.n))} />`)}
     <tfoot><tr>
       <td colSpan="4">${t('tasks.total')}</td>
       <td className="tk-c-num">${totalMinText(list.total)}</td>
@@ -170,7 +184,7 @@ export function TasksPanel({ snapshot, isOnline, clock = Date.now }) {
     ${hasTable ? html`<div className="tk-progress" role="progressbar" aria-label=${t('tasks.progress')} aria-valuemin="0" aria-valuemax=${list.total.count} aria-valuenow=${list.total.done} aria-valuetext=${t('tasks.done', { done: list.total.done, count: list.total.count })}><span style=${{ width: `${donePercent(list.total)}%` }}></span></div>` : null}
     ${state === 'offline' ? html`<p className="tk-offline" role="status">${t('tasks.offline')}</p>` : null}
     ${state === 'loading' || state === 'empty' ? html`<p className="tk-note" role="status">${t(`tasks.${state}`)}</p>` : null}
-    ${hasTable ? html`<${Table} list=${list} isStill=${state === 'offline'} now=${panelNow(snapshot, isOnline, clock)} />` : null}
+    ${hasTable ? html`<${Table} list=${list} isStill=${state === 'offline'} now=${panelNow(snapshot, isOnline, clock)} agents=${snapshot?.agents ?? []} />` : null}
     ${hasTable ? html`<p className="tk-foot">${[t('tasks.footnote'), ...footnoteKeys(list).map(key => t(key))].join(' · ')}</p>` : null}
   <//>`
 }

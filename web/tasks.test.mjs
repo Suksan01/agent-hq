@@ -140,9 +140,10 @@ test('the status cell says the status in words for a screen reader, in en and th
   for (const status of ['done', 'working', 'review', 'waiting']) assert.match(STRINGS.th[`tasks.status.${status}`], THAI)
 })
 
-test('the greys of the tasks table keep at least 4.5:1 on the lightest tile it can sit on', () => {
+test('the greys of the tasks table keep at least 4.5:1 on the lightest tile it can sit on, in order: text > secondary > dim', () => {
   const css = read('./space.css')
-  const [, r, g, b, a] = /--tk-dim:\s*rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)/.exec(css)
+  const panel = /\.tk-panel \{([^}]*)\}/.exec(css)[1]
+  const alphaOf = name => Number(new RegExp(`${name}:\\s*rgba\\(242,\\s*242,\\s*245,\\s*([\\d.]+)\\)`).exec(panel)[1])
   const lin = c => ((c /= 255) <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)
   const lum = ([x, y, z]) => 0.2126 * lin(x) + 0.7152 * lin(y) + 0.0722 * lin(z)
   const mix = (fg, alpha, bg) => fg.map((c, i) => c * alpha + bg[i] * (1 - alpha))
@@ -151,9 +152,12 @@ test('the greys of the tasks table keep at least 4.5:1 on the lightest tile it c
   const lit = [60, 60, 80] // a tile under a bright planet or glow (the .sk-tile gradients): the lightest we have seen
   const worst = Math.max(overlay('\\.tk-task\\.is-open \\.tk-row'), overlay('\\.tk-row:hover'), overlay('\\.tk-detail td'))
   const bg = mix([255, 255, 255], worst, lit) // the open row's overlay, the lightest of the three
-  const ink = mix([r, g, b].map(Number), Number(a), bg)
 
-  assert.ok(ratio(ink, bg) >= 4.5, `contrast ${ratio(ink, bg).toFixed(2)} on ${bg.map(Math.round)}`)
+  for (const name of ['--tk-dim', '--sk-text-2']) {
+    const ink = mix([242, 242, 245], alphaOf(name), bg)
+    assert.ok(ratio(ink, bg) >= 4.5, `${name} contrast ${ratio(ink, bg).toFixed(2)} on ${bg.map(Math.round)}`)
+  }
+  assert.ok(1 > alphaOf('--sk-text-2') && alphaOf('--sk-text-2') > alphaOf('--tk-dim'), 'text 1.0 > secondary > dim')
   assert.doesNotMatch(css.slice(css.indexOf('.tk-panel {')), /\.tk-[^{]*\{[^}]*var\(--sk-text-3\)/, 'no tasks rule uses the 3.2:1 grey')
 })
 
@@ -277,4 +281,30 @@ test('the panel draws again on a slow timer while a task works, and clears it', 
   assert.match(source, /setInterval\(\(\) => setTick\(n => n \+ 1\), TICK_MS\)/)
   assert.match(source, /return \(\) => clearInterval\(timer\)/)
   assert.match(source, /isTicking = isOnline && needsTick\(list\)/)
+})
+
+test('quiet needs no working member: a long turn is not quiet, an abandoned task is, and a null stamp falls back to the start', () => {
+  const now = 500 * MIN
+  const agent = (name, status) => ({ id: `id-${name}`, name, nickname: `Nick ${name}`, status, isMain: false })
+  const task = (over = {}) => ({ status: 'working', who: 'dev-1', work: [{ who: 'dev-1', workMs: 1000 }], lastActiveAt: now - 40 * MIN, startedAt: now - 90 * MIN, ...over })
+
+  assert.equal(quietMinutes(task(), now, [agent('dev-1', 'running')]), null, 'a member in one long turn is working: the stamp is only set at a turn end')
+  assert.equal(quietMinutes(task(), now, [agent('dev-1', 'pending')]), null)
+  assert.equal(quietMinutes(task(), now, [agent('dev-1', 'idle')]), '40', 'its member stopped and the stamp is old')
+  assert.equal(quietMinutes(task(), now, []), '40', 'a member gone from the list')
+  assert.equal(quietMinutes(task(), now, [agent('dev-2', 'running')]), '40', 'another member working is not this task\'s')
+  assert.equal(quietMinutes(task({ work: [{ who: 'dev-1' }, { who: 'qa-1' }] }), now, [agent('dev-1', 'idle'), agent('qa-1', 'running')]), null, 'any one of its members working')
+  assert.equal(quietMinutes(task({ lastActiveAt: null }), now, []), '90', 'no stamp: measured from when it started')
+  assert.equal(quietMinutes(task({ lastActiveAt: null, startedAt: null }), now, []), null, 'no usable time: not flagged')
+  assert.equal(quietMinutes(task({ lastActiveAt: now - 3 * MIN }), now, []), null, 'recent')
+  assert.equal(quietMinutes(task(), Number.NaN, []), null)
+  assert.equal(agoMinutes(now - MIN, Number.NaN), null, 'no usable clock: no last-active line')
+})
+
+test('the quiet words reach a sighted user too: the status cell title and the open detail', () => {
+  const source = read('./tasks.js')
+
+  assert.match(source, /<td className="tk-c-mark" title=\$\{quiet === null \?/)
+  assert.match(source, /tk-last tk-last--quiet/)
+  assert.match(source, /<\$\{Detail\} row=\$\{row\} id=\$\{id\} now=\$\{now\} quiet=\$\{quiet\} \/>/)
 })
