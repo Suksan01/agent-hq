@@ -14,7 +14,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import { STRINGS } from './i18n.js'
-import { costText, memberLine, minText, nextOpen, panelState, timeline, totalMinText } from './tasks.js'
+import { costText, donePercent, footnoteKeys, memberLine, minText, nextOpen, panelState, timeline, totalMinText, whoText } from './tasks.js'
 
 const MIN = 60_000
 const THAI = /[฀-๿]/
@@ -132,4 +132,72 @@ test('the total row shows whole minutes and a cost even with no work counted, as
   assert.equal(totalMinText({ workMs: 31_000 }), '<1')
   assert.equal(totalMinText({ workMs: 5.6 * MIN }), '6')
   assert.equal(costText({ costUsd: 0, isPartial: false }), '$0.00')
+})
+
+test('the status cell says the status in words for a screen reader, in en and th', () => {
+  const source = read('./tasks.js')
+
+  assert.match(source, /<td className="tk-c-mark"[^>]*>.*<span className="tk-sr">\$\{word\('tasks\.status', row\.status\)\}<\/span>/, 'a tk-sr span with the status word in the status cell')
+  assert.match(read('./space.css'), /\.tk-sr\s*\{[^}]*clip: rect\(0 0 0 0\)/, 'tk-sr hides it visually only')
+  for (const status of ['done', 'working', 'review', 'waiting']) assert.match(STRINGS.th[`tasks.status.${status}`], THAI)
+})
+
+test('the greys of the tasks table keep at least 4.5:1 on the tile', () => {
+  const css = read('./space.css')
+  const [, r, g, b, a] = /--tk-dim:\s*rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)/.exec(css)
+  const lin = c => ((c /= 255) <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)
+  const lum = ([x, y, z]) => 0.2126 * lin(x) + 0.7152 * lin(y) + 0.0722 * lin(z)
+  const mix = (fg, alpha, bg) => fg.map((c, i) => c * alpha + bg[i] * (1 - alpha))
+  const ratio = (x, y) => (Math.max(lum(x), lum(y)) + 0.05) / (Math.min(lum(x), lum(y)) + 0.05)
+  const lit = [28, 28, 44] // a tile lit from one edge, lighter than the canvas (#050507) under a 5% glass
+  const ink = mix([r, g, b].map(Number), Number(a), lit)
+
+  assert.ok(ratio(ink, lit) >= 4.5, `contrast ${ratio(ink, lit).toFixed(2)}`)
+  assert.doesNotMatch(css.slice(css.indexOf('.tk-panel {')), /\.tk-[^{]*\{[^}]*var\(--sk-text-3\)/, 'no tasks rule uses the 3.2:1 grey')
+})
+
+test('the header has the count and a progress bar; the footer total does not repeat the count', () => {
+  const source = read('./tasks.js')
+
+  assert.equal(donePercent({ done: 2, count: 5 }), 40)
+  assert.equal(donePercent({ done: 0, count: 0 }), 0)
+  assert.match(source, /role="progressbar"/)
+  assert.match(source, /<td colSpan="4">\$\{t\('tasks\.total'\)\}<\/td>/, 'the footer says Total, no count')
+})
+
+test('the footnote explains + for unknown prices, — for no price, and removed tasks, each only when it applies', () => {
+  const rows = (...costs) => costs.map(([costUsd, isPartial], n) => ({ n, costUsd, isPartial }))
+
+  assert.deepEqual(footnoteKeys({ rows: rows([1, false]), total: { costUsd: 1, isPartial: false }, removed: { workMs: 0, costUsd: 0 } }), [])
+  assert.deepEqual(footnoteKeys({ rows: rows([1, true]), total: { costUsd: 1, isPartial: true }, removed: { workMs: 0, costUsd: 0 } }), ['tasks.footPartial'])
+  assert.deepEqual(footnoteKeys({ rows: rows([null, false], [1, false]), total: { costUsd: 1, isPartial: false }, removed: { workMs: 0, costUsd: 0 } }), ['tasks.footNoPrice'])
+  assert.deepEqual(footnoteKeys({ rows: rows([1, true], [null, false]), total: { costUsd: 1, isPartial: true }, removed: { workMs: 5, costUsd: 0 } }), ['tasks.footPartial', 'tasks.footNoPrice', 'tasks.footRemoved'])
+  for (const key of ['footPartial', 'footNoPrice', 'footRemoved']) {
+    assert.match(STRINGS.th[`tasks.${key}`], THAI)
+    assert.ok(STRINGS.en[`tasks.${key}`])
+  }
+})
+
+test('an expandable row shows a chevron that turns when open, an open-row style, and no motion under reduced motion', () => {
+  const source = read('./tasks.js')
+  const css = read('./space.css')
+
+  assert.match(source, /className="tk-chev" aria-hidden="true"/)
+  assert.match(css, /\.tk-task\.is-open \.tk-chev\s*\{[^}]*rotate\(90deg\)/)
+  assert.match(css, /\.tk-task\.is-open \.tk-row\s*\{[^}]*background/)
+  assert.ok(reducedMotionBlocks(css).some(body => /\.tk-chev[^{]*\{[^}]*transition:\s*none/.test(body)), 'the chevron does not animate under reduced motion')
+})
+
+test('Thai headings of the table are 12px, not the 10px mono of the Latin ones', () => {
+  assert.match(read('./space.css'), /html\[lang='th'\] \.tk-table th\s*\{[^}]*font-size:\s*12px/)
+})
+
+test('parallel work shows the first member and +n for the others with counted work; the title lists them all', () => {
+  const work = (who, workMs) => ({ who, workMs })
+
+  assert.deepEqual(whoText({ who: 'dev-1', work: [work('dev-1', 5000)] }), { text: 'dev-1', title: '' })
+  assert.deepEqual(whoText({ who: 'dev-1', work: [work('dev-1', 5000), work('qa-1', 9000), work('qa-1', 1000), work('rev-1', 0)] }), { text: 'dev-1 +1', title: 'dev-1, qa-1' })
+  assert.deepEqual(whoText({ who: 'dev-1', work: [work('dev-1', 1), work('dev-2', 1), work('qa-1', 1)] }), { text: 'dev-1 +2', title: 'dev-1, dev-2, qa-1' })
+  assert.deepEqual(whoText({ who: null, work: [] }), { text: '—', title: '' })
+  assert.deepEqual(whoText({ who: 'dev-1' }), { text: 'dev-1', title: '' }, 'an older snapshot without work entries')
 })

@@ -31,6 +31,28 @@ export const memberLine = work => ({
   cost: costText({ costUsd: work.costUsd, isPartial: false }),
 })
 
+/** The who cell: the row's `who`, and `+n` when n more members have counted work on it (the detail lists them all). */
+export function whoText(row) {
+  const names = [...new Set((row.work ?? []).filter(w => w.workMs > 0).map(w => w.who))]
+  const first = row.who ?? names[0] ?? null
+  if (first === null) return { text: NONE, title: '' }
+  const others = names.filter(name => name !== first)
+  return { text: others.length > 0 ? `${first} +${others.length}` : first, title: others.length > 0 ? [first, ...others].join(', ') : '' }
+}
+
+/** Which legend lines the footnote adds: `+` when some price is unknown, `—` when a row has none, the removed tasks when the total counts them. */
+export function footnoteKeys(list) {
+  const unpriced = value => value === null || value === undefined
+  const keys = []
+  if (list.rows.some(r => !unpriced(r.costUsd) && r.isPartial) || (!unpriced(list.total?.costUsd) && list.total?.isPartial)) keys.push('tasks.footPartial')
+  if (list.rows.some(r => unpriced(r.costUsd))) keys.push('tasks.footNoPrice')
+  if (list.removed && (list.removed.workMs > 0 || list.removed.costUsd > 0)) keys.push('tasks.footRemoved')
+  return keys
+}
+
+/** How much of the plan is done, 0 to 100. */
+export const donePercent = total => (total.count > 0 ? Math.round((total.done / total.count) * 100) : 0)
+
 /** The row's events oldest first; the row is not changed. */
 export const timeline = row => [...row.events].sort((a, b) => a.at - b.at)
 
@@ -55,6 +77,10 @@ function Mark({ status, isStill }) {
   return html`<span className=${`tk-mark tk-mark--${status}`}>${status === 'review' ? '◑' : '○'}</span>`
 }
 
+function Chevron() {
+  return html`<span className="tk-chev" aria-hidden="true">›</span>`
+}
+
 function Detail({ row, id }) {
   const lines = row.work.map(memberLine)
   return html`<tr className="tk-detail" id=${id}><td colSpan="6">
@@ -70,12 +96,13 @@ function Detail({ row, id }) {
 
 function Row({ row, isOpen, isStill, onToggle }) {
   const id = `tk-detail-${row.n}`
+  const who = whoText(row)
   return html`<tbody className=${`tk-task tk-task--${row.status}${isOpen ? ' is-open' : ''}`}>
     <tr className="tk-row" onClick=${onToggle}>
-      <td className="tk-c-mark" title=${word('tasks.status', row.status)}><${Mark} status=${row.status} isStill=${isStill} /></td>
+      <td className="tk-c-mark" title=${word('tasks.status', row.status)}><${Mark} status=${row.status} isStill=${isStill} /><span className="tk-sr">${word('tasks.status', row.status)}</span></td>
       <td className="tk-c-n">${row.n}</td>
-      <td className="tk-c-title"><button type="button" className="tk-title" aria-expanded=${isOpen} aria-controls=${isOpen ? id : undefined} onClick=${e => { e.stopPropagation(); onToggle() }}>${row.title}</button></td>
-      <td className="tk-c-who">${row.who ?? NONE}</td>
+      <td className="tk-c-title"><button type="button" className="tk-title" aria-expanded=${isOpen} aria-controls=${isOpen ? id : undefined} onClick=${e => { e.stopPropagation(); onToggle() }}><${Chevron} /><span>${row.title}</span></button></td>
+      <td className="tk-c-who" title=${who.title || undefined}>${who.text}</td>
       <td className="tk-c-num">${minText(row)}</td>
       <td className="tk-c-num">${costText(row)}</td>
     </tr>
@@ -89,7 +116,7 @@ function Table({ list, isStill }) {
     <thead><tr><th><span className="tk-sr">${t('tasks.colStatus')}</span></th><th>#</th><th>${t('tasks.colTask')}</th><th className="tk-c-who">${t('tasks.colWho')}</th><th className="tk-c-num">${t('tasks.colMin')}</th><th className="tk-c-num">${t('tasks.colCost')}</th></tr></thead>
     ${list.rows.map(row => html`<${Row} key=${row.n} row=${row} isStill=${isStill} isOpen=${open === row.n} onToggle=${() => setOpen(nextOpen(open, row.n))} />`)}
     <tfoot><tr>
-      <td colSpan="4">${t('tasks.total')} ${list.total.done}/${list.total.count}</td>
+      <td colSpan="4">${t('tasks.total')}</td>
       <td className="tk-c-num">${totalMinText(list.total)}</td>
       <td className="tk-c-num">${costText(list.total)}</td>
     </tr></tfoot>
@@ -104,9 +131,10 @@ export function TasksPanel({ snapshot, isOnline }) {
   const hasTable = state === 'ready' || state === 'offline'
   return html`<${GlassTile} edge="bottom" soft className="tk-panel" role="region" aria-label=${t('tasks.title')}>
     <header className="tk-head"><span className="sk-label">${t('tasks.title')}</span>${hasTable ? html`<span className="tk-count">${t('tasks.done', { done: list.total.done, count: list.total.count })}</span>` : null}</header>
+    ${hasTable ? html`<div className="tk-progress" role="progressbar" aria-label=${t('tasks.progress')} aria-valuemin="0" aria-valuemax=${list.total.count} aria-valuenow=${list.total.done}><span style=${{ width: `${donePercent(list.total)}%` }}></span></div>` : null}
     ${state === 'offline' ? html`<p className="tk-offline" role="status">${t('tasks.offline')}</p>` : null}
     ${state === 'loading' || state === 'empty' ? html`<p className="tk-note" role="status">${t(`tasks.${state}`)}</p>` : null}
     ${hasTable ? html`<${Table} list=${list} isStill=${state === 'offline'} />` : null}
-    ${hasTable ? html`<p className="tk-foot">${t('tasks.footnote')}</p>` : null}
+    ${hasTable ? html`<p className="tk-foot">${[t('tasks.footnote'), ...footnoteKeys(list).map(key => t(key))].join(' · ')}</p>` : null}
   <//>`
 }
