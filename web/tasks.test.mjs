@@ -167,7 +167,7 @@ test('the header has the count and a progress bar; the footer total does not rep
   assert.equal(donePercent({ done: 2, count: 5 }), 40)
   assert.equal(donePercent({ done: 0, count: 0 }), 0)
   assert.match(source, /role="progressbar"/)
-  assert.match(source, /<td colSpan="4">\$\{t\('tasks\.total'\)\}<\/td>/, 'the footer says Total, no count')
+  assert.match(source, /<td colSpan="3">\$\{t\('tasks\.total'\)\}<\/td>/, 'the footer says Total, no count')
 })
 
 test('the footnote explains + for unknown prices, — for no price, and removed tasks, each only when it applies', () => {
@@ -215,7 +215,7 @@ test('the cost column is wide enough and never wraps: its header, rows and total
   assert.match(source, /<td className="tk-c-num tk-c-cost">\$\{costText\(row\)\}<\/td>/)
   assert.match(source, /<td className="tk-c-num tk-c-cost">\$\{costText\(list\.total\)\}<\/td>/)
   assert.match(source, /<th className="tk-c-num tk-c-cost">/)
-  assert.match(css, /\.tk-table \.tk-c-cost\s*\{[^}]*width:\s*64px[^}]*white-space:\s*nowrap/)
+  assert.match(css, /\.tk-table \.tk-c-cost\s*\{[^}]*width:\s*72px[^}]*white-space:\s*nowrap[^}]*text-align:\s*right/)
   assert.match(css, /\.tk-table \.tk-c-num\s*\{[^}]*width:\s*44px/)
   assert.equal(STRINGS.en['tasks.colCost'], '≈', 'each cell carries its own $')
 })
@@ -248,7 +248,7 @@ test('only a working task quiet for QUIET_MS or more is flagged; done, review, w
 test('the quiet spinner is dimmed, the detail and member lines show last active, and the words are in en and th', () => {
   const source = read('./tasks.js')
 
-  assert.match(read('./space.css'), /\.tk-mark\.is-quiet\s*\{[^}]*opacity/)
+  assert.match(read('./space.css'), /\.tk-mark\.is-quiet\s*\{[^}]*color:\s*var\(--tk-dim\)/)
   assert.match(source, /isQuiet=\$\{quiet !== null\}/)
   assert.match(source, /t\('tasks\.quiet', \{ n: quiet \}\)/, 'a screen reader hears the quiet minutes')
   assert.match(source, /t\('tasks\.lastActive'/)
@@ -307,4 +307,57 @@ test('the quiet words reach a sighted user too: the status cell title and the op
   assert.match(source, /<td className="tk-c-mark" title=\$\{quiet === null \?/)
   assert.match(source, /tk-last tk-last--quiet/)
   assert.match(source, /<\$\{Detail\} row=\$\{row\} id=\$\{id\} now=\$\{now\} quiet=\$\{quiet\} \/>/)
+})
+
+test('a quiet spinner is still and in the dim grey, not a faded animation; the quiet words are lowercase in en and Thai has its own', () => {
+  const css = read('./space.css')
+
+  assert.match(css, /\.tk-mark\.is-quiet \.tk-spin\s*\{[^}]*animation:\s*none/)
+  assert.doesNotMatch(css, /\.tk-mark\.is-quiet\s*\{[^}]*opacity/, 'opacity .45 gave 1.9:1')
+  assert.equal(STRINGS.en['tasks.quiet'], 'no activity for {n} min')
+  assert.match(css, /\.tk-last--quiet::first-letter\s*\{[^}]*uppercase/, 'the detail line starts with a capital')
+  assert.equal(STRINGS.en['tasks.footRemoved'], 'the total includes removed tasks')
+  assert.doesNotMatch(STRINGS.th['tasks.footRemoved'], /รวมรวม/, 'no doubled word')
+})
+
+test('the who column is gone: who sits under the title, and no rule styles a heading as a who cell', () => {
+  const source = read('./tasks.js')
+  const css = read('./space.css')
+
+  assert.doesNotMatch(source, /tk-c-who|colWho/)
+  assert.match(source, /<span className="tk-who"/)
+  assert.doesNotMatch(css, /\.tk-c-who/, 'the old rule also hit the Who heading: 12px, grey, no uppercase')
+  assert.match(css, /\.tk-who\s*\{[^}]*display:\s*block/)
+})
+
+test('the title keeps its room: no who column, Min folds away in a narrow panel, the cost stays', () => {
+  const css = read('./space.css')
+  const widths = [...css.matchAll(/\.tk-table (?:th:first-child, )?\.tk-c-(\w+)\s*\{[^}]*?width:\s*(\d+)px/g)].map(m => [m[1], Number(m[2])])
+  const fixed = Object.fromEntries(widths)
+
+  assert.deepEqual([fixed.num, fixed.cost], [44, 72])
+  assert.match(css, /\.tk-panel\s*\{[^}]*container-type:\s*inline-size/)
+  assert.match(css, /@container \(max-width: 300px\)\s*\{\s*\.tk-table \.tk-c-min\s*\{\s*display:\s*none/)
+  assert.doesNotMatch(css, /@container[^{]*\{[^}]*tk-c-cost[^}]*display:\s*none/, 'the cost is never folded away')
+  // 24 (status) + 24 (#) + 44 (Min) + 72 (cost) leave a 320px table 156px for the title cell, 142px for its text after the chevron
+  assert.ok(320 - 24 - 24 - fixed.num - fixed.cost - 14 >= 140)
+  assert.ok(260 - 24 - 24 - fixed.cost - 14 >= 100, 'at 320px the panel is about 260px; with Min folded the text has at least 100px')
+})
+
+test('the footnote and the left column: footnote in the secondary grey, the column scrolls with a visible bar', () => {
+  const css = read('./space.css')
+
+  assert.match(css, /\.tk-foot\s*\{[^}]*color:\s*var\(--sk-text-2\)/)
+  assert.match(css, /\.hq-left\s*\{[^}]*scrollbar-width:\s*thin/)
+  assert.doesNotMatch(css, /\.hq-left::-webkit-scrollbar[^{]*\{\s*display:\s*none/)
+})
+
+test('a member counts as working only by its name: a nickname or id equal to another member\'s name is not it', () => {
+  const now = 500 * MIN
+  const task = { status: 'working', who: 'dev-1', work: [{ who: 'dev-1', workMs: 1 }], lastActiveAt: now - 40 * MIN }
+  const agent = (over) => ({ id: 'a1', name: 'zed', nickname: 'Zed', status: 'running', isMain: false, ...over })
+
+  assert.equal(quietMinutes(task, now, [agent({ nickname: 'dev-1' })]), '40', 'a nickname is not a name')
+  assert.equal(quietMinutes(task, now, [agent({ id: 'dev-1' })]), '40', 'nor is an id')
+  assert.equal(quietMinutes(task, now, [agent({ name: 'dev-1' })]), null, 'its name is')
 })
