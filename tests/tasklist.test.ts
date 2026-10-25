@@ -12,7 +12,7 @@ import type { EngineInterface } from 'claude-code'
 import { applyPlanTicks, mergeList, parsePlan, readList, writeList } from '../hooks/tasklist'
 import type { TaskList } from '../hooks/tasklist'
 
-const work = (over: Record<string, unknown> = {}) => ({ role: 'senior-dev', step: 'build', workMs: 60_000, inputTokens: 10, outputTokens: 20, cacheReadTokens: 30, cacheWriteTokens: 40, model: 'claude-sonnet-5-5', ...over })
+const work = (over: Record<string, unknown> = {}) => ({ role: 'senior-dev', step: 'build', workMs: 60_000, inputTokens: 10, outputTokens: 20, cacheReadTokens: 30, cacheWriteTokens: 40, model: 'claude-sonnet-5-5', lastAt: null, ...over })
 const task = (n: number, over: Record<string, unknown> = {}) => ({ n, title: `Task ${n}`, status: 'waiting', doneBy: null, startedAt: null, doneAt: null, work: {}, events: [], ...over })
 const OPTS = { plan: 'docs/plans/x.md', approvedAt: 1, now: 9, price: (w: { model: string | null }) => (w.model === 'mystery-model-9' ? null : 0.01) }
 const listOf = (tasks: unknown[], over: Record<string, unknown> = {}) => ({ version: 1, plan: 'docs/plans/x.md', approvedAt: 1_761_300_000_000, tasks, removed: { workMs: 0, costUsd: 0 }, ...over }) as TaskList
@@ -82,6 +82,14 @@ test('mergeList keeps the work of a task with the same number and takes the new 
   expect(one?.title).toBe('A renamed')
   expect(one?.work).toEqual({ 'senior-dev-1': work() })
   expect(one?.events).toEqual([{ at: 5, kind: 'start', who: 'senior-dev-1' }])
+})
+
+test('mergeList keeps lastAt on the work of a task that stays', () => {
+  const old = listOf([task(1, { status: 'working', work: { 'senior-dev-1': work({ lastAt: 4242 }) } })])
+
+  const merged = mergeList(old, [{ n: 1, title: 'Task 1', done: false }], OPTS)
+
+  expect(merged.tasks[0]?.work['senior-dev-1']?.lastAt).toBe(4242)
 })
 
 test('mergeList starts a new number waiting, next to the kept ones, in the new plan order', () => {
@@ -180,6 +188,7 @@ test('readList says no list, with a reason, for every kind of invalid file (AC12
       ['task work not an object', badTask({ work: 'lots' })],
       ['work time negative', badTask({ work: { 'a-1': work({ workMs: -5 }) } })],
       ['work time not a number', badTask({ work: { 'a-1': work({ workMs: 'long' }) } })],
+      ['work lastAt not a time', badTask({ work: { 'a-1': work({ lastAt: 'soon' }) } })],
       ['removed missing', JSON.stringify({ version: 1, plan: 'p.md', approvedAt: 1, tasks: [] })],
     ]
     for (const [label, text] of invalid) {
@@ -191,6 +200,16 @@ test('readList says no list, with a reason, for every kind of invalid file (AC12
       expect(out.kind, label).toBe('invalid')
       expect(out.reason, label).toBeTruthy()
     }
+})
+
+test('a list saved before lastAt loads with lastAt null, and a saved lastAt is kept', async () => {
+    const d = disk()
+    d.files.set(d.path, JSON.stringify(listOf([task(1, { work: { 'a-1': work({ lastAt: undefined }), 'b-1': work({ lastAt: 4242 }), 'c-1': work({ lastAt: null }) } })])))
+
+    const out = await readList(d.$, d.path)
+
+    const rows = out.list?.tasks[0]?.work
+    expect([rows?.['a-1']?.lastAt, rows?.['b-1']?.lastAt, rows?.['c-1']?.lastAt]).toEqual([null, 4242, null])
 })
 
 test('readList ignores a list with an unknown version, and says why (AC12)', async () => {
@@ -223,6 +242,16 @@ test('writeList writes a file that readList reads back as the same list,', async
 
     expect((await readList(d.$, d.path)).list).toEqual(saved)
     expect(JSON.parse(d.files.get(d.path) ?? 'null').version).toBe(1)
+})
+
+test('writeList then readList keeps each member\'s lastAt', async () => {
+  const d = disk()
+    const saved = listOf([task(1, { work: { 'a-1': work({ lastAt: 4242 }), 'b-1': work({ lastAt: null }) } })])
+
+    await writeList(d.$, d.path, saved)
+
+    const rows = (await readList(d.$, d.path)).list?.tasks[0]?.work
+    expect([rows?.['a-1']?.lastAt, rows?.['b-1']?.lastAt]).toEqual([4242, null])
 })
 
 test('writeList replaces an earlier file whole', async () => {

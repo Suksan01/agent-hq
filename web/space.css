@@ -606,17 +606,18 @@
 @media (prefers-reduced-motion: reduce) { .sk-bubble { animation: none; } }
 
 /* ---------- the Tasks panel (tasks.js): the approved plan's list as a ledger ---------- */
-.tk-panel { padding: 18px 14px 14px; overflow: hidden; }
+.tk-panel { padding: 18px 14px 14px; overflow: hidden; --tk-dim: rgba(242, 242, 245, 0.7); --sk-text-2: rgba(242, 242, 245, 0.78); } /* text 1.0 > secondary 0.78 > dim 0.7, each 4.5:1 or more even on a lit tile under the open-row overlay (--sk-text-3 gave 3.2:1, --sk-text-2 4:1) */
 .tk-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
 .tk-count, .tk-num, .tk-c-num, .tk-c-n { font-family: var(--sk-font-mono); font-variant-numeric: tabular-nums; }
 .tk-count { font-size: 12px; color: var(--sk-text-2); }
 .tk-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .tk-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 13px; }
-.tk-table th { font: 400 10px var(--sk-font-mono); text-transform: uppercase; letter-spacing: .06em; color: var(--sk-text-3); text-align: left; padding: 0 4px 6px; border-bottom: 1px solid var(--sk-line); }
+.tk-table th { font: 400 10px var(--sk-font-mono); text-transform: uppercase; letter-spacing: .06em; color: var(--tk-dim); text-align: left; padding: 0 4px 6px; border-bottom: 1px solid var(--sk-line); }
 .tk-table th:first-child, .tk-c-mark { width: 24px; padding-left: 0; padding-right: 0; text-align: center; }
-.tk-table th:nth-child(2), .tk-c-n { width: 24px; color: var(--sk-text-3); }
+.tk-table th:nth-child(2), .tk-c-n { width: 24px; color: var(--tk-dim); }
 .tk-table .tk-c-who { width: 62px; color: var(--sk-text-2); overflow-wrap: anywhere; font-size: 12px; }
 .tk-table .tk-c-num { width: 44px; text-align: right; }
+.tk-table .tk-c-cost { width: 64px; white-space: nowrap; } /* "$12.34+" at 13px mono is about 55px */
 .tk-table td { padding: 7px 4px; vertical-align: top; }
 .tk-c-title { overflow-wrap: anywhere; }
 .tk-row { border-bottom: 1px solid var(--sk-line); transition: background .2s; }
@@ -624,13 +625,16 @@
 .tk-row { cursor: pointer; }
 .tk-title { all: unset; box-sizing: border-box; display: block; width: 100%; cursor: pointer; overflow-wrap: anywhere; }
 .tk-title:focus-visible { outline: 1.5px solid var(--st-lead); outline-offset: 2px; border-radius: 4px; }
-.tk-task--waiting .tk-row { color: var(--sk-text-3); }
+.tk-task--waiting .tk-row { color: var(--tk-dim); }
 .tk-task--done .tk-c-title { color: var(--sk-text-2); }
 .tk-mark { display: inline-flex; width: 16px; height: 16px; align-items: center; justify-content: center; font-size: 15px; line-height: 1; }
 .tk-mark--done { color: var(--st-done); }
 .tk-mark--review { color: var(--st-waiting); }
 .tk-mark--working { color: var(--st-working); }
 .tk-spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid color-mix(in srgb, currentColor 25%, transparent); border-top-color: currentColor; animation: tk-spin .8s linear infinite; }
+.tk-mark.is-quiet { opacity: .45; } /* working, but quiet for a while */
+.tk-last { margin: 0 0 4px; font-size: 12px; color: var(--sk-text-2); }
+.tk-last--quiet { color: var(--st-waiting); }
 .tk-mark.is-still .tk-spin { animation: none; border-top-color: color-mix(in srgb, currentColor 25%, transparent); }
 @keyframes tk-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .tk-spin { animation: none; border-top-color: currentColor; border-right-color: currentColor; } }
@@ -641,10 +645,18 @@
 .tk-w-role, .tk-w-step { color: var(--sk-text-2); }
 .tk-num { color: var(--sk-text-2); font-size: 11px; }
 .tk-events { display: grid; gap: 2px; margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--sk-line); color: var(--sk-text-2); overflow-wrap: anywhere; }
-.tk-events time { font-family: var(--sk-font-mono); color: var(--sk-text-3); margin-right: 4px; }
-.tk-none { margin: 0; color: var(--sk-text-3); font-size: 12px; }
+.tk-events time { font-family: var(--sk-font-mono); color: var(--tk-dim); margin-right: 4px; }
+.tk-none { margin: 0; color: var(--tk-dim); font-size: 12px; }
 .tk-table tfoot td { padding-top: 10px; font-weight: 600; border-top: 1px solid var(--sk-line); }
-.tk-foot { margin: 10px 0 0; font-size: 11px; color: var(--sk-text-3); }
+.tk-foot { margin: 10px 0 0; font-size: 11px; color: var(--tk-dim); }
+.tk-progress { height: 3px; margin: -4px 0 10px; border-radius: 2px; background: rgba(255, 255, 255, .1); overflow: hidden; }
+.tk-progress span { display: block; height: 100%; border-radius: 2px; background: var(--st-done); transition: width .4s var(--sk-ease); }
+.tk-title { display: flex; gap: 4px; align-items: baseline; }
+.tk-chev { flex: none; width: 10px; color: var(--tk-dim); transition: transform .2s var(--sk-ease); }
+.tk-task.is-open .tk-chev { transform: rotate(90deg); color: var(--sk-text); }
+.tk-task.is-open .tk-row { background: rgba(255, 255, 255, .07); }
+.tk-task.is-open .tk-title { font-weight: 600; }
+@media (prefers-reduced-motion: reduce) { .tk-chev, .tk-progress span { transition: none; } }
 .tk-note, .tk-offline { margin: 4px 0 10px; color: var(--sk-text-2); font-size: 13px; }
 .tk-offline { padding: 6px 10px; border-radius: 12px; background: color-mix(in srgb, var(--st-waiting) 14%, transparent); color: var(--st-waiting); }
 .hq-left .tk-panel { width: 100%; min-width: 0; box-sizing: border-box; }
@@ -657,6 +669,7 @@
   }
 }
 html[lang='th'] :is(.tk-table th, .tk-foot, .tk-note, .tk-offline) { letter-spacing: 0; line-height: 1.5; }
+html[lang='th'] .tk-table th { font-size: 12px; text-transform: none; }
 
 /* ---------- Thai (html lang="th"): room for the marks above and below, no tracking, long runs may break ---------- */
 html[lang='th'] .sk-label { letter-spacing: 0; }

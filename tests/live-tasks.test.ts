@@ -90,8 +90,8 @@ test('each member\'s work is listed with its role, step, time, the four token co
   const [first] = three?.work ?? []
   expect(near(first?.costUsd, priced(work(2)))).toBe(true)
   expect(three?.work.map(w => ({ ...w, costUsd: w.costUsd === null ? null : 'priced' }))).toEqual([
-    { who: 'dev-3', role: 'dev', step: 'build', workMs: 2 * MIN, inputTokens: 100, outputTokens: 1_000_000, cacheReadTokens: 7, cacheWriteTokens: 3, costUsd: 'priced' },
-    { who: 'rev-1', role: 'reviewer', step: 'review', workMs: 1 * MIN, inputTokens: 100, outputTokens: 1_000_000, cacheReadTokens: 7, cacheWriteTokens: 3, costUsd: null },
+    { who: 'dev-3', role: 'dev', step: 'build', workMs: 2 * MIN, inputTokens: 100, outputTokens: 1_000_000, cacheReadTokens: 7, cacheWriteTokens: 3, costUsd: 'priced', lastAt: null },
+    { who: 'rev-1', role: 'reviewer', step: 'review', workMs: 1 * MIN, inputTokens: 100, outputTokens: 1_000_000, cacheReadTokens: 7, cacheWriteTokens: 3, costUsd: null, lastAt: null },
   ])
 })
 
@@ -157,4 +157,16 @@ test('a member just linked, with nothing counted, does not make the row or the t
   expect([linked?.rows[0]?.isPartial, linked?.total.isPartial]).toEqual([false, false])
   expect(near(linked?.rows[0]?.costUsd, priced(work(2)))).toBe(true)
   expect([unpriced?.rows[0]?.isPartial, unpriced?.total.isPartial]).toEqual([true, true])
+})
+
+test('lastActiveAt is the latest lastAt over a task\'s work, null when nothing was counted or the file predates the field', () => {
+  const rows = rowsOf(listOf([
+    task(1, { status: 'working', work: { 'dev-1': work(1, { lastAt: 1000 }), 'rev-1': work(1, { lastAt: 5000 }), 'qa-1': work(1, { lastAt: 3000 }) } }),
+    task(2, { status: 'working', work: { 'dev-2': work(1, { lastAt: null }) } }),
+    task(3, { work: { 'dev-3': work(1) } }), // an old file: no lastAt at all
+    task(4),
+  ]))
+  expect(rows.map(r => r.lastActiveAt)).toEqual([5000, null, null, null])
+  expect(rows[0]?.work.map(w => w.lastAt)).toEqual([1000, 5000, 3000])
+  expect(rows[2]?.work[0]?.lastAt).toBeNull()
 })

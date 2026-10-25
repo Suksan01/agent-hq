@@ -17,7 +17,7 @@ export function linkedTask(list: TaskList, member: string): number | undefined {
   return found?.n
 }
 
-const NO_WORK: TaskWork = { role: '', step: 'build', workMs: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, model: null }
+const NO_WORK: TaskWork = { role: '', step: 'build', workMs: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, model: null, lastAt: null }
 
 /** A task's status after a member's turn on it: a waiting task starts, a builder reopens a task in review, a reviewer's turn keeps it. */
 function statusAfter(task: ListTask, work: TaskWork): ListTask['status'] {
@@ -44,6 +44,7 @@ export function addTurnToTask(list: TaskList, member: string | undefined, turn: 
       cacheReadTokens: before.cacheReadTokens + count(usage?.cache_read_input_tokens),
       cacheWriteTokens: before.cacheWriteTokens + count(usage?.cache_creation_input_tokens),
       model: typeof usage?.model === 'string' && usage.model ? usage.model : before.model,
+      lastAt: at,
     }
     const status = statusAfter(task, before)
     return { ...task, status, startedAt: task.startedAt ?? at, work: { ...task.work, [member]: row } }

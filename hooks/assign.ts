@@ -173,7 +173,7 @@ export function missingTask(list: TaskList, n: number): string | undefined {
 export function linkMember(list: TaskList, n: number, link: { status: 'working' | 'review'; who: string; role: string; step: string; kind: 'start' | 'review'; at: number }): TaskList {
   const tasks = list.tasks.map(x => {
     if (x.n !== n) return x
-    const row = (Object.hasOwn(x.work, link.who) ? x.work[link.who] : undefined) ?? { role: link.role, step: link.step, workMs: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, model: null }
+    const row = (Object.hasOwn(x.work, link.who) ? x.work[link.who] : undefined) ?? { role: link.role, step: link.step, workMs: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, model: null, lastAt: null }
     // a done task given work again is open again
     return { ...x, status: link.status, ...(x.status === 'done' ? { doneAt: null, doneBy: null } : {}), startedAt: x.startedAt ?? link.at, work: { ...x.work, [link.who]: row }, events: [...x.events, { at: link.at, kind: link.kind, who: link.who }] }
   })

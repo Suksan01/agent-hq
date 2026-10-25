@@ -14,7 +14,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import { STRINGS } from './i18n.js'
-import { costText, memberLine, minText, nextOpen, panelState, timeline, totalMinText } from './tasks.js'
+import { QUIET_MS, agoMinutes, costText, donePercent, footnoteKeys, memberLine, minText, needsTick, nextOpen, panelNow, panelState, quietMinutes, timeline, totalMinText, whoText } from './tasks.js'
 
 const MIN = 60_000
 const THAI = /[฀-๿]/
@@ -81,7 +81,6 @@ test('the panel draws plan text as text, never as HTML, and puts a real button o
   assert.doesNotMatch(source, /innerHTML|dangerouslySetInnerHTML|insertAdjacentHTML|document\.write/)
   assert.match(source, /<button/, 'a real <button> per row title')
   assert.doesNotMatch(source, /role="button"|role='button'/, 'not a role=button on a <tr>')
-  assert.match(source, /aria-expanded/)
 })
 
 /** The bodies of every `@media (prefers-reduced-motion: reduce) { ... }` block in the css, braces matched. */
@@ -132,4 +131,180 @@ test('the total row shows whole minutes and a cost even with no work counted, as
   assert.equal(totalMinText({ workMs: 31_000 }), '<1')
   assert.equal(totalMinText({ workMs: 5.6 * MIN }), '6')
   assert.equal(costText({ costUsd: 0, isPartial: false }), '$0.00')
+})
+
+test('the status cell says the status in words for a screen reader, in en and th', () => {
+  const source = read('./tasks.js')
+
+  assert.match(read('./space.css'), /\.tk-sr\s*\{[^}]*clip: rect\(0 0 0 0\)/, 'tk-sr hides it visually only')
+  for (const status of ['done', 'working', 'review', 'waiting']) assert.match(STRINGS.th[`tasks.status.${status}`], THAI)
+})
+
+test('the greys of the tasks table keep at least 4.5:1 on the lightest tile it can sit on, in order: text > secondary > dim', () => {
+  const css = read('./space.css')
+  const panel = /\.tk-panel \{([^}]*)\}/.exec(css)[1]
+  const alphaOf = name => Number(new RegExp(`${name}:\\s*rgba\\(242,\\s*242,\\s*245,\\s*([\\d.]+)\\)`).exec(panel)[1])
+  const lin = c => ((c /= 255) <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)
+  const lum = ([x, y, z]) => 0.2126 * lin(x) + 0.7152 * lin(y) + 0.0722 * lin(z)
+  const mix = (fg, alpha, bg) => fg.map((c, i) => c * alpha + bg[i] * (1 - alpha))
+  const ratio = (x, y) => (Math.max(lum(x), lum(y)) + 0.05) / (Math.min(lum(x), lum(y)) + 0.05)
+  const overlay = name => Number(new RegExp(`${name}[^{]*\\{[^}]*background:\\s*rgba\\(255,\\s*255,\\s*255,\\s*([\\d.]+)\\)`).exec(css)[1])
+  const lit = [60, 60, 80] // a tile under a bright planet or glow (the .sk-tile gradients): the lightest we have seen
+  const worst = Math.max(overlay('\\.tk-task\\.is-open \\.tk-row'), overlay('\\.tk-row:hover'), overlay('\\.tk-detail td'))
+  const bg = mix([255, 255, 255], worst, lit) // the open row's overlay, the lightest of the three
+
+  for (const name of ['--tk-dim', '--sk-text-2']) {
+    const ink = mix([242, 242, 245], alphaOf(name), bg)
+    assert.ok(ratio(ink, bg) >= 4.5, `${name} contrast ${ratio(ink, bg).toFixed(2)} on ${bg.map(Math.round)}`)
+  }
+  assert.ok(1 > alphaOf('--sk-text-2') && alphaOf('--sk-text-2') > alphaOf('--tk-dim'), 'text 1.0 > secondary > dim')
+  assert.doesNotMatch(css.slice(css.indexOf('.tk-panel {')), /\.tk-[^{]*\{[^}]*var\(--sk-text-3\)/, 'no tasks rule uses the 3.2:1 grey')
+})
+
+test('the header has the count and a progress bar; the footer total does not repeat the count', () => {
+  const source = read('./tasks.js')
+
+  assert.equal(donePercent({ done: 2, count: 5 }), 40)
+  assert.equal(donePercent({ done: 0, count: 0 }), 0)
+  assert.match(source, /role="progressbar"/)
+  assert.match(source, /<td colSpan="4">\$\{t\('tasks\.total'\)\}<\/td>/, 'the footer says Total, no count')
+})
+
+test('the footnote explains + for unknown prices, — for no price, and removed tasks, each only when it applies', () => {
+  const rows = (...costs) => costs.map(([costUsd, isPartial], n) => ({ n, costUsd, isPartial }))
+
+  assert.deepEqual(footnoteKeys({ rows: rows([1, false]), total: { costUsd: 1, isPartial: false }, removed: { workMs: 0, costUsd: 0 } }), [])
+  assert.deepEqual(footnoteKeys({ rows: rows([1, true]), total: { costUsd: 1, isPartial: true }, removed: { workMs: 0, costUsd: 0 } }), ['tasks.footPartial'])
+  assert.deepEqual(footnoteKeys({ rows: rows([null, false], [1, false]), total: { costUsd: 1, isPartial: false }, removed: { workMs: 0, costUsd: 0 } }), ['tasks.footNoPrice'])
+  assert.deepEqual(footnoteKeys({ rows: rows([1, true], [null, false]), total: { costUsd: 1, isPartial: true }, removed: { workMs: 5, costUsd: 0 } }), ['tasks.footPartial', 'tasks.footNoPrice', 'tasks.footRemoved'])
+  for (const key of ['footPartial', 'footNoPrice', 'footRemoved']) {
+    assert.match(STRINGS.th[`tasks.${key}`], THAI)
+    assert.ok(STRINGS.en[`tasks.${key}`])
+  }
+})
+
+test('an expandable row shows a chevron that turns when open, an open-row style, and no motion under reduced motion', () => {
+  const source = read('./tasks.js')
+  const css = read('./space.css')
+
+  assert.match(css, /\.tk-task\.is-open \.tk-chev\s*\{[^}]*rotate\(90deg\)/)
+  assert.match(css, /\.tk-task\.is-open \.tk-row\s*\{[^}]*background/)
+  assert.ok(reducedMotionBlocks(css).some(body => /\.tk-chev[^{]*\{[^}]*transition:\s*none/.test(body)), 'the chevron does not animate under reduced motion')
+})
+
+test('Thai headings of the table are 12px, not the 10px mono of the Latin ones', () => {
+  assert.match(read('./space.css'), /html\[lang='th'\] \.tk-table th\s*\{[^}]*font-size:\s*12px/)
+})
+
+test('parallel work shows the first member and +n for the others with counted work; the title lists them all', () => {
+  const work = (who, workMs) => ({ who, workMs })
+
+  assert.deepEqual(whoText({ who: 'dev-1', work: [work('dev-1', 5000)] }), { text: 'dev-1', title: '' })
+  assert.deepEqual(whoText({ who: 'dev-1', work: [work('dev-1', 5000), work('qa-1', 9000), work('qa-1', 1000), work('rev-1', 0)] }), { text: 'dev-1 +1', title: 'dev-1, qa-1' })
+  assert.deepEqual(whoText({ who: 'dev-1', work: [work('dev-1', 5000), { ...work('qa-1', 0), outputTokens: 3 }] }), { text: 'dev-1 +1', title: 'dev-1, qa-1' }, 'tokens without time count, as the terminal counts them')
+  assert.deepEqual(whoText({ who: 'dev-1', work: [work('dev-1', 1), work('dev-2', 1), work('qa-1', 1)] }), { text: 'dev-1 +2', title: 'dev-1, dev-2, qa-1' })
+  assert.deepEqual(whoText({ who: null, work: [] }), { text: '—', title: '' })
+  assert.deepEqual(whoText({ who: 'dev-1' }), { text: 'dev-1', title: '' }, 'an older snapshot without work entries')
+})
+
+test('the cost column is wide enough and never wraps: its header, rows and total carry tk-c-cost; Min stays narrow', () => {
+  const source = read('./tasks.js')
+  const css = read('./space.css')
+
+  assert.equal(costText({ costUsd: 123.45, isPartial: true }), '$123.45+')
+  assert.match(source, /<td className="tk-c-num tk-c-cost">\$\{costText\(row\)\}<\/td>/)
+  assert.match(source, /<td className="tk-c-num tk-c-cost">\$\{costText\(list\.total\)\}<\/td>/)
+  assert.match(source, /<th className="tk-c-num tk-c-cost">/)
+  assert.match(css, /\.tk-table \.tk-c-cost\s*\{[^}]*width:\s*64px[^}]*white-space:\s*nowrap/)
+  assert.match(css, /\.tk-table \.tk-c-num\s*\{[^}]*width:\s*44px/)
+  assert.equal(STRINGS.en['tasks.colCost'], '≈', 'each cell carries its own $')
+})
+
+test('"last active" counts whole minutes, never goes negative, and says nothing without a stamp', () => {
+  const now = 100 * MIN
+
+  assert.equal(agoMinutes(now - 5 * MIN, now), '5')
+  assert.equal(agoMinutes(now - 5.9 * MIN, now), '5')
+  assert.equal(agoMinutes(now - 20_000, now), '<1')
+  assert.equal(agoMinutes(now + 7 * MIN, now), '<1', 'a stamp in the future is not negative')
+  assert.equal(agoMinutes(null, now), null)
+  assert.equal(agoMinutes(undefined, now), null, 'a snapshot of an older mod')
+  assert.equal(agoMinutes(Number.NaN, now), null)
+})
+
+test('only a working task quiet for QUIET_MS or more is flagged; done, review, waiting and unknown never are', () => {
+  const now = 500 * MIN
+  const row = (status, lastActiveAt) => ({ status, lastActiveAt })
+
+  assert.equal(quietMinutes(row('working', now - QUIET_MS), now), '10', 'exactly the threshold')
+  assert.equal(quietMinutes(row('working', now - QUIET_MS + 1), now), null, 'just under it')
+  assert.equal(quietMinutes(row('working', now - 45 * MIN), now), '45')
+  assert.equal(quietMinutes(row('working', now + MIN), now), null, 'a future stamp is not quiet')
+  assert.equal(quietMinutes(row('working', null), now), null, 'unknown is not flagged')
+  assert.equal(quietMinutes({ status: 'working' }, now), null)
+  for (const status of ['done', 'waiting', 'review']) assert.equal(quietMinutes(row(status, now - 60 * MIN), now), null, `${status} is never flagged`)
+})
+
+test('the quiet spinner is dimmed, the detail and member lines show last active, and the words are in en and th', () => {
+  const source = read('./tasks.js')
+
+  assert.match(read('./space.css'), /\.tk-mark\.is-quiet\s*\{[^}]*opacity/)
+  assert.match(source, /isQuiet=\$\{quiet !== null\}/)
+  assert.match(source, /t\('tasks\.quiet', \{ n: quiet \}\)/, 'a screen reader hears the quiet minutes')
+  assert.match(source, /t\('tasks\.lastActive'/)
+  assert.match(source, /t\('tasks\.ago'/)
+  for (const key of ['lastActive', 'ago', 'quiet']) {
+    assert.match(STRINGS.en[`tasks.${key}`], /\{n\}/)
+    assert.match(STRINGS.th[`tasks.${key}`], THAI)
+  }
+})
+
+test('quiet is measured on the page clock, so a working task whose snapshot is old still gets flagged; offline keeps the last seen time', () => {
+  const at = 1_000 * MIN // the last snapshot: the mod sends none while nobody works
+  const snapshot = { at, taskList: { rows: [{ status: 'working', lastActiveAt: at - MIN }] } }
+  const later = () => at + 30 * MIN
+  const row = snapshot.taskList.rows[0]
+
+  assert.equal(quietMinutes(row, snapshot.at), null, 'frozen at the snapshot time it never shows')
+  assert.equal(quietMinutes(row, panelNow(snapshot, true, later)), '31', 'the page clock moves on')
+  assert.equal(panelNow(snapshot, false, later), at, 'offline: as last seen')
+  assert.equal(panelNow({}, false, later), later(), 'no snapshot time: the clock')
+  assert.equal(agoMinutes(at + 5 * MIN, panelNow(snapshot, true, () => at)), '<1', 'a clock behind the stamp never shows negative')
+  assert.equal(needsTick(snapshot.taskList), true)
+  assert.equal(needsTick({ rows: [{ status: 'done' }, { status: 'waiting' }] }), false, 'no timer without a working task')
+  assert.equal(needsTick(null), false)
+})
+
+test('the panel draws again on a slow timer while a task works, and clears it', () => {
+  const source = read('./tasks.js')
+
+  assert.match(source, /setInterval\(\(\) => setTick\(n => n \+ 1\), TICK_MS\)/)
+  assert.match(source, /return \(\) => clearInterval\(timer\)/)
+  assert.match(source, /isTicking = isOnline && needsTick\(list\)/)
+})
+
+test('quiet needs no working member: a long turn is not quiet, an abandoned task is, and a null stamp falls back to the start', () => {
+  const now = 500 * MIN
+  const agent = (name, status) => ({ id: `id-${name}`, name, nickname: `Nick ${name}`, status, isMain: false })
+  const task = (over = {}) => ({ status: 'working', who: 'dev-1', work: [{ who: 'dev-1', workMs: 1000 }], lastActiveAt: now - 40 * MIN, startedAt: now - 90 * MIN, ...over })
+
+  assert.equal(quietMinutes(task(), now, [agent('dev-1', 'running')]), null, 'a member in one long turn is working: the stamp is only set at a turn end')
+  assert.equal(quietMinutes(task(), now, [agent('dev-1', 'pending')]), null)
+  assert.equal(quietMinutes(task(), now, [agent('dev-1', 'idle')]), '40', 'its member stopped and the stamp is old')
+  assert.equal(quietMinutes(task(), now, []), '40', 'a member gone from the list')
+  assert.equal(quietMinutes(task(), now, [agent('dev-2', 'running')]), '40', 'another member working is not this task\'s')
+  assert.equal(quietMinutes(task({ work: [{ who: 'dev-1' }, { who: 'qa-1' }] }), now, [agent('dev-1', 'idle'), agent('qa-1', 'running')]), null, 'any one of its members working')
+  assert.equal(quietMinutes(task({ lastActiveAt: null }), now, []), '90', 'no stamp: measured from when it started')
+  assert.equal(quietMinutes(task({ lastActiveAt: null, startedAt: null }), now, []), null, 'no usable time: not flagged')
+  assert.equal(quietMinutes(task({ lastActiveAt: now - 3 * MIN }), now, []), null, 'recent')
+  assert.equal(quietMinutes(task(), Number.NaN, []), null)
+  assert.equal(agoMinutes(now - MIN, Number.NaN), null, 'no usable clock: no last-active line')
+})
+
+test('the quiet words reach a sighted user too: the status cell title and the open detail', () => {
+  const source = read('./tasks.js')
+
+  assert.match(source, /<td className="tk-c-mark" title=\$\{quiet === null \?/)
+  assert.match(source, /tk-last tk-last--quiet/)
+  assert.match(source, /<\$\{Detail\} row=\$\{row\} id=\$\{id\} now=\$\{now\} quiet=\$\{quiet\} \/>/)
 })
