@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.8.1 (2026-10-25)
 
 ### Changed
 - **Impeccable is the default design-quality skill for UI roles.** When the plugin is installed, the team interview adds
