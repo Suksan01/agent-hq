@@ -30,6 +30,8 @@ const ASKS_MAX = 50
 const CARDS_MAX = 5 // asks that carry a card: the state is re-sent whole at every change
 export const CARD_MAX_BYTES = 2048
 const REASON_MAX = 300
+const SIZES_MAX = 8 // other fields named on a card, and the longest name kept of each
+const KEY_MAX = 40
 // the fields that decide an ask; everything else a tool takes (file contents, edit strings, cells) is shown by size only
 const DECIDING_FIELDS: readonly string[] = ['command', 'file_path', 'notebook_path', 'url', 'pattern', 'description']
 /** How long an idle teammate (done with its turn) counts as needing the person; after that it is only resting. */
@@ -76,7 +78,8 @@ export function cardOf(tool: string, input: unknown, reason?: string): AskCard {
   if (total > CARD_MAX_BYTES || fields.some(f => maskSecrets(f.text) !== f.text)) return hidden
   const sizes = Object.keys(given)
     .filter(key => !DECIDING_FIELDS.includes(key) && (typeof given[key] === 'string' || (typeof given[key] === 'object' && given[key] !== null)))
-    .map(key => ({ key, chars: sizeOf(given[key]) }))
+    .slice(0, SIZES_MAX)
+    .map(key => ({ key: maskSecrets(clipTo(key, KEY_MAX)), chars: sizeOf(given[key]) }))
   return withReason({ tool, fields, sizes, isHidden: false })
 }
 
