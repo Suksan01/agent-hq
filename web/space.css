@@ -683,3 +683,20 @@ html[lang='th'] :is(.sk-body-text, .sk-toast__text, .sk-inbox__ask, .sk-confirm,
 }
 
 .sk-chip[disabled] { opacity: .4; cursor: not-allowed; }
+
+/* Paused: members not working and the seats never started (web/paused.js). Greys stay at 0.78 of the text colour or more: 4.5:1 on the glass. */
+.pz-panel { display: grid; gap: 10px; }
+.pz-tile { padding: 8px 10px; --sk-text-2: rgba(242, 242, 245, 0.78); }
+.pz-head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 4px; border: 0; background: transparent; color: var(--sk-text); font: inherit; cursor: pointer; text-align: left; }
+.pz-head:focus-visible, .pz-pick:focus-visible { outline: 2px solid #fff; outline-offset: 2px; border-radius: 12px; }
+.pz-count { margin-left: auto; font: 500 12px var(--sk-font-mono); color: var(--sk-text-2); font-variant-numeric: tabular-nums; }
+.pz-caret { color: var(--sk-text-2); font-size: 11px; }
+.pz-list { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 2px; }
+.pz-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'who state' 'role ago'; gap: 2px 10px; align-items: center; width: 100%; padding: 7px 6px; border: 0; border-radius: 12px; background: transparent; color: var(--sk-text); font: 400 13px var(--sk-font-title); text-align: left; box-sizing: border-box; }
+.pz-pick { cursor: pointer; }
+.pz-pick:hover { background: rgba(255, 255, 255, 0.06); }
+.pz-who { grid-area: who; font-weight: 600; overflow-wrap: anywhere; }
+.pz-row > .sk-pill { grid-area: state; justify-self: end; }
+.pz-role, .pz-ago { color: var(--sk-text-2); font-size: 12px; overflow-wrap: anywhere; }
+.pz-role { grid-area: role; }
+.pz-ago { grid-area: ago; justify-self: end; }

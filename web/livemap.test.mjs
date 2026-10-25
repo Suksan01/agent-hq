@@ -261,3 +261,28 @@ test("groups give the lead (only) its session's next steps", () => {
   assert.deepEqual(group.agents.find(a => a.isLead).suggestions, { recap: null, items: ['Review it'], at: 3 })
   assert.equal(group.agents.find(a => !a.isLead).suggestions, undefined)
 })
+
+// ---- the Paused section: paused members leave the main groups
+
+test('paused members leave the diagram and space groups, but the lead, working and needs-you members stay', () => {
+  const s1 = session('s1', 'app', [lead, agent('work'), agent('idle', { status: 'idle', isPaused: true }), agent('done', { status: 'completed', isPaused: true }), agent('ask', { status: 'idle', isPaused: true }), agent('mainpaused', { isPaused: true, isMain: true })], { inbox: [{ agent: 'ask', what: 'Bash: ls' }] })
+  const sessions = sessionsOf({ v: 2, sessions: [s1] })
+
+  const ids = groupsOf(sessions, sessionNames(sessions), () => 0)[0].agents.map(a => a.id)
+
+  assert.deepEqual([...ids].sort(), ['ask', 'main', 'mainpaused', 'work']) // needs-you stays; a lead is never paused
+})
+
+test('an older mod without isPaused or seats draws everyone, and counts still come from every member', () => {
+  const s1 = session('s1', 'app', [lead, agent('a'), agent('b', { status: 'completed' })])
+  const sessions = sessionsOf({ v: 2, sessions: [s1] })
+
+  assert.equal(groupsOf(sessions, sessionNames(sessions), () => 0)[0].agents.length, 3)
+  assert.deepEqual(sessions[0].snapshot.seats, [])
+})
+
+test('counts include paused members: done and failed come from the agents, a zero folded adds nothing', () => {
+  const a = session('a', 'app', [lead, agent('1'), agent('2', { status: 'completed', isPaused: true }), agent('3', { status: 'failed', isPaused: true }), agent('4', { status: 'killed', isPaused: true }), agent('5', { status: 'idle', isPaused: true })], { folded: { done: 0, failed: 0 } })
+
+  assert.deepEqual(countsOf([a]), { working: 1, waiting: 0, done: 1, failed: 2 })
+})

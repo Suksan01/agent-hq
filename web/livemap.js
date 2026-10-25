@@ -14,7 +14,7 @@ export const statusOf = status => STATUS_OF[status] ?? (['working', 'waiting', '
 const LEAD_TONE = { running: 'working', needs_input: 'waiting', done: 'done', error: 'failed' }
 export const agentStatus = a => (a.isMain ? LEAD_TONE[a.tone] ?? 'working' : statusOf(a.status))
 
-export const BLANK = { at: 0, team: null, agents: [], tasks: [], taskList: null, roles: [], overall: { done: 0, active: 0, total: 0 }, tasksProgress: { done: 0, active: 0, total: 0 }, notice: null, hideFinished: false, events: [], folded: { done: 0, failed: 0 } }
+export const BLANK = { at: 0, team: null, agents: [], seats: [], tasks: [], taskList: null, roles: [], overall: { done: 0, active: 0, total: 0 }, tasksProgress: { done: 0, active: 0, total: 0 }, notice: null, hideFinished: false, events: [], folded: { done: 0, failed: 0 } }
 
 /** /events and /state carry {v: 2, sessions: [{session, cwd, label, alive, snapshot}]}; an older single snapshot is one session. Stable order: name, then id. */
 export function sessionsOf(data) {
@@ -39,6 +39,9 @@ export function progressOf(agent) {
 /** Who is waiting for the person, as `session|agent` ids. */
 export const waitingIds = sessions => new Set(sessions.flatMap(s => inboxOf(s.snapshot).map(i => `${keyOf(s)}|${i.agent}`)))
 
+/** Whether a member goes to the Paused section: the mod says so (`isPaused`; an older mod never does), and it is neither the lead nor waiting on the person. */
+export const isPausedAgent = (agent, needsYou) => agent.isPaused === true && !agent.isMain && !needsYou
+
 /**
  * The groups the diagram and space views draw: one per session, its agents in the views' shape. `clockOf(session)` is the engine's time
  * (ms) so a working agent's current call can say how long it has run.
@@ -50,7 +53,7 @@ export function groupsOf(sessions, names, clockOf = () => 0) {
     const n = names.get(s.session) ?? { team: s.label, folder: s.label, tag: '' }
     const clock = clockOf(s.session)
     const talk = talkOf(s.snapshot)
-    const agents = [...s.snapshot.agents].sort((a, b) => Number(b.isMain) - Number(a.isMain) || a.id.localeCompare(b.id)).map(a => {
+    const agents = s.snapshot.agents.filter(a => !isPausedAgent(a, waiting.has(`${keyOf(s)}|${a.id}`))).sort((a, b) => Number(b.isMain) - Number(a.isMain) || a.id.localeCompare(b.id)).map(a => {
       const status = agentStatus(a)
       const needsYou = waiting.has(`${keyOf(s)}|${a.id}`)
       return {
