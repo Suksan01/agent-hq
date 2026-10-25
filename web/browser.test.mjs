@@ -173,7 +173,7 @@ test('the Tasks table: every row has as many cells as the header, counting colSp
 test('below 1100px the last Paused row stays clickable: the left column stops above the needs-you and activity stack', { skip, timeout: slow(60_000) }, async t => {
   const world = newWorld(t)
   const { alpha, alphaMod } = await twoSessions(world)
-  const paused = ['p1', 'p2', 'p3', 'p4'].map(id => [id, `Idle ${id}`, 'idle', { isPaused: true }])
+  const paused = [['w1', 'Waits', 'waiting'], ...['p1', 'p2', 'p3', 'p4'].map(id => [id, `Idle ${id}`, 'idle', { isPaused: true }])] // one member needs the person: the stack has its needs-you pill
   const seats = [{ name: 'qa-2', role: 'qa', roleTitle: 'QA Engineer' }, { name: 'rev-2', role: 'reviewer', roleTitle: 'Code Reviewer' }]
   alphaMod.make = mark => ({ ...buildSnapshot({ team: 'Alpha Team', mark, agents: paused }), seats })
   alphaMod.write(1)
@@ -182,6 +182,7 @@ test('below 1100px the last Paused row stays clickable: the left column stops ab
   await until(() => page.eval(`!!document.querySelector('.pz-head')`), 15_000, 'the Paused section')
   await page.eval(`document.querySelector('.pz-head').click()`)
   await until(() => page.eval(`document.querySelectorAll('.pz-row').length === 6`), 5000, 'four members and two seats listed')
+  assert.ok(await page.eval(`document.querySelector('.hq-right').getBoundingClientRect().height > 0`), 'setup: the stack under the left column is not empty')
 
   await page.eval(`(() => { const left = document.querySelector('.hq-left'); left.scrollTop = left.scrollHeight })()`)
   await sleep(300)
@@ -195,5 +196,5 @@ test('below 1100px the last Paused row stays clickable: the left column stops ab
   })()`)
 
   assert.ok(hit.isLast, `the last Paused row is what sits under its own centre (its bottom ${hit.lastBottom}, the stack starts at ${hit.rightTop})`)
-  assert.ok(hit.lastBottom <= hit.rightTop || hit.rightHeight === 0, 'the column ends above the stack')
+  assert.ok(hit.rightHeight > 0 && hit.lastBottom <= hit.rightTop, 'the column ends above the stack')
 })
