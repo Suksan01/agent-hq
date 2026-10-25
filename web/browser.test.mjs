@@ -102,3 +102,30 @@ test('kill -9 of the hub: the page reconnects by itself within the backoff, with
   assert.ok(backAt < slow(15_000), `back within the backoff (${backAt.toFixed(0)} ms)`)
   console.log(`[browser 2] hub killed: live data on the page again after ${backAt.toFixed(0)} ms, ${events().length} /events requests, 0 refused`)
 })
+
+// ---- 3. the Tasks panel: what a screen reader gets, and the row that opens --------------------------------------------------------
+
+test('the Tasks panel: a progressbar with its text, the status in words beside a hidden icon, and aria-expanded following a click', { skip, timeout: slow(60_000) }, async t => {
+  const world = newWorld(t)
+  const { alpha, alphaMod } = await twoSessions(world)
+  const row = (n, status, over = {}) => ({ n, title: `Task ${n}`, status, who: null, doneBy: null, startedAt: null, doneAt: null, lastActiveAt: null, workMs: 0, costUsd: null, isPartial: false, work: [], events: [], ...over })
+  const taskList = { rows: [row(1, 'done', { who: 'dev-1' }), row(2, 'waiting')], total: { done: 1, count: 2, workMs: 0, costUsd: null, isPartial: false }, removed: { workMs: 0, costUsd: 0 } }
+  alphaMod.make = mark => ({ ...buildSnapshot({ team: 'Alpha Team', mark }), taskList })
+  alphaMod.write(1)
+  const page = await launchBrowser(world)
+  await page.open(alpha.url)
+  await until(() => page.eval(`!!document.querySelector('.tk-panel .tk-title')`), 15_000, 'the Tasks panel')
+
+  const bar = await page.eval(`(() => { const b = document.querySelector('.tk-panel [role=progressbar]'); return b && { now: b.getAttribute('aria-valuenow'), max: b.getAttribute('aria-valuemax'), text: b.getAttribute('aria-valuetext') } })()`)
+  assert.deepEqual(bar, { now: '1', max: '2', text: '1/2 done' })
+  const statusCell = await page.eval(`(() => { const c = document.querySelectorAll('.tk-panel .tk-c-mark')[1]; return { words: c.querySelector('.tk-sr')?.textContent, iconHidden: c.querySelector('.tk-mark')?.getAttribute('aria-hidden') } })()`)
+  assert.deepEqual(statusCell, { words: 'Waiting', iconHidden: 'true' }, 'the status is said in words; the glyph is hidden from a reader')
+
+  const expanded = () => page.eval(`document.querySelectorAll('.tk-panel .tk-title')[1].getAttribute('aria-expanded')`)
+  assert.equal(await expanded(), 'false')
+  await page.eval(`document.querySelectorAll('.tk-panel .tk-title')[1].click()`)
+  await until(async () => (await expanded()) === 'true', 5000, 'aria-expanded true after a click')
+  assert.ok(await page.eval(`!!document.querySelector('.tk-panel .tk-task.is-open')`), 'the open row has its class')
+  await page.eval(`document.querySelectorAll('.tk-panel .tk-title')[1].click()`)
+  await until(async () => (await expanded()) === 'false', 5000, 'aria-expanded false after a second click')
+})

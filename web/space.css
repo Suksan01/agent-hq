@@ -606,7 +606,7 @@
 @media (prefers-reduced-motion: reduce) { .sk-bubble { animation: none; } }
 
 /* ---------- the Tasks panel (tasks.js): the approved plan's list as a ledger ---------- */
-.tk-panel { padding: 18px 14px 14px; overflow: hidden; --tk-dim: rgba(242, 242, 245, 0.56); } /* 5.4:1 or more on the tile, where --sk-text-3 gave 3.2:1 */
+.tk-panel { padding: 18px 14px 14px; overflow: hidden; --tk-dim: rgba(242, 242, 245, 0.7); } /* 4.7:1 or more even on a lit tile under the open-row overlay, where --sk-text-3 gave 3.2:1 */
 .tk-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
 .tk-count, .tk-num, .tk-c-num, .tk-c-n { font-family: var(--sk-font-mono); font-variant-numeric: tabular-nums; }
 .tk-count { font-size: 12px; color: var(--sk-text-2); }

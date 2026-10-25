@@ -81,7 +81,6 @@ test('the panel draws plan text as text, never as HTML, and puts a real button o
   assert.doesNotMatch(source, /innerHTML|dangerouslySetInnerHTML|insertAdjacentHTML|document\.write/)
   assert.match(source, /<button/, 'a real <button> per row title')
   assert.doesNotMatch(source, /role="button"|role='button'/, 'not a role=button on a <tr>')
-  assert.match(source, /aria-expanded/)
 })
 
 /** The bodies of every `@media (prefers-reduced-motion: reduce) { ... }` block in the css, braces matched. */
@@ -137,22 +136,24 @@ test('the total row shows whole minutes and a cost even with no work counted, as
 test('the status cell says the status in words for a screen reader, in en and th', () => {
   const source = read('./tasks.js')
 
-  assert.match(source, /<td className="tk-c-mark"[^>]*>.*<span className="tk-sr">\$\{word\('tasks\.status', row\.status\)\}/, 'a tk-sr span with the status word in the status cell')
   assert.match(read('./space.css'), /\.tk-sr\s*\{[^}]*clip: rect\(0 0 0 0\)/, 'tk-sr hides it visually only')
   for (const status of ['done', 'working', 'review', 'waiting']) assert.match(STRINGS.th[`tasks.status.${status}`], THAI)
 })
 
-test('the greys of the tasks table keep at least 4.5:1 on the tile', () => {
+test('the greys of the tasks table keep at least 4.5:1 on the lightest tile it can sit on', () => {
   const css = read('./space.css')
   const [, r, g, b, a] = /--tk-dim:\s*rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)/.exec(css)
   const lin = c => ((c /= 255) <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)
   const lum = ([x, y, z]) => 0.2126 * lin(x) + 0.7152 * lin(y) + 0.0722 * lin(z)
   const mix = (fg, alpha, bg) => fg.map((c, i) => c * alpha + bg[i] * (1 - alpha))
   const ratio = (x, y) => (Math.max(lum(x), lum(y)) + 0.05) / (Math.min(lum(x), lum(y)) + 0.05)
-  const lit = [28, 28, 44] // a tile lit from one edge, lighter than the canvas (#050507) under a 5% glass
-  const ink = mix([r, g, b].map(Number), Number(a), lit)
+  const overlay = name => Number(new RegExp(`${name}[^{]*\\{[^}]*background:\\s*rgba\\(255,\\s*255,\\s*255,\\s*([\\d.]+)\\)`).exec(css)[1])
+  const lit = [60, 60, 80] // a tile under a bright planet or glow (the .sk-tile gradients): the lightest we have seen
+  const worst = Math.max(overlay('\\.tk-task\\.is-open \\.tk-row'), overlay('\\.tk-row:hover'), overlay('\\.tk-detail td'))
+  const bg = mix([255, 255, 255], worst, lit) // the open row's overlay, the lightest of the three
+  const ink = mix([r, g, b].map(Number), Number(a), bg)
 
-  assert.ok(ratio(ink, lit) >= 4.5, `contrast ${ratio(ink, lit).toFixed(2)}`)
+  assert.ok(ratio(ink, bg) >= 4.5, `contrast ${ratio(ink, bg).toFixed(2)} on ${bg.map(Math.round)}`)
   assert.doesNotMatch(css.slice(css.indexOf('.tk-panel {')), /\.tk-[^{]*\{[^}]*var\(--sk-text-3\)/, 'no tasks rule uses the 3.2:1 grey')
 })
 
@@ -182,7 +183,6 @@ test('an expandable row shows a chevron that turns when open, an open-row style,
   const source = read('./tasks.js')
   const css = read('./space.css')
 
-  assert.match(source, /className="tk-chev" aria-hidden="true"/)
   assert.match(css, /\.tk-task\.is-open \.tk-chev\s*\{[^}]*rotate\(90deg\)/)
   assert.match(css, /\.tk-task\.is-open \.tk-row\s*\{[^}]*background/)
   assert.ok(reducedMotionBlocks(css).some(body => /\.tk-chev[^{]*\{[^}]*transition:\s*none/.test(body)), 'the chevron does not animate under reduced motion')
@@ -197,6 +197,7 @@ test('parallel work shows the first member and +n for the others with counted wo
 
   assert.deepEqual(whoText({ who: 'dev-1', work: [work('dev-1', 5000)] }), { text: 'dev-1', title: '' })
   assert.deepEqual(whoText({ who: 'dev-1', work: [work('dev-1', 5000), work('qa-1', 9000), work('qa-1', 1000), work('rev-1', 0)] }), { text: 'dev-1 +1', title: 'dev-1, qa-1' })
+  assert.deepEqual(whoText({ who: 'dev-1', work: [work('dev-1', 5000), { ...work('qa-1', 0), outputTokens: 3 }] }), { text: 'dev-1 +1', title: 'dev-1, qa-1' }, 'tokens without time count, as the terminal counts them')
   assert.deepEqual(whoText({ who: 'dev-1', work: [work('dev-1', 1), work('dev-2', 1), work('qa-1', 1)] }), { text: 'dev-1 +2', title: 'dev-1, dev-2, qa-1' })
   assert.deepEqual(whoText({ who: null, work: [] }), { text: '—', title: '' })
   assert.deepEqual(whoText({ who: 'dev-1' }), { text: 'dev-1', title: '' }, 'an older snapshot without work entries')

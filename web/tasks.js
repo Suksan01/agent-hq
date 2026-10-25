@@ -33,9 +33,12 @@ export const memberLine = work => ({
   cost: costText({ costUsd: work.costUsd, isPartial: false }),
 })
 
+/** Does this member's work count (as the terminal's isCounted does): some time, or any token of the four kinds. */
+const isCounted = w => w.workMs > 0 || (w.inputTokens ?? 0) + (w.outputTokens ?? 0) + (w.cacheReadTokens ?? 0) + (w.cacheWriteTokens ?? 0) > 0
+
 /** The who cell: the row's `who`, and `+n` when n more members have counted work on it (the detail lists them all). */
 export function whoText(row) {
-  const names = [...new Set((row.work ?? []).filter(w => w.workMs > 0).map(w => w.who))]
+  const names = [...new Set((row.work ?? []).filter(isCounted).map(w => w.who))]
   const first = row.who ?? names[0] ?? null
   if (first === null) return { text: NONE, title: '' }
   const others = names.filter(name => name !== first)
@@ -88,9 +91,9 @@ const word = (prefix, key) => (has(`${prefix}.${key}`) ? t(`${prefix}.${key}`) :
 const clock = at => new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 
 function Mark({ status, isStill, isQuiet }) {
-  if (status === 'done') return html`<span className="tk-mark tk-mark--done"><${Icon} name="done" size=${14} /></span>`
-  if (status === 'working') return html`<span className=${`tk-mark tk-mark--working${isStill ? ' is-still' : ''}${isQuiet ? ' is-quiet' : ''}`}><span className="tk-spin"></span></span>`
-  return html`<span className=${`tk-mark tk-mark--${status}`}>${status === 'review' ? '◑' : '○'}</span>`
+  if (status === 'done') return html`<span className="tk-mark tk-mark--done" aria-hidden="true"><${Icon} name="done" size=${14} /></span>`
+  if (status === 'working') return html`<span className=${`tk-mark tk-mark--working${isStill ? ' is-still' : ''}${isQuiet ? ' is-quiet' : ''}`} aria-hidden="true"><span className="tk-spin"></span></span>`
+  return html`<span className=${`tk-mark tk-mark--${status}`} aria-hidden="true">${status === 'review' ? '◑' : '○'}</span>`
 }
 
 function Chevron() {
@@ -150,7 +153,7 @@ export function TasksPanel({ snapshot, isOnline }) {
   const hasTable = state === 'ready' || state === 'offline'
   return html`<${GlassTile} edge="bottom" soft className="tk-panel" role="region" aria-label=${t('tasks.title')}>
     <header className="tk-head"><span className="sk-label">${t('tasks.title')}</span>${hasTable ? html`<span className="tk-count">${t('tasks.done', { done: list.total.done, count: list.total.count })}</span>` : null}</header>
-    ${hasTable ? html`<div className="tk-progress" role="progressbar" aria-label=${t('tasks.progress')} aria-valuemin="0" aria-valuemax=${list.total.count} aria-valuenow=${list.total.done}><span style=${{ width: `${donePercent(list.total)}%` }}></span></div>` : null}
+    ${hasTable ? html`<div className="tk-progress" role="progressbar" aria-label=${t('tasks.progress')} aria-valuemin="0" aria-valuemax=${list.total.count} aria-valuenow=${list.total.done} aria-valuetext=${t('tasks.done', { done: list.total.done, count: list.total.count })}><span style=${{ width: `${donePercent(list.total)}%` }}></span></div>` : null}
     ${state === 'offline' ? html`<p className="tk-offline" role="status">${t('tasks.offline')}</p>` : null}
     ${state === 'loading' || state === 'empty' ? html`<p className="tk-note" role="status">${t(`tasks.${state}`)}</p>` : null}
     ${hasTable ? html`<${Table} list=${list} isStill=${state === 'offline'} now=${snapshot.at ?? 0} />` : null}
