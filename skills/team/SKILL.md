@@ -326,15 +326,22 @@ safer · asks before adding a dep
 
 The lead gets a **title**, **rules** (how it plans, assigns, reviews and reports), **skills** and **model** (`opus`).
 
-### UI roles and HeroUI
+### UI roles, Impeccable and HeroUI
 
-A role that builds or designs UI (a frontend, UI or prototype role) works with HeroUI v3, the
-opt-in for in-app prototypes in `/agent-hq:feature`:
-- **skills**: add the official HeroUI skill when this session lists it, `heroui-react` for web and `heroui-native` for
+A role that builds, designs or reviews UI or UX (a frontend, UI, UX, designer or prototype role, and a QA or review
+role whose work includes UI) gets Impeccable by default as its design-quality layer, and works with HeroUI v3 (the
+opt-in for in-app prototypes in `/agent-hq:feature`) as the component library:
+- **Impeccable skill**: add `impeccable:impeccable` to the skills of every such role when this session lists it. When
+  it is missing, offer to install it (`claude plugin marketplace add pbakaus/impeccable`, then
+  `claude plugin install impeccable@impeccable`), and only on the person's yes.
+- **Impeccable rule**: add "Use the `impeccable:impeccable` skill for design quality: `/impeccable init` once per
+  project, `shape` before building a new screen, `critique` or `audit` before review, `polish` before done. HeroUI
+  supplies the components; Impeccable decides how they look and read."
+- **HeroUI skill**: add the official HeroUI skill when this session lists it, `heroui-react` for web and `heroui-native` for
   React Native. When it is missing, offer to install it, the Claude skill only
   (`npx skills add heroui-inc/heroui --skill heroui-react -a claude-code`, `--skill heroui-native` for React Native),
   and only on the person's yes.
-- **rules**: add "Look up every HeroUI component with the HeroUI MCP (`list_components`, `get_component_docs`,
+- **HeroUI rule**: add "Look up every HeroUI component with the HeroUI MCP (`list_components`, `get_component_docs`,
   `get_theme_variables`) or the `heroui-react` skill before using it; never write HeroUI code from memory, and never
   the v2 setup."
 - **tools**: when the role has a tools list, add the MCP server's tools by their full names, since a tools list

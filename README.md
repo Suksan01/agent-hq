@@ -470,7 +470,7 @@ From the mod folder:
 - `node --test web/server.test.mjs web/build-design.test.mjs` tests the local server, the hub and the design build
   (real server processes on free ports, in temp folders).
 - `node --test skills/feature/skill.test.mjs skills/team/skill.test.mjs` checks the feature skill's six phases, their
-  gates and build rules, and the HeroUI rules the team interview gives UI roles.
+  gates and build rules, and the Impeccable and HeroUI rules the team interview gives UI roles.
 - `node --test skills/self-evaluation/skill.test.mjs` checks that the self-evaluation skill teaches the same evidence
   rule as the role prompt, and that every `Self-check` example in it follows that rule (the mod's test sandbox cannot
   read Markdown).

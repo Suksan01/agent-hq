@@ -21,6 +21,14 @@ test('UI roles list the official HeroUI skill when it is installed', () => {
   assert.match(skill, /opt-in for in-app prototypes/) // the feature skill's default is the Design canvas
 })
 
+test('UI roles get Impeccable by default, with an install line and a rule for its commands', () => {
+  assert.match(skill, /`impeccable:impeccable`/)
+  assert.match(skill, /claude plugin marketplace add pbakaus\/impeccable/)
+  assert.match(skill, /claude plugin install impeccable@impeccable/)
+  assert.match(skill, /`\/impeccable init` once per\s+project/)
+  assert.match(skill, /`critique` or `audit` before review, `polish` before done/)
+})
+
 test('the Team Assistant can write the spec and plan files, and only those', () => {
   const card = JSON.parse(skill.match(/```json\n(\{\n  "id": "assistant"[\s\S]*?\n\})\n```/)[1])
   assert.ok(card.tools.includes('Write') && card.tools.includes('Edit'), 'it can write files')
