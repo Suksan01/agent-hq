@@ -45,8 +45,8 @@ no token, no helper process, nothing for an agent to call that could decide.
 `description`. For `Write.content`, `Edit` strings and notebook cells: key names and sizes only. Each is masked with
 `maskSecrets` (fail-closed, as `isShowable` at `pageapproval.ts:88`; a heuristic, not a guarantee). A secret hit, or over
 2 KB, shows no input, only "Too large or sensitive to show here: see the terminal". At most 5 open asks carry an input
-(`envelope()` re-sends every snapshot); older ones keep the `describeAsk` words. The state file is written 0600 where
-`$.fs.write` allows (hygiene only: the same user can read it) and the asks are cleared at session end.
+(`envelope()` re-sends every snapshot); older ones keep the `describeAsk` words. `$.fs.write` takes no mode, so the state file keeps its default permissions; the live folder is already 0700 (and the
+same user can read both anyway). The asks are cleared at session end.
 
 **`/hq web approvals`:** removed, not a toggle. The card is always shown while a page is open (a setting would only be
 a second place to be wrong). `/hq web next` and its `Setting` helpers stay. The bare `/hq web approvals` is then an

@@ -10,22 +10,22 @@ Card shape: each open ask in the state file's inbox may carry `card` `{ tool, fi
 
 ## Tasks
 
-- [ ] 1. **SD-a** remove the mod's decide path. Files: `hooks/pageapproval.ts` (delete), `hooks/register.tsx`,
+- [x] 1. **SD-a** remove the mod's decide path. Files: `hooks/pageapproval.ts` (delete), `hooks/register.tsx`,
   `hooks/inbox.ts` (only: receive `pageCount`), `hooks/i18n.ts` (drop `web.approvals*`, `approval.waiting`,
   `approvals.*`, `web.linkNotice`, en and th), delete `tests/page-approval-wiring.test.ts`,
   `tests/page-approval-dormant.test.ts`, `tests/page-approval.test.ts` (keep the `pageCount` case in
   `tests/inbox.test.ts`). Remove `askOnPage`, mode tracking (unless task 3's denied-call hook needs it), the setting
   `PAGE_APPROVALS`, `linkReply`; `/hq web` reply carries the link. ACs: 2, 9, 10.
   Done: tsc clean, `claude plugin test .` green. Deps: none. Parallel with 2 (disjoint files).
-- [ ] 2. **SD-b** remove the hub's decide path. Files: `web/hub.mjs`, `web/server.mjs`, delete `web/approve.mjs`,
+- [x] 2. **SD-b** remove the hub's decide path. Files: `web/hub.mjs`, `web/server.mjs`, delete `web/approve.mjs`,
   `web/approvals.mjs`, `web/approve.test.mjs`; remove approval cases from `web/server.test.mjs`. ACs: 1, 7 (hub side), 8.
   Done: `node --test web/*.test.mjs` green. Deps: none. Parallel with 1.
-- [ ] 3. **SD-a** the card data. Files: `hooks/inbox.ts` (`cardOf`, deciding fields only, key names and sizes for
+- [x] 3. **SD-a** the card data. Files: `hooks/inbox.ts` (`cardOf`, deciding fields only, key names and sizes for
   Write/Edit/notebook, mask via `maskSecrets`, 2 KB and 5-card caps), `hooks/register.tsx` (record the card in the
-  `tool.check` hook, session-end clear, `removeAsk` on a denied call if `tool.call` is not reached, state written 0600
-  where `$.fs.write` allows), `hooks/live.ts` (additive snapshot field). ACs: 2, 4, 5, 14. Done: tsc clean, suite green.
+  `tool.check` hook, session-end clear, `removeAsk` on a denied call if `tool.call` is not reached; no 0600:
+  `$.fs.write` takes no mode and the live folder is already 0700), `hooks/live.ts` (additive snapshot field). ACs: 2, 4, 5, 14. Done: tsc clean, suite green.
   Deps: 1.
-- [ ] 4. **SD-b** the page card. Files: `web/approval.js` (view-only, text nodes only), `web/livestate.js` (drop
+- [x] 4. **SD-b** the page card. Files: `web/approval.js` (view-only, text nodes only), `web/livestate.js` (drop
   `answerApproval` and the approval SSE state), `web/live.js` (render cards from the snapshot, fall back to
   `describeAsk` words without `card`), `web/net.js` (drop the two handlers), `web/i18n.js` (en and th: view-only line,
   "too large or sensitive: see the terminal"; remove the old keys). ACs: 6, 11, 12, 13. Done: suite green.
@@ -34,7 +34,7 @@ Card shape: each open ask in the state file's inbox may carry `card` `{ tool, fi
   (AC1/AC2); text nodes only, U+202E and zero-width shown marked (AC12); masked and capped input (AC4); en and th
   complete (AC11); no orphans (AC8 grep); state-file permissions; denied-call path handled (AC14); CHANGELOG and README
   true; tsc clean. Output: APPROVED or findings.
-- [ ] 6. **SD-c** docs. Files: `README.md` (commands and capabilities: no page approvals, the card is view-only and
+- [x] 6. **SD-c** docs. Files: `README.md` (commands and capabilities: no page approvals, the card is view-only and
   says "answer in the terminal"), `CHANGELOG.md` (Unreleased: Added the card, Removed page approvals "never shipped
   enabled", the `$.store` key `pageApprovals` left alone). Version bump is the lead's at release. Deps: 4.
 - [ ] 7. **Lead** one run of the existing suite, tsc and `claude plugin validate .`, then a look at the page with a real
@@ -55,3 +55,5 @@ extra `card` field and the unused `pageApprovals` store key are harmless to 0.7.
 ## Estimate
 
 7 tasks; at most 2 agents at once; about 1.5 to 2 hours over 5 waves. Unverified: the denied-call path (task 3).
+
+Follow-up (not in 0.8.0): the card does not show how long the ask has waited yet.

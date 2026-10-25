@@ -5,6 +5,18 @@
 ### Added
 - **hq_assign `worktree: true`.** Runs a member in its own git worktree: the tool answers with the Agent call (carrying `isolation: "worktree"`) for the lead to make, and the brief tells the member to commit there for the lead to merge. It cannot be combined with `files` (the guard checks scopes against the project folder). The feature skill uses it for parallel tasks.
 
+- **A view-only card for each permission ask on the live page.** It shows who asks, the tool, the fields that decide the
+  ask (command, file path, URL, pattern, description) and only the names and sizes of file contents and edit strings,
+  with hidden characters made visible. A secret or more than 2 KB hides the fields; the newest 5 asks carry a card. It
+  says to answer in the terminal and has no Allow or Deny: nothing the page sends can answer an ask. The card goes when
+  the call is allowed, denied or fails, and at the session's end.
+
+### Removed
+- **Page approvals** (they never shipped enabled) and `/hq web approvals`: the hold in `tool.check`, the approve helper,
+  the hub's approval routes and tokens, and their strings and tests. An agent of the same OS user could reach every
+  such path, so the terminal dialog stays the only way to answer. `/hq web` gives the login link in its reply again.
+  The `pageApprovals` key left in `$.store` by earlier builds is not read and is harmless.
+
 ### Fixed
 - **No false board failure.** In a session whose tool list has no TaskCreate (and the call fails), hq_assign no longer says the board "could not be updated": it says once that the assignment is tracked on the Agent HQ sidebar and live page. A real TaskCreate error keeps its reason.
 

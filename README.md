@@ -224,7 +224,14 @@ held on an approval. They are listed on the live page as the **inbox** (who, sin
 turn, and `needs you` is the number of inbox items. Agents that are idle between turns or held do not count as
 working, and the status line is empty when there is nothing to show. A teammate idle between turns is in the inbox for
 its first 10 minutes only; an agent held on an approval and an open dialog stay until they are answered, and a
-dialog's ask leaves when its agent's turn ends.
+dialog's ask leaves when its agent's turn ends (and at once when the call is allowed, denied or fails).
+
+**Permission asks on the page are view only.** Each open ask also shows on the live page as a card: who asks, the tool,
+the fields that decide it (`command`, `file_path`, `url`, `pattern`, `description`; hidden characters shown as
+`⟦U+XXXX⟧`), only the names and sizes of the rest (a file's contents, an edit's strings), and why it asked. A secret in
+those fields, or more than 2 KB of them, hides them, and at most the newest 5 asks carry a card. The card says to answer
+in the terminal: the page has no Allow or Deny, and nothing it sends can answer an ask. The dialog is the only authority
+and shows the real command, so trust it over the page. `/hq web` gives the login link in its reply.
 
 ## Nicknames, sounds and XP
 
