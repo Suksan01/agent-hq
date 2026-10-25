@@ -49,7 +49,7 @@ function Section({ section, isMulti, onPick }) {
   const id = `pz-list-${section.key}`
   const title = `${t('paused.title')}${isMulti ? ` · ${section.label}` : ''}`
   return html`<${GlassTile} status="idle" soft className="pz-tile">
-    <button type="button" className="pz-head" aria-expanded=${isOpen} aria-controls=${id} onClick=${() => setOpen(!isOpen)}>
+    <button type="button" className="pz-head" aria-expanded=${isOpen} aria-controls=${isOpen ? id : undefined} onClick=${() => setOpen(!isOpen)}>
       <span className="sk-label">${title}</span><span className="pz-count">${section.rows.length}</span><span className="pz-caret" aria-hidden="true">${isOpen ? '▾' : '▸'}</span>
     </button>
     ${isOpen ? html`<ul className="pz-list" id=${id}>${section.rows.map((row, i) => html`<${Row} key=${row.id ?? `seat-${i}`} row=${row} onPick=${id2 => onPick?.(section.key, id2)} />`)}</ul>` : null}

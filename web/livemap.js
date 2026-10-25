@@ -42,18 +42,29 @@ export const waitingIds = sessions => new Set(sessions.flatMap(s => inboxOf(s.sn
 /** Whether a member goes to the Paused section: the mod says so (`isPaused`; an older mod never does), and it is neither the lead nor waiting on the person. */
 export const isPausedAgent = (agent, needsYou) => agent.isPaused === true && !agent.isMain && !needsYou
 
+/** The order a session's members are drawn in: the lead first, then by id. */
+const drawOrder = agents => [...agents].sort((a, b) => Number(b.isMain) - Number(a.isMain) || a.id.localeCompare(b.id))
+
+/** Each member's place in the whole team, `session|agent` -> index, paused ones included: it picks the avatar, so it must not change when a member pauses. */
+export function agentIndexes(sessions) {
+  const indexes = new Map()
+  let index = 0
+  for (const s of sessions) for (const a of drawOrder(s.snapshot.agents)) indexes.set(`${keyOf(s)}|${a.id}`, index++)
+  return indexes
+}
+
 /**
  * The groups the diagram and space views draw: one per session, its agents in the views' shape. `clockOf(session)` is the engine's time
  * (ms) so a working agent's current call can say how long it has run.
  */
 export function groupsOf(sessions, names, clockOf = () => 0) {
   const waiting = waitingIds(sessions)
-  let index = 0
+  const indexes = agentIndexes(sessions)
   return sessions.map(s => {
     const n = names.get(s.session) ?? { team: s.label, folder: s.label, tag: '' }
     const clock = clockOf(s.session)
     const talk = talkOf(s.snapshot)
-    const agents = s.snapshot.agents.filter(a => !isPausedAgent(a, waiting.has(`${keyOf(s)}|${a.id}`))).sort((a, b) => Number(b.isMain) - Number(a.isMain) || a.id.localeCompare(b.id)).map(a => {
+    const agents = drawOrder(s.snapshot.agents).filter(a => !isPausedAgent(a, waiting.has(`${keyOf(s)}|${a.id}`))).map(a => {
       const status = agentStatus(a)
       const needsYou = waiting.has(`${keyOf(s)}|${a.id}`)
       return {
@@ -74,7 +85,7 @@ export function groupsOf(sessions, names, clockOf = () => 0) {
         bubble: bubbleOf(talk.get(a.id), s.snapshot.agents, clock),
         elapsed: status === 'working' && a.activity?.since ? Math.max(0, Math.round((clock - a.activity.since) / 1000)) : undefined,
         seed: a.id,
-        index: index++,
+        index: indexes.get(`${keyOf(s)}|${a.id}`),
       }
     })
     // "Hide done" drops finished members (never the lead); a helper whose parent went is hung on the lead

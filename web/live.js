@@ -8,7 +8,7 @@ import * as kit from './spacekit.js'
 import { sessionNames } from './labels.js'
 import { LiveView, ViewToggle, useViewMode } from './liveview.js'
 import { useLazySpace } from './lazyspace.js'
-import { addRequest, attentionOf, boardSections, drawerOf, feedItems, groupsOf, hudOf, inboxItems, keyOf, pctOf } from './livemap.js'
+import { addRequest, agentIndexes, attentionOf, boardSections, drawerOf, feedItems, groupsOf, hudOf, inboxItems, keyOf, pctOf } from './livemap.js'
 import { feedRows } from './feed.js'
 import { TaskBoardTile } from './panels.js'
 import { TasksPanel } from './tasks.js'
@@ -134,7 +134,7 @@ function App() {
     const [key, id] = selected.split('|')
     const session = list.find(s => keyOf(s) === key)
     const agent = session?.snapshot.agents.find(a => a.id === id)
-    const index = groups.find(g => keyOf(g) === key)?.agents.find(a => a.id === id)?.index ?? 0
+    const index = agentIndexes(list).get(selected) ?? 0 // from the whole team: a paused member keeps the avatar it had
     if (agent) return (lastPick.current = { session, agent, index })
     const kept = lastPick.current
     return kept && keyOf(kept.session) === key && kept.agent.id === id ? kept : null

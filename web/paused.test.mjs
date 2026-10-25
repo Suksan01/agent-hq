@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 
 import { pausedOf, pausedSections } from './paused.js'
@@ -56,4 +57,20 @@ test('the Paused words exist in English and Thai with the same placeholders', ()
     assert.deepEqual(STRINGS.en[key].match(/\{\w+\}/g), STRINGS.th[key].match(/\{\w+\}/g), key)
   }
   assert.match(STRINGS.th['paused.title'], /[฀-๿]/)
+})
+
+test('the Not started pill text and the Paused greys keep at least 4.5:1 on the lightest tile they can sit on', () => {
+  const css = readFileSync(new URL('./space.css', import.meta.url), 'utf8')
+  const lin = c => ((c /= 255) <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)
+  const lum = ([x, y, z]) => 0.2126 * lin(x) + 0.7152 * lin(y) + 0.0722 * lin(z)
+  const mix = (fg, alpha, bg) => fg.map((c, i) => c * alpha + bg[i] * (1 - alpha))
+  const ratio = (x, y) => (Math.max(lum(x), lum(y)) + 0.05) / (Math.min(lum(x), lum(y)) + 0.05)
+  const lit = [60, 60, 80] // a tile under a bright planet or glow: the lightest we have seen
+  const hover = mix([255, 255, 255], 0.06, lit) // a row under the pointer
+  const idle = /--st-idle:\s*#([0-9a-f]{6})/i.exec(css)[1].match(/../g).map(h => parseInt(h, 16))
+  const pill = mix(idle, 0.4, [255, 255, 255]) // .sk-pill: color-mix(var(--hue) 40%, #fff); the ghost pill has no fill of its own
+  const grey = Number(/\.pz-tile \{[^}]*--sk-text-2:\s*rgba\(242,\s*242,\s*245,\s*([\d.]+)\)/.exec(css)[1])
+
+  assert.ok(ratio(pill, hover) >= 4.5, `pill ${ratio(pill, hover).toFixed(2)}`)
+  assert.ok(ratio(mix([242, 242, 245], grey, hover), hover) >= 4.5, `grey ${ratio(mix([242, 242, 245], grey, hover), hover).toFixed(2)}`)
 })
