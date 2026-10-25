@@ -6,15 +6,32 @@ import { baseName, commandWords, hostOf } from './activity'
 import { MAIN, isFinished } from './model'
 import { headOf } from './cells'
 import { t } from './i18n'
+import { maskSecrets } from './secrets'
 import type { Key, Lang } from './i18n'
 
-export type InboxItem = { agent: string; since: number; what: string }
+/**
+ * What the live page shows of an open ask (view only): the fields that decide it, masked, and the size of the rest.
+ * `isHidden`: a secret was found or the fields are over CARD_MAX_BYTES, so none is shown and the terminal has them all.
+ */
+export type AskCard = {
+  tool: string
+  fields: { key: string; text: string }[]
+  sizes: { key: string; chars: number }[]
+  isHidden: boolean
+  reason?: string
+}
+export type InboxItem = { agent: string; since: number; what: string; card?: AskCard }
 /** An open permission ask, by the tool call it is for. */
 export type Ask = InboxItem
 export type Asks = Record<string, Ask>
 
 const WHAT_MAX = 120
 const ASKS_MAX = 50
+const CARDS_MAX = 5 // asks that carry a card: the state is re-sent whole at every change
+export const CARD_MAX_BYTES = 2048
+const REASON_MAX = 300
+// the fields that decide an ask; everything else a tool takes (file contents, edit strings, cells) is shown by size only
+const DECIDING_FIELDS: readonly string[] = ['command', 'file_path', 'notebook_path', 'url', 'pattern', 'description']
 /** How long an idle teammate (done with its turn) counts as needing the person; after that it is only resting. */
 export const IDLE_LIMIT_MS = 10 * 60_000
 
@@ -27,9 +44,50 @@ export function describeAsk(tool: string, input: unknown): string {
   return clip(detail ? `${tool}: ${detail}` : tool)
 }
 
-/** The asks with this one added; at most 50 are kept, the oldest go first. */
+function utf8Bytes(text: string): number {
+  let bytes = 0
+  for (const ch of text) {
+    const code = ch.codePointAt(0) ?? 0
+    bytes += code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4
+  }
+  return bytes
+}
+
+const sizeOf = (value: unknown): number => {
+  try {
+    return typeof value === 'string' ? value.length : (JSON.stringify(value) ?? '').length
+  } catch {
+    return 0 // a cycle: nothing to say about its size
+  }
+}
+
+/**
+ * The card for an ask: the deciding fields as text, masked, and the other fields by name and size. Fails closed: a field
+ * that changes when masked (a secret, as far as `maskSecrets` can tell), or fields over CARD_MAX_BYTES, show nothing.
+ */
+export function cardOf(tool: string, input: unknown, reason?: string): AskCard {
+  const given = typeof input === 'object' && input !== null && !Array.isArray(input) ? (input as Record<string, unknown>) : null
+  const maskedReason = reason ? clipTo(maskSecrets(reason), REASON_MAX) : undefined
+  const withReason = (card: AskCard): AskCard => (maskedReason ? { ...card, reason: maskedReason } : card)
+  const hidden = withReason({ tool, fields: [], sizes: [], isHidden: true })
+  if (!given) return hidden
+  const fields = DECIDING_FIELDS.flatMap(key => (typeof given[key] === 'string' ? [{ key, text: given[key] as string }] : []))
+  const total = fields.reduce((sum, f) => sum + utf8Bytes(f.text), 0)
+  if (total > CARD_MAX_BYTES || fields.some(f => maskSecrets(f.text) !== f.text)) return hidden
+  const sizes = Object.keys(given)
+    .filter(key => !DECIDING_FIELDS.includes(key) && (typeof given[key] === 'string' || (typeof given[key] === 'object' && given[key] !== null)))
+    .map(key => ({ key, chars: sizeOf(given[key]) }))
+  return withReason({ tool, fields, sizes, isHidden: false })
+}
+
+const clipTo = (text: string, max: number) => (text.length > max ? `${headOf(text, max - 1)}…` : text)
+
+/** The asks with this one added; at most 50 are kept, the oldest go first, and only the newest CARDS_MAX keep their card. */
 export function addAsk(asks: Asks, toolUseId: string, ask: Ask): Asks {
-  return Object.fromEntries(Object.entries({ ...asks, [toolUseId]: ask }).slice(-ASKS_MAX))
+  const kept = Object.entries({ ...asks, [toolUseId]: ask }).slice(-ASKS_MAX)
+  const withCard = kept.filter(([, a]) => a.card).map(([id]) => id)
+  const stripped = new Set(withCard.slice(0, Math.max(0, withCard.length - CARDS_MAX)))
+  return Object.fromEntries(kept.map(([id, a]) => (stripped.has(id) ? [id, { agent: a.agent, since: a.since, what: a.what }] : [id, a])))
 }
 
 export const removeAsk = (asks: Asks, toolUseId: string): Asks => Object.fromEntries(Object.entries(asks).filter(([id]) => id !== toolUseId))

@@ -24,7 +24,7 @@ import { soundsOn, themeOf } from './themes'
 import { agentRoles, guardToolCall } from './guard'
 import { addTurn } from './usage'
 import { describeCall, endActivity, hasRunningCall, liveActivities, startActivity } from './activity'
-import { addAsk, buildInbox, describeAsk, dropAsksOf, pageCount, removeAsk, statusText, trackWaiting } from './inbox'
+import { addAsk, buildInbox, cardOf, describeAsk, dropAsksOf, pageCount, removeAsk, statusText, trackWaiting } from './inbox'
 import { announceXp, createLedger, creditActivity, creditTestRun, xpStoreOf, xpSummaries } from './xpstore'
 import { ASSIGN_TOOL, HIRE_TOOL, LEAD_TOOLS_NOTE, REVIEW_TOOL, STATUS_TOOL, TOOL_SPECS, hqAssign, hqHire, hqReview, hqStatus, keepResult, readBriefFile, textOfContent } from './tools'
 import type { ToolAnswer, ToolDeps } from './tools'
@@ -495,6 +495,15 @@ async function clearDone($: EngineInterface) {
   await update($, tasks, () => cleared.tasks)
   await update($, todos, () => cleared.todos)
   await syncStatus($)
+}
+
+/** A decided call no longer waits on the person: its ask leaves the inbox and the page. */
+async function endAsk($: EngineInterface, toolUseId: string | undefined) {
+  if (!toolUseId || !(await read($, asks))[toolUseId]) return
+  await update($, asks, all => removeAsk(all, toolUseId))
+    .then(() => syncStatus($))
+    .then(() => requestLive($))
+    .catch(() => {})
 }
 
 /** Writes the page's snapshot when it changed; the server pushes each write to open pages at once. */
@@ -1152,13 +1161,30 @@ export const register: Register = (on, options) => {
       const toolUseId = e.tool_use_id
       await $.clock
         .now()
-        .then(since => update($, asks, all => addAsk(all, toolUseId, { agent: e.agentId ?? MAIN, since, what: describeAsk(e.tool, e.input) })))
+        .then(since => update($, asks, all => addAsk(all, toolUseId, { agent: e.agentId ?? MAIN, since, what: describeAsk(e.tool, e.input), card: cardOf(e.tool, e.input, verdict.reason) })))
         .then(() => syncStatus($))
         .then(() => requestLive($))
         .catch(error => $.ui.log(`Agent HQ: could not note a permission ask (${error instanceof Error ? error.message : String(error)})`, { to: 'debug' }))
     }
     return verdict
   }).catch(($, e, next) => next(e)) // the hook failed: the engine's own verdict stands (next replays it)
+
+  // a call the person denied may never reach tool.call, so its ask would stay on the page until the turn ends: a failed
+  // call and a denied one (PermissionDenied) end their ask too
+  on('classic.PostToolUseFailure', async ($, e, next) => {
+    await endAsk($, e.tool_use_id)
+    return next(e)
+  }).catch(($, e, next) => next(e))
+  on('classic.PermissionDenied', async ($, e, next) => {
+    await endAsk($, e.tool_use_id)
+    return next(e)
+  }).catch(($, e, next) => next(e))
+
+  // the session ends: no ask can still wait on a dialog, so none stays in the state file the page reads
+  on('session.end', async ($, e, next) => {
+    await update($, asks, () => ({})).then(() => writeLive($)).catch(() => {})
+    return next(e)
+  }).catch(($, e, next) => next(e))
 
   // a message between the lead and a member, or between members, shows over the member's card (hooks/talk.ts); the
   // person's own message from the live page is theirs, not the team's talk
