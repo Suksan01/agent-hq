@@ -67,7 +67,7 @@ export function agoMinutes(at, now) {
 /** Is one of the task's members (its work entries, or its `who`) an agent the snapshot shows working right now? */
 const hasWorkingMember = (row, agents) => {
   const names = new Set([row.who, ...(row.work ?? []).map(w => w.who)].filter(Boolean))
-  return agents.some(a => agentStatus(a) === 'working' && [a.name, a.id, a.nickname].some(id => names.has(id)))
+  return agents.some(a => agentStatus(a) === 'working' && names.has(a.name))
 }
 
 /**
@@ -123,7 +123,7 @@ function Chevron() {
 function Detail({ row, id, now, quiet }) {
   const lines = row.work.map(memberLine)
   const last = agoMinutes(row.lastActiveAt, now)
-  return html`<tr className="tk-detail" id=${id}><td colSpan="6">
+  return html`<tr className="tk-detail" id=${id}><td colSpan="5">
     ${last === null ? null : html`<p className="tk-last">${t('tasks.lastActive', { n: last })}</p>`}
     ${quiet === null ? null : html`<p className="tk-last tk-last--quiet">${t('tasks.quiet', { n: quiet })}</p>`}
     ${lines.length === 0 ? html`<p className="tk-none">${t('tasks.noWork')}</p>` : html`<ul className="tk-work">
@@ -144,9 +144,8 @@ function Row({ row, isOpen, isStill, now, agents, onToggle }) {
     <tr className="tk-row" onClick=${onToggle}>
       <td className="tk-c-mark" title=${quiet === null ? word('tasks.status', row.status) : `${word('tasks.status', row.status)}, ${t('tasks.quiet', { n: quiet })}`}><${Mark} status=${row.status} isStill=${isStill} isQuiet=${quiet !== null} /><span className="tk-sr">${word('tasks.status', row.status)}${quiet === null ? '' : `, ${t('tasks.quiet', { n: quiet })}`}</span></td>
       <td className="tk-c-n">${row.n}</td>
-      <td className="tk-c-title"><button type="button" className="tk-title" aria-expanded=${isOpen} aria-controls=${isOpen ? id : undefined} onClick=${e => { e.stopPropagation(); onToggle() }}><${Chevron} /><span>${row.title}</span></button></td>
-      <td className="tk-c-who" title=${who.title || undefined}>${who.text}</td>
-      <td className="tk-c-num">${minText(row)}</td>
+      <td className="tk-c-title"><button type="button" className="tk-title" aria-expanded=${isOpen} aria-controls=${isOpen ? id : undefined} onClick=${e => { e.stopPropagation(); onToggle() }}><${Chevron} /><span>${row.title}</span></button>${who.text === NONE ? null : html`<span className="tk-who" title=${who.title || undefined}>${who.text}</span>`}</td>
+      <td className="tk-c-num tk-c-min">${minText(row)}</td>
       <td className="tk-c-num tk-c-cost">${costText(row)}</td>
     </tr>
     ${isOpen ? html`<${Detail} row=${row} id=${id} now=${now} quiet=${quiet} />` : null}
@@ -156,11 +155,11 @@ function Row({ row, isOpen, isStill, now, agents, onToggle }) {
 function Table({ list, isStill, now, agents }) {
   const [open, setOpen] = useState(null)
   return html`<table className="tk-table">
-    <thead><tr><th><span className="tk-sr">${t('tasks.colStatus')}</span></th><th>#</th><th>${t('tasks.colTask')}</th><th className="tk-c-who">${t('tasks.colWho')}</th><th className="tk-c-num">${t('tasks.colMin')}</th><th className="tk-c-num tk-c-cost">${t('tasks.colCost')}</th></tr></thead>
+    <thead><tr><th><span className="tk-sr">${t('tasks.colStatus')}</span></th><th>#</th><th>${t('tasks.colTask')}</th><th className="tk-c-num tk-c-min">${t('tasks.colMin')}</th><th className="tk-c-num tk-c-cost">${t('tasks.colCost')}</th></tr></thead>
     ${list.rows.map(row => html`<${Row} key=${row.n} row=${row} isStill=${isStill} now=${now} agents=${agents} isOpen=${open === row.n} onToggle=${() => setOpen(nextOpen(open, row.n))} />`)}
     <tfoot><tr>
-      <td colSpan="4">${t('tasks.total')}</td>
-      <td className="tk-c-num">${totalMinText(list.total)}</td>
+      <td colSpan="3">${t('tasks.total')}</td>
+      <td className="tk-c-num tk-c-min">${totalMinText(list.total)}</td>
       <td className="tk-c-num tk-c-cost">${costText(list.total)}</td>
     </tr></tfoot>
   </table>`
