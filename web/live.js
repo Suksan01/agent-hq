@@ -25,6 +25,7 @@ const WIDE = 1100 // from here the HUD and the panels sit beside the canvas; bel
 const PANEL_W = 372
 const PILLS_H = 96 // the collapsed pills (needs you, activity) on a phone
 const NARROW_TOP = 188 // the compact HUD on a phone
+const RIGHT_GAP = 14 // between the end of the left column and the panels over the bottom of the page
 
 /** The height of the bottom bar (it wraps on a phone); the panels and the views' inset sit above it. Measured on resize only. */
 function useHeight() {
@@ -41,6 +42,21 @@ function useHeight() {
     watch.current.observe(el)
   }, [])
   return [height, ref]
+}
+
+/** How much of the bottom `.hq-right` (needs you, activity) covers `.hq-left` below WIDE, as `--hq-right` (its height and a gap, 0 when empty); `.hq-left` stops above it. */
+function useRightClearance() {
+  const watch = useRef(null)
+  return useCallback(el => {
+    watch.current?.disconnect()
+    const set = px => document.documentElement.style.setProperty('--hq-right', `${px}px`)
+    if (!el || !window.ResizeObserver) return set(0)
+    watch.current = new ResizeObserver(() => {
+      const height = Math.ceil(el.getBoundingClientRect().height)
+      set(height > 0 ? height + RIGHT_GAP : 0)
+    })
+    watch.current.observe(el)
+  }, [])
 }
 
 function useWide() {
@@ -81,6 +97,7 @@ function App() {
   const [draft, setDraft] = useState(null) // a next step pressed on a lead deck: { for: selected, text, n }, put in that lead's box once, never sent from here
   const view = useRef(null)
   const [barHeight, bar] = useHeight()
+  const rightRef = useRightClearance()
   const [lastLang, keepLang] = useStored('agent-hq.lang', 'en') // so the screens before any session (connecting, none) speak it too
 
   useEffect(() => pauseOffscreen(document.body), [])
@@ -184,7 +201,7 @@ function App() {
       <${PausedPanel} sections=${paused} isMulti=${isMulti} onPick=${choose} />
       ${boardOpen ? html`<${TaskBoardTile} sections=${boardSections(shown, names)} onClose=${() => setBoardOpen(false)} />` : null}
     </div>
-    <div className=${`hq-right${drawer ? ' has-drawer' : ''}`}>
+    <div className=${`hq-right${drawer ? ' has-drawer' : ''}`} ref=${rightRef}>
       ${drawer?.lead && teams.length > 1 ? html`<${SegmentedToggle} label=${t('live.teamToMessage')} value=${keyOf(pick.session)} options=${teams.map(s => ({ id: keyOf(s), label: names.get(s.session)?.flag ?? s.label }))}
         onChange=${key => talkTo(list.find(s => keyOf(s) === key))} />` : null}
       ${drawer

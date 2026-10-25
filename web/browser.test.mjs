@@ -169,3 +169,31 @@ test('the Tasks table: every row has as many cells as the header, counting colSp
   assert.ok(titleRow.title >= 140, `the title cell keeps its room beside an open detail row (${titleRow.title}px, not half)`)
   assert.ok(narrow.rows.find(r => r.kind === 'detail').shown === 1, 'the detail is one cell spanning the width')
 })
+
+test('below 1100px the last Paused row stays clickable: the left column stops above the needs-you and activity stack', { skip, timeout: slow(60_000) }, async t => {
+  const world = newWorld(t)
+  const { alpha, alphaMod } = await twoSessions(world)
+  const paused = ['p1', 'p2', 'p3', 'p4'].map(id => [id, `Idle ${id}`, 'idle', { isPaused: true }])
+  const seats = [{ name: 'qa-2', role: 'qa', roleTitle: 'QA Engineer' }, { name: 'rev-2', role: 'reviewer', roleTitle: 'Code Reviewer' }]
+  alphaMod.make = mark => ({ ...buildSnapshot({ team: 'Alpha Team', mark, agents: paused }), seats })
+  alphaMod.write(1)
+  const page = await launchBrowser(world, { width: 375, height: 812, mobile: true })
+  await page.open(alpha.url)
+  await until(() => page.eval(`!!document.querySelector('.pz-head')`), 15_000, 'the Paused section')
+  await page.eval(`document.querySelector('.pz-head').click()`)
+  await until(() => page.eval(`document.querySelectorAll('.pz-row').length === 6`), 5000, 'four members and two seats listed')
+
+  await page.eval(`(() => { const left = document.querySelector('.hq-left'); left.scrollTop = left.scrollHeight })()`)
+  await sleep(300)
+  const hit = await page.eval(`(() => {
+    const rows = document.querySelectorAll('.pz-row')
+    const last = rows[rows.length - 1]
+    const r = last.getBoundingClientRect()
+    const el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
+    const right = document.querySelector('.hq-right').getBoundingClientRect()
+    return { isLast: el?.closest('.pz-row') === last, lastBottom: r.bottom, rightTop: right.top, rightHeight: right.height }
+  })()`)
+
+  assert.ok(hit.isLast, `the last Paused row is what sits under its own centre (its bottom ${hit.lastBottom}, the stack starts at ${hit.rightTop})`)
+  assert.ok(hit.lastBottom <= hit.rightTop || hit.rightHeight === 0, 'the column ends above the stack')
+})
