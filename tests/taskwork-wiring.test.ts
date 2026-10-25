@@ -9,7 +9,7 @@
 //    nothing is saved over it and nothing throws.
 import { expect, mock, test } from 'claude-code/testing'
 import type { AgentInfo, On } from 'claude-code'
-import type { Engine, MockClock } from 'claude-code/testing'
+import type { Engine } from 'claude-code/testing'
 
 import { withApproval } from '../hooks/approval'
 import { TEAM_FILE } from '../hooks/team'
