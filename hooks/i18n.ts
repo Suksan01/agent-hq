@@ -76,7 +76,7 @@ const en = {
   'tasktable.who': 'Who',
   'tasktable.min': 'Min',
   'tasktable.total': 'Total',
-  'tasktable.cost': '≈ $',
+  'tasktable.cost': '≈',
   'tasktable.more': '+{n} more ({list})',
   'tasktable.working': '{n} working',
   'tasktable.review': '{n} in review',

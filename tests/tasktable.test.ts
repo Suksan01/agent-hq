@@ -101,7 +101,7 @@ test('every task is a row in plan order, with a header and a total row', async (
   const lines = await linesOf(ui)
 
   expect(lines.map(l => l.key)).toEqual(['tasks-head', 'tasks-row-1', 'tasks-row-2', 'tasks-row-3', 'tasks-row-4', 'tasks-row-5', 'tasks-total', 'tasks-legend'])
-  for (const word of ['#', 'Task', 'Who', 'Min', '≈ $']) expect(lines[0]?.text, word).toContain(word)
+  for (const word of ['#', 'Task', 'Who', 'Min', '≈']) expect(lines[0]?.text, word).toContain(word)
   await ui.unmount()
 })
 
@@ -265,7 +265,7 @@ test('the cost header comes from the string table, in Thai too', { options: { la
   const ui = await mountTable($, on, listOf(doneTask(1)), 60)
 
   expect((await linesOf(ui)).find(l => l.key === 'tasks-head')?.text).toContain('ราคา ≈')
-  expect(TABLES.en['tasktable.cost']).toBe('≈ $')
+  expect(TABLES.en['tasktable.cost']).toBe('≈')
   await ui.unmount()
 })
 
