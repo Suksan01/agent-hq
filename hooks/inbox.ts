@@ -81,3 +81,13 @@ export function statusText(working: number, needsYou: number, tasks: { done: num
   if (working === 0 && needsYou === 0 && tasks.total === 0) return undefined
   return `${t(lang, 'line.working', { n: working })}${needsYou > 0 ? t(lang, 'line.needsYou', { n: needsYou }) : ''}${tasks.total > 0 ? t(lang, 'line.tasks', tasks) : ''}`
 }
+
+/** How many pages the hub says are open, from its pages.json `{ count, at }`; 0 for anything unreadable. */
+export function pageCount(text: string): number {
+  try {
+    const count = (JSON.parse(text) as { count?: unknown } | null)?.count
+    return typeof count === 'number' && Number.isInteger(count) && count > 0 ? count : 0
+  } catch {
+    return 0
+  }
+}
