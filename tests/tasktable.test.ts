@@ -100,7 +100,7 @@ test('every task is a row in plan order, with a header and a total row', async (
 
   const lines = await linesOf(ui)
 
-  expect(lines.map(l => l.key)).toEqual(['tasks-head', 'tasks-row-1', 'tasks-row-2', 'tasks-row-3', 'tasks-row-4', 'tasks-row-5', 'tasks-total'])
+  expect(lines.map(l => l.key)).toEqual(['tasks-head', 'tasks-row-1', 'tasks-row-2', 'tasks-row-3', 'tasks-row-4', 'tasks-row-5', 'tasks-total', 'tasks-legend'])
   for (const word of ['#', 'Task', 'Who', 'Min', '≈ $']) expect(lines[0]?.text, word).toContain(word)
   await ui.unmount()
 })
@@ -122,9 +122,9 @@ test('each row shows its number, title, who, whole minutes and the cost to the c
 
   const lines = await linesOf(ui)
 
-  expect(rowOf(lines, 1)).toMatch(new RegExp(`1\\s+Data model\\s+dev-1\\s+12\\s+${moneyRe(price * 2)}$`)) // done: who finished it
+  expect(rowOf(lines, 1)).toMatch(new RegExp(`1\\s+Data model\\s+dev-1 \\+1\\s+12\\s+${moneyRe(price * 2)}$`)) // done: who finished it
   expect(rowOf(lines, 2)).toMatch(new RegExp(`2\\s+Sidebar list\\s+dev-2\\s+5\\s+${moneyRe(price)}$`)) // working: the member on it
-  expect(rowOf(lines, 3)).toMatch(new RegExp(`\\s+rev-1\\s+3\\s+${moneyRe(price)}\\+$`)) // review: the reviewer; one model unpriced: partial
+  expect(rowOf(lines, 3)).toMatch(new RegExp(`\\s+rev-1 \\+1\\s+3\\s+${moneyRe(price)}\\+$`)) // review: the reviewer; one model unpriced: partial
   expect(rowOf(lines, 4)).toMatch(/4\s+Tests <b>bold<\/b>\s+—\s+—\s+—$/) // waiting, nobody, nothing counted; markup shown as text
   await ui.unmount()
 })
@@ -155,7 +155,7 @@ test('the total row counts done over all, adds the minutes and the cost, and mar
 
   const total = (await linesOf(ui)).find(l => l.key === 'tasks-total')?.text ?? ''
 
-  expect(total).toMatch(/^Total 1\/5/)
+  expect(total).toMatch(/^Total ▰▱▱▱ 1\/5/)
   expect(tail(total)).toEqual([String(12 + 5 + 3), `${money(price * 4)}+`])
   await ui.unmount()
 })
@@ -180,8 +180,92 @@ test('a total with every cost priced has no +', async ($, on) => {
 
   const total = (await linesOf(ui)).find(l => l.key === 'tasks-total')?.text ?? ''
 
-  expect(total).toMatch(/^Total 1\/2/)
+  expect(total).toMatch(/^Total ▰▰▱▱ 1\/2/)
   expect(tail(total)).toEqual(['2', money(price)])
+  await ui.unmount()
+})
+
+// ---- progress bar, legend, parallel who, hidden counts, translated header
+
+const doneTask = (n: number, over: Row = {}) => task(n, { status: 'done', doneBy: 'dev-1', work: { 'dev-1': work(1) }, events: [ev('dev-1', n)], ...over })
+
+for (const [done, count, label] of [[0, 2, 'Total ▱▱▱▱ 0/2'], [1, 2, 'Total ▰▰▱▱ 1/2'], [2, 8, 'Total ▰▱▱▱ 2/8'], [3, 4, 'Total ▰▰▰▱ 3/4'], [2, 2, 'Total ▰▰▰▰ 2/2']] as const) {
+  test(`the total row's bar reads ${label}: empty at none done, full only at all done`, async ($, on) => {
+    const ui = await mountTable($, on, listOf(...Array.from({ length: count }, (_, i) => (i < done ? doneTask(i + 1) : task(i + 1)))), 40)
+
+    const total = (await linesOf(ui)).find(l => l.key === 'tasks-total')?.text ?? ''
+
+    expect(total).toContain(label)
+    expect(textWidth(total)).toBeLessThanOrEqual(40)
+    await ui.unmount()
+  })
+}
+
+const partialTask = () => doneTask(1, { work: { 'dev-1': work(1, { model: 'mystery-model' }) } })
+const withRemoved = (list: TaskList, removed: object) => ({ ...list, removed: { workMs: 0, costUsd: 0, ...removed } }) as TaskList
+const LEGENDS: [string, TaskList, string | null][] = [
+  ['nothing to explain: no legend line', listOf(doneTask(1)), null],
+  ['unknown prices: the + is explained', listOf(partialTask()), '+ = some prices unknown'],
+  ['removed work: the total says so', withRemoved(listOf(doneTask(1)), { workMs: 5 * MIN, costUsd: 1 }), 'total includes removed tasks'],
+  ['both: one line, dim parts joined', withRemoved(listOf(partialTask()), { workMs: 5 * MIN }), '+ = some prices unknown · total includes removed tasks'],
+]
+for (const [name, list, want] of LEGENDS) {
+  test(`the legend under the table, ${name}`, async ($, on) => {
+    const ui = await mountTable($, on, list, 80)
+
+    expect((await linesOf(ui)).find(l => l.key === 'tasks-legend')?.text.trim() ?? null).toBe(want)
+    await ui.unmount()
+  })
+}
+
+test('a legend wider than the sidebar is cut with …', async ($, on) => {
+  const ui = await mountTable($, on, withRemoved(listOf(partialTask()), { workMs: 5 * MIN }), 40)
+
+  const legend = (await linesOf(ui)).find(l => l.key === 'tasks-legend')?.text ?? ''
+
+  expect(textWidth(legend)).toBeLessThanOrEqual(40)
+  expect(legend).toContain('…')
+  await ui.unmount()
+})
+
+test('Who shows +N when more members have counted work on a task, and not for uncounted work or a waiting task', async ($, on) => {
+  const three = doneTask(1, { work: { 'dev-1': work(2), 'qa-1': work(1), 'rev-1': work(1) } })
+  const idle = doneTask(2, { work: { 'dev-1': work(2), 'qa-1': work(0, { outputTokens: 0 }) } })
+  const ui = await mountTable($, on, listOf(three, idle, task(3, { work: { 'dev-1': work(1) } })), 80)
+
+  const lines = await linesOf(ui)
+
+  expect(rowOf(lines, 1)).toMatch(/dev-1 \+2\s+4\s/)
+  expect(rowOf(lines, 2)).not.toContain('+')
+  expect(rowOf(lines, 3)).toMatch(/—\s+1\s/) // waiting: nobody
+  await ui.unmount()
+})
+
+test('a long name gives way to the +N of Who at a narrow width, and Min and cost stay whole', async ($, on) => {
+  const long = doneTask(1, { doneBy: 'senior-developer-1', work: { 'senior-developer-1': work(2), 'qa-1': work(1) } })
+  const ui = await mountTable($, on, listOf(long), 40)
+
+  const row = rowOf(await linesOf(ui), 1)
+
+  expect(row).toMatch(/…? \+1\s+3\s+\$/)
+  expect(textWidth(row)).toBeLessThanOrEqual(40)
+  expect(tail(row)).toEqual(['3', money(price * 2)])
+  await ui.unmount()
+})
+
+test('+N more says what it hides, in plan order of status, and only the statuses that are hidden', async ($, on) => {
+  const many = [task(1, { status: 'working', work: { 'a-1': work(1) }, events: [ev('a-1', 1)] }), ...Array.from({ length: 9 }, (_, i) => doneTask(i + 2))]
+  const ui = await mountTable($, on, listOf(...many), 60)
+
+  expect((await linesOf(ui)).find(l => l.key === 'tasks-more')?.text).toBe('+2 more (2 done)')
+  await ui.unmount()
+})
+
+test('the cost header comes from the string table, in Thai too', { options: { language: 'thai' } }, async ($, on) => {
+  const ui = await mountTable($, on, listOf(doneTask(1)), 60)
+
+  expect((await linesOf(ui)).find(l => l.key === 'tasks-head')?.text).toContain('ราคา ≈')
+  expect(TABLES.en['tasktable.cost']).toBe('≈ $')
   await ui.unmount()
 })
 
@@ -227,9 +311,9 @@ test('with more tasks than fit, working and review rows show first, then "+N mor
   expect(shown.indexOf(15)).toBeLessThan(shown.indexOf(14)) // working before review
   expect(shown.indexOf(13)).toBeGreaterThan(shown.indexOf(14)) // waiting after them
   expect(shown.filter(n => n <= 12)).toEqual([]) // done rows last: 11 waiting ones come first and fill what fits
-  expect(lines.find(l => l.key === 'tasks-more')?.text).toBe(`+${many.length - shown.length} more`)
+  expect(lines.find(l => l.key === 'tasks-more')?.text).toBe(`+${many.length - shown.length} more (5 waiting, 12 done)`) // what the hidden rows are
   expect(keys.at(-1)).toBe('tasks-total')
-  expect(lines.at(-1)?.text).toMatch(/^Total 12\/25/)
+  expect(lines.at(-1)?.text).toMatch(/^Total ▰▰▱▱ 12\/25/)
   await ui.unmount()
 })
 
