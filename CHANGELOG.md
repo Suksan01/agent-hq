@@ -3,9 +3,10 @@
 ## Unreleased
 
 ### Changed
-- **Impeccable is the default design-quality skill for UI roles.** The team interview adds `impeccable:impeccable` to
-  every role that builds, designs or reviews UI or UX, with a rule for when to use its commands (`init`, `critique`,
-  `audit`, `polish`), and offers to install the plugin on the person's yes. HeroUI stays the component library.
+- **Impeccable is the default design-quality skill for UI roles.** When the plugin is installed, the team interview adds
+  `impeccable:impeccable` to every role that builds, designs or reviews UI or UX. Builders load it with `init`, `shape`
+  and `polish`; review and QA roles with `critique` or `audit`, reporting findings without edits. It offers the install
+  on the person's yes. HeroUI is unchanged.
 
 ## 0.8.0 (2026-10-25)
 

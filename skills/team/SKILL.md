@@ -333,10 +333,15 @@ role whose work includes UI) gets Impeccable by default as its design-quality la
 opt-in for in-app prototypes in `/agent-hq:feature`) as the component library:
 - **Impeccable skill**: add `impeccable:impeccable` to the skills of every such role when this session lists it. When
   it is missing, offer to install it (`claude plugin marketplace add pbakaus/impeccable`, then
-  `claude plugin install impeccable@impeccable`), and only on the person's yes.
-- **Impeccable rule**: add "Use the `impeccable:impeccable` skill for design quality: `/impeccable init` once per
-  project, `shape` before building a new screen, `critique` or `audit` before review, `polish` before done. HeroUI
-  supplies the components; Impeccable decides how they look and read."
+  `claude plugin install impeccable@impeccable`), and only on the person's yes. A plugin installed mid-session is
+  listed only after `/reload-plugins`, so write the skill into the team file after that. A role with a `tools` list
+  keeps `Skill` in it, since members load the skill with the Skill tool.
+- **Impeccable rule**: add it only together with the skill, never alone. Members cannot type slash commands: they load
+  `impeccable:impeccable` with the Skill tool and pass the command as its argument (for example `init`). For a builder
+  (frontend, UI, UX, designer, prototype): "Load `impeccable:impeccable` with `init` once per project, `shape` when
+  you start a design and `polish` before you report done. HeroUI supplies the components; Impeccable decides how they
+  look and read." For a review or QA role: "Load `impeccable:impeccable` with `critique` or `audit` and report the
+  results as findings; make no edits and never run `polish`."
 - **HeroUI skill**: add the official HeroUI skill when this session lists it, `heroui-react` for web and `heroui-native` for
   React Native. When it is missing, offer to install it, the Claude skill only
   (`npx skills add heroui-inc/heroui --skill heroui-react -a claude-code`, `--skill heroui-native` for React Native),

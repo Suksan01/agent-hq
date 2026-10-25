@@ -21,12 +21,18 @@ test('UI roles list the official HeroUI skill when it is installed', () => {
   assert.match(skill, /opt-in for in-app prototypes/) // the feature skill's default is the Design canvas
 })
 
-test('UI roles get Impeccable by default, with an install line and a rule for its commands', () => {
-  assert.match(skill, /`impeccable:impeccable`/)
-  assert.match(skill, /claude plugin marketplace add pbakaus\/impeccable/)
-  assert.match(skill, /claude plugin install impeccable@impeccable/)
-  assert.match(skill, /`\/impeccable init` once per\s+project/)
-  assert.match(skill, /`critique` or `audit` before review, `polish` before done/)
+test('UI roles get Impeccable by default, gated on the person, with a rule split by role', () => {
+  const section = skill.match(/### UI roles, Impeccable and HeroUI[\s\S]*?\n### /)[0].replace(/\s+/g, ' ')
+  assert.match(section, /`impeccable:impeccable`/)
+  assert.match(section, /claude plugin marketplace add pbakaus\/impeccable/)
+  assert.match(section, /claude plugin install impeccable@impeccable/)
+  assert.match(section, /only on the person's yes/)
+  assert.match(section, /\/reload-plugins/)
+  assert.match(section, /Skill tool/)
+  assert.match(section, /builder .*`init` once per project, `shape` when you start a design and `polish` before you report done/)
+  const reviewer = section.match(/For a review or QA role: "([^"]*)"/)[1]
+  assert.match(reviewer, /`critique` or `audit`/)
+  assert.doesNotMatch(reviewer.replace(/never run `polish`/, ''), /polish/) // the reviewer never runs polish
 })
 
 test('the Team Assistant can write the spec and plan files, and only those', () => {
