@@ -3,6 +3,7 @@
 
 import type { Tone } from './cells'
 import type { LiveEvent } from './feed'
+import { isResting } from './inbox'
 import type { InboxItem } from './inbox'
 import type { AgentUsage } from './usage'
 import { botState, paletteOf, speciesOf, spriteFrames } from './sprites'
@@ -19,6 +20,7 @@ import type { XpSummary } from './xpstore'
 import { costOf } from './prices'
 import { isCounted } from './tasklist'
 import type { ListTask, TaskList } from './tasklist'
+import { AGENT_PREFIX } from './team'
 import { t } from './i18n'
 import type { Lang } from './i18n'
 
@@ -102,7 +104,7 @@ export type LiveSnapshot = {
   events: LiveEvent[]
   /** What waits on the person: permission asks and agents held on an approval, longest waiting first. */
   inbox: InboxItem[]
-  /** Always zero now: no member leaves the page for being finished or idle (see MAX_PAUSED); kept so an older page still reads it. */
+  /** Paused members dropped by the MAX_PAUSED cap and only counted: completed, and failed or stopped. Zero until the cap is hit. */
   folded: { done: number; failed: number }
   /** Seats of the team no member holds yet (never started this session): the page lists them as paused. Empty without a team. */
   seats: { name: string; role: string; roleTitle: string }[]
@@ -126,19 +128,32 @@ export type LiveExtras = {
 /** How many paused members (newest first) stay in the snapshot; older ones are dropped so it stays small. */
 export const MAX_PAUSED = 50
 
-/** Not working and not waiting on the person. The lead is never paused. */
-const isPaused = (agent: HqAgent) => agent.id !== MAIN && agent.status !== 'running' && agent.status !== 'pending' && agent.status !== 'waiting'
-
-/** The paused members past the newest MAX_PAUSED, by when they ended (else started). */
-function pausedOverCap(data: HqData): Set<string> {
-  const paused = Object.values(data.agents).filter(isPaused).sort((x, y) => (y.endedAt ?? y.startedAt) - (x.endedAt ?? x.startedAt))
-  return new Set(paused.slice(MAX_PAUSED).map(x => x.id))
+/**
+ * Not working and not waiting on the person at `at`. An idle member the inbox still lists (see buildInbox: within
+ * IDLE_LIMIT_MS of its waitingSince) is waiting on the person; it is paused once the inbox lets it go. The lead never is.
+ */
+function isPaused(agent: HqAgent, at: number, waitingSince: Readonly<Record<string, number>>): boolean {
+  if (agent.id === MAIN || agent.status === 'running' || agent.status === 'pending' || agent.status === 'waiting') return false
+  return agent.status !== 'idle' || isResting(agent, waitingSince[agent.id] ?? agent.startedAt, at)
 }
 
-/** Every seat of the team (role id and count, named as hq_assign names them) that no agent holds yet. */
+/** The paused members past the newest MAX_PAUSED, by when they ended (else started). */
+function pausedOverCap(data: HqData, at: number, waitingSince: Readonly<Record<string, number>>): HqAgent[] {
+  const paused = Object.values(data.agents).filter(x => isPaused(x, at, waitingSince)).sort((x, y) => (y.endedAt ?? y.startedAt) - (x.endedAt ?? x.startedAt))
+  return paused.slice(MAX_PAUSED)
+}
+
+/**
+ * The team's seats nobody holds: per role, `count` minus the agents of that role (whatever their name, hq_assign takes
+ * a custom one), listed by the default names `${role}-${n}` that no agent uses, in order.
+ */
 function seatsOf(data: HqData): LiveSnapshot['seats'] {
-  const taken = new Set(Object.values(data.agents).map(x => x.name))
-  return (data.team?.roles ?? []).flatMap(r => Array.from({ length: r.count }, (_, i) => ({ name: `${r.id}-${i + 1}`, role: r.id, roleTitle: r.title }))).filter(s => !taken.has(s.name))
+  const names = new Set(Object.values(data.agents).map(x => x.name))
+  return (data.team?.roles ?? []).flatMap(r => {
+    const held = Object.values(data.agents).filter(x => x.role === `${AGENT_PREFIX}${r.id}`).length
+    const free = Array.from({ length: r.count }, (_, i) => `${r.id}-${i + 1}`).filter(name => !names.has(name))
+    return free.slice(0, Math.max(0, r.count - held)).map(name => ({ name, role: r.id, roleTitle: r.title }))
+  })
 }
 
 /** Roles the page offers, each with how many of it are at work now (a role's count caps that). */
@@ -199,7 +214,9 @@ function taskListOf(list: TaskList | null | undefined): LiveTaskList | null {
 
 export function buildSnapshot(data: HqData, at: number, notice: LiveSnapshot['notice'] = null, extras: LiveExtras = {}): LiveSnapshot {
   const lang = data.lang ?? 'en'
-  const goneIds = pausedOverCap(data)
+  const since = extras.waitingSince ?? {}
+  const gone = pausedOverCap(data, at, since)
+  const goneIds = new Set(gone.map(x => x.id))
   const agents = treeRows(data).filter(({ agent }) => !goneIds.has(agent.id)).map(({ agent, work }): LiveAgent => {
     const isMain = agent.id === MAIN
     const label = labelOf(agent, data.team, lang)
@@ -233,7 +250,7 @@ export function buildSnapshot(data: HqData, at: number, notice: LiveSnapshot['no
       lastTool: agent.lastTool ?? null,
       activity: activityOf(data, agent.id),
       says: sayingOf(agent, data, lang)?.text ?? null,
-      isPaused: isPaused(agent),
+      isPaused: isPaused(agent, at, since),
       startedAt: agent.startedAt,
       endedAt: agent.endedAt ?? null,
       usage: extras.usage?.[agent.id] ?? null,
@@ -256,7 +273,7 @@ export function buildSnapshot(data: HqData, at: number, notice: LiveSnapshot['no
     lastAction: extras.lastAction ?? 0,
     events: [...(extras.events ?? [])],
     inbox: [...(extras.inbox ?? [])],
-    folded: { done: 0, failed: 0 },
+    folded: { done: gone.filter(x => x.status === 'completed').length, failed: gone.filter(x => x.status === 'failed' || x.status === 'killed').length },
     seats: seatsOf(data),
     bubbles: [...(data.bubbles ?? [])],
     suggestions: extras.suggestions ?? null,

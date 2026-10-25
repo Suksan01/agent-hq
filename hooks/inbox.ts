@@ -120,6 +120,9 @@ export function trackWaiting(since: Record<string, number>, agents: Record<strin
   )
 }
 
+/** An idle teammate that has waited past IDLE_LIMIT_MS is resting, not waiting on anyone. */
+export const isResting = (agent: HqAgent, since: number, now: number) => agent.status === 'idle' && now - since > IDLE_LIMIT_MS
+
 /**
  * Everything waiting on the person at `now`, longest waiting first: open permission asks, then held agents and idle
  * teammates (an idle one only for IDLE_LIMIT_MS: a teammate idle for hours is resting, not waiting on anyone).
@@ -131,8 +134,7 @@ export function buildInbox(asks: Asks, agents: Record<string, HqAgent>, waitingS
     const held = HELD[a.status]
     const what = held && t(lang, held)
     const since = waitingSince[a.id] ?? a.startedAt
-    const isResting = a.status === 'idle' && now - since > IDLE_LIMIT_MS
-    return a.id !== MAIN && what && !askers.has(a.id) && !isResting ? [{ agent: a.id, since, what }] : []
+    return a.id !== MAIN && what && !askers.has(a.id) && !isResting(a, since, now) ? [{ agent: a.id, since, what }] : []
   })
   return [...fromAsks, ...fromAgents].sort((a, b) => a.since - b.since)
 }

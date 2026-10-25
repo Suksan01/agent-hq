@@ -2,6 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import type { AgentInfo } from 'claude-code'
 
 import { MAX_PAUSED, buildSnapshot } from '../hooks/live'
+import { IDLE_LIMIT_MS, buildInbox } from '../hooks/inbox'
 import { MAIN, createTask, mergeAgents, updateTask } from '../hooks/model'
 import { parseTeam } from '../hooks/team'
 import type { HqData } from '../hooks/view'
@@ -89,6 +90,19 @@ test('an idle teammate stays past the old limit, paused; a working and a waiting
   expect(Object.fromEntries(snap.agents.map(a => [a.id, a.isPaused]))).toEqual({ [MAIN]: false, i1: true, r1: false, w1: false })
 })
 
+test('an idle member the inbox still holds as waiting is not paused; once the inbox lets it go, it is', () => {
+  const data = dataOf(mergeAgents({}, [member('i1', 'idle')], 0))
+  const waitingSince = { i1: 1000 }
+  for (const at of [1000 + IDLE_LIMIT_MS, 1000 + IDLE_LIMIT_MS + 1]) {
+    const listed = buildInbox({}, data.agents, waitingSince, at).some(x => x.agent === 'i1')
+
+    const paused = buildSnapshot(data, at, null, { waitingSince }).agents.find(a => a.id === 'i1')?.isPaused
+
+    expect(paused).toBe(!listed) // the two never disagree
+  }
+  expect(buildSnapshot(data, 1000 + IDLE_LIMIT_MS, null, { waitingSince }).agents.find(a => a.id === 'i1')?.isPaused).toBe(false)
+})
+
 test('seats lists the team\'s unstarted seats only, named as hq_assign names them; empty without a team', () => {
   if (typeof TEAM === 'string') throw new Error(TEAM)
   const dev: AgentInfo = { id: 'd1', name: 'frontend-dev-1', type: 'agent-hq:frontend-dev', description: 'x', status: 'running' }
@@ -96,6 +110,16 @@ test('seats lists the team\'s unstarted seats only, named as hq_assign names the
 
   expect(buildSnapshot(withTeam, 5).seats).toEqual([{ name: 'frontend-dev-2', role: 'frontend-dev', roleTitle: 'Frontend Developer' }])
   expect(buildSnapshot(dataOf(mergeAgents({}, [], 0)), 5).seats).toEqual([])
+})
+
+test('a member given a custom name still fills its role\'s seat: seats counts per role, not by name', () => {
+  if (typeof TEAM === 'string') throw new Error(TEAM)
+  const alice: AgentInfo = { id: 'a1', name: 'alice', type: 'agent-hq:frontend-dev', description: 'x', status: 'completed' }
+  const data: HqData = { ...dataOf(mergeAgents({}, [alice], 1)), team: TEAM }
+
+  expect(buildSnapshot(data, 5).seats).toEqual([{ name: 'frontend-dev-1', role: 'frontend-dev', roleTitle: 'Frontend Developer' }]) // count 2, one held
+  const both: HqData = { ...data, agents: mergeAgents(data.agents, [alice, { ...alice, id: 'a2', name: 'bob' }], 2) }
+  expect(buildSnapshot(both, 5).seats).toEqual([])
 })
 
 test('only the newest MAX_PAUSED paused members stay; a working one always does', () => {
@@ -110,4 +134,28 @@ test('only the newest MAX_PAUSED paused members stay; a working one always does'
   expect(ids).toContain('r1')
   expect(ids).toContain(`p${MAX_PAUSED + 2}`)
   expect(ids).not.toContain('p0')
+})
+
+test('folded counts the paused members the cap drops, and is zero below the cap', () => {
+  const some = [member('c1', 'completed'), member('f1', 'failed'), member('k1', 'killed')]
+  expect(buildSnapshot(dataOf(mergeAgents({}, some, 0)), 9).folded).toEqual({ done: 0, failed: 0 })
+
+  const many = [...Array.from({ length: MAX_PAUSED }, (_, i) => member(`n${i}`, 'completed')), ...some]
+  const first = mergeAgents({}, many, 0)
+  // the three oldest are the ones from `some`: ended long before the rest
+  const aged = Object.fromEntries(Object.entries(first).map(([id, a]) => [id, { ...a, endedAt: some.some(s => s.id === id) ? 1 : 1000 }]))
+
+  expect(buildSnapshot(dataOf(mergeAgents(aged, many, 5)), 9).folded).toEqual({ done: 1, failed: 2 })
+})
+
+// measured: one agent about 730 bytes, the 52 kept (50 paused, the lead, a working one) about 40.5 KB
+const SNAPSHOT_BOUND = 60_000
+test('a snapshot of 60 agents (59 paused, one working) keeps 52 and stays under the size bound', () => {
+  const many = [...Array.from({ length: 59 }, (_, i) => member(`p${i}`, 'completed')), member('r1', 'running')]
+  const data = dataOf(mergeAgents({}, many, 0))
+
+  const snap = buildSnapshot(data, 9)
+
+  expect(snap.agents).toHaveLength(MAX_PAUSED + 2)
+  expect(JSON.stringify(snap).length).toBeLessThan(SNAPSHOT_BOUND)
 })
