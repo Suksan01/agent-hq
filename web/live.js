@@ -8,10 +8,11 @@ import * as kit from './spacekit.js'
 import { sessionNames } from './labels.js'
 import { LiveView, ViewToggle, useViewMode } from './liveview.js'
 import { useLazySpace } from './lazyspace.js'
-import { addRequest, attentionOf, boardSections, drawerOf, feedItems, groupsOf, hudOf, inboxItems, keyOf, pctOf } from './livemap.js'
+import { addRequest, agentIndexes, attentionOf, boardSections, drawerOf, feedItems, groupsOf, hudOf, inboxItems, keyOf, pctOf } from './livemap.js'
 import { feedRows } from './feed.js'
 import { TaskBoardTile } from './panels.js'
 import { TasksPanel } from './tasks.js'
+import { PausedPanel, pausedSections } from './paused.js'
 import { ApprovalCard, cardsOf } from './approval.js'
 import { post, useLive, useStored } from './livestate.js'
 import { pauseOffscreen } from './motion.js'
@@ -98,6 +99,7 @@ function App() {
   const groups = useMemo(() => groupsOf(list, names, live.clockOf), [sessions])
   const hud = useMemo(() => hudOf(shown, names), [sessions, focused])
   const inbox = useMemo(() => inboxItems(list, names, list.length > 1, live.clockOf), [sessions])
+  const paused = useMemo(() => pausedSections(shown, names, live.clockOf), [sessions, focused])
   const cards = useMemo(() => cardsOf(list), [sessions]) // the open asks that carry a card (view only)
   const current = focused === null ? attentionOf(shown) : shown.find(s => s.alive) ?? shown[0]
   const isMulti = list.length > 1
@@ -132,7 +134,7 @@ function App() {
     const [key, id] = selected.split('|')
     const session = list.find(s => keyOf(s) === key)
     const agent = session?.snapshot.agents.find(a => a.id === id)
-    const index = groups.find(g => keyOf(g) === key)?.agents.find(a => a.id === id)?.index ?? 0
+    const index = agentIndexes(list).get(selected) ?? 0 // from the whole team: a paused member keeps the avatar it had
     if (agent) return (lastPick.current = { session, agent, index })
     const kept = lastPick.current
     return kept && keyOf(kept.session) === key && kept.agent.id === id ? kept : null
@@ -167,7 +169,7 @@ function App() {
   const inset = wide
     ? { top: 16, right: side ? PANEL_W + 24 : 16, bottom: barHeight, left: PANEL_W + 24 }
     : { top: NARROW_TOP, right: 12, bottom: barHeight + (sheet ? Math.round(innerHeight * 0.4) : PILLS_H), left: 12 }
-  const chips = [{ id: 'all', label: t('live.all'), count: list.length }, ...list.map(s => ({ id: keyOf(s), label: names.get(s.session)?.chip ?? s.label, count: s.snapshot.agents.filter(a => !a.isMain).length, seed: names.get(s.session)?.flag, attention: inbox.some(i => i.session === s.session) }))]
+  const chips = [{ id: 'all', label: t('live.all'), count: list.length }, ...list.map(s => ({ id: keyOf(s), label: names.get(s.session)?.chip ?? s.label, count: s.snapshot.agents.filter(a => !a.isMain).length + (Array.isArray(s.snapshot.seats) ? s.snapshot.seats.length : 0), seed: names.get(s.session)?.flag, attention: inbox.some(i => i.session === s.session) }))]
   const target = focused === null ? 'all' : keyOf(list.find(s => s.session === focused) ?? list[0])
 
   return html`<${SpaceCanvas} className="hq-app">
@@ -179,6 +181,7 @@ function App() {
     <div className="hq-left">
       <${Hud} hud=${hud} online=${live.online} loginLost=${live.loginLost} />
       <${TasksPanel} snapshot=${sessions === null ? undefined : current?.snapshot} isOnline=${live.online} />
+      <${PausedPanel} sections=${paused} isMulti=${isMulti} onPick=${choose} />
       ${boardOpen ? html`<${TaskBoardTile} sections=${boardSections(shown, names)} onClose=${() => setBoardOpen(false)} />` : null}
     </div>
     <div className=${`hq-right${drawer ? ' has-drawer' : ''}`}>

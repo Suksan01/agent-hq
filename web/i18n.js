@@ -6,7 +6,7 @@
 
 export const STRINGS = {
   en: {
-    'status.working': 'Working', 'status.waiting': 'Needs you', 'status.done': 'Done', 'status.failed': 'Failed', 'status.idle': 'Idle', 'status.stopped': 'Stopped', 'status.lead': 'Lead',
+    'status.working': 'Working', 'status.waiting': 'Needs you', 'status.done': 'Done', 'status.failed': 'Failed', 'status.idle': 'Idle', 'status.stopped': 'Stopped', 'status.lead': 'Lead', 'paused.title': 'Paused', 'paused.notStarted': 'Not started', 'paused.ago': '{time} ago',
     'crew.waiting': 'Waiting', 'lead.allDone': 'All done', 'lead.failure': 'Failure in team',
     'orb.thinking': 'Thinking', 'card.now': 'Now', 'card.next': 'Next', team: 'Team',
     'chips.label': 'Systems', 'toolbar.label': 'Tools', 'menu.label': 'Actions', send: 'Send', close: 'Close',
@@ -58,7 +58,7 @@ export const STRINGS = {
     'tasks.event.start': 'started', 'tasks.event.review': 'sent to review', 'tasks.event.done': 'done',
   },
   th: {
-    'status.working': 'ทำงานอยู่', 'status.waiting': 'รอคุณ', 'status.done': 'เสร็จแล้ว', 'status.failed': 'ล้มเหลว', 'status.idle': 'ว่าง', 'status.stopped': 'หยุดแล้ว', 'status.lead': 'หัวหน้าทีม',
+    'status.working': 'ทำงานอยู่', 'status.waiting': 'รอคุณ', 'status.done': 'เสร็จแล้ว', 'status.failed': 'ล้มเหลว', 'status.idle': 'ว่าง', 'status.stopped': 'หยุดแล้ว', 'status.lead': 'หัวหน้าทีม', 'paused.title': 'พักอยู่', 'paused.notStarted': 'ยังไม่เริ่ม', 'paused.ago': '{time} ที่แล้ว',
     'crew.waiting': 'รอคุณ', 'lead.allDone': 'เสร็จครบแล้ว', 'lead.failure': 'มีงานล้มเหลวในทีม',
     'orb.thinking': 'กำลังคิด', 'card.now': 'ตอนนี้', 'card.next': 'ถัดไป', team: 'ทีม',
     'chips.label': 'ระบบ', 'toolbar.label': 'เครื่องมือ', 'menu.label': 'คำสั่ง', send: 'ส่ง', close: 'ปิด',
