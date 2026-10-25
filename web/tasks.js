@@ -18,8 +18,8 @@ export const minText = row => wholeMinutes(row.workMs)
 /** The total row's minutes, as the sidebar's: `<1` under a minute, else whole minutes, 0 where nothing is counted. */
 export const totalMinText = total => (total.workMs > 0 && total.workMs < MINUTE ? '<1' : String(Math.round(total.workMs / MINUTE)))
 
-/** Estimated dollars of a row or the total: a dash where none is priced, two decimals, `+` where only some are. */
-export const costText = row => (row.costUsd === null || row.costUsd === undefined ? NONE : `${row.costUsd.toFixed(2)}${row.isPartial ? '+' : ''}`)
+/** Estimated dollars of a row or the total: a dash where none is priced, a `$` prefix, two decimals, `+` where only some are. */
+export const costText = row => (row.costUsd === null || row.costUsd === undefined ? NONE : `$${row.costUsd.toFixed(2)}${row.isPartial ? '+' : ''}`)
 
 /** One member's work for the detail: who, role, step, minutes, all four token kinds added, and its own cost. */
 export const memberLine = work => ({
@@ -61,7 +61,7 @@ function Detail({ row, id }) {
     ${lines.length === 0 ? html`<p className="tk-none">${t('tasks.noWork')}</p>` : html`<ul className="tk-work">
       ${lines.map((line, i) => html`<li key=${i}>
         <span className="tk-w-who">${line.who}</span><span className="tk-w-role">${line.role}</span><span className="tk-w-step">${word('tasks.step', line.step)}</span>
-        <span className="tk-num">${t('tasks.minutes', { n: line.min })}</span><span className="tk-num">${t('tasks.tokens', { n: line.tokens.toLocaleString() })}</span><span className="tk-num">${line.cost === NONE ? NONE : `≈ $${line.cost}`}</span>
+        <span className="tk-num">${t('tasks.minutes', { n: line.min })}</span><span className="tk-num">${t('tasks.tokens', { n: line.tokens.toLocaleString() })}</span><span className="tk-num">${line.cost === NONE ? NONE : `≈ ${line.cost}`}</span>
       </li>`)}
     </ul>`}
     ${row.events.length > 0 ? html`<ol className="tk-events">${timeline(row).map((e, i) => html`<li key=${i}><time>${clock(e.at)}</time> ${word('tasks.event', e.kind)}${e.who ? ` · ${e.who}` : ''}</li>`)}</ol>` : null}

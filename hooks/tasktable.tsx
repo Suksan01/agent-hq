@@ -44,7 +44,7 @@ function totalsOf(x: ListTask) {
 const minutes = (ms: number, isCounted: boolean) => (!isCounted ? NONE : ms < MS_PER_MIN ? '<1' : String(Math.round(ms / MS_PER_MIN)))
 /** The total row's minutes: `<1` under a minute, else whole minutes, 0 where nothing is counted (the page's total follows the same rule). */
 const totalMinutes = (ms: number) => (ms > 0 && ms < MS_PER_MIN ? '<1' : String(Math.round(ms / MS_PER_MIN)))
-const money = (usd: number, isPartial: boolean) => `${usd.toFixed(2)}${isPartial ? '+' : ''}`
+const money = (usd: number, isPartial: boolean) => `$${usd.toFixed(2)}${isPartial ? '+' : ''}`
 
 /** The member on a working or review task (who holds its latest event), the finisher of a done one, nobody on a waiting one. */
 function whoOf(x: ListTask): string {

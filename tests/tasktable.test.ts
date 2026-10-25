@@ -38,7 +38,8 @@ const task = (n: number, over: Row = {}) => ({ n, title: `Task ${n}`, status: 'w
 const ev = (who: string, at: number) => ({ at, kind: 'start', who })
 const listOf = (...tasks: Row[]) => ({ version: 1, plan: 'docs/plans/x.md', approvedAt: 1, tasks, removed: { workMs: 0, costUsd: 0 } }) as unknown as TaskList
 const price = PRICES[0]!.output
-const money = (n: number) => n.toFixed(2)
+const money = (n: number) => `$${n.toFixed(2)}`
+const moneyRe = (n: number) => money(n).replace('$', '\\$') // for a RegExp source
 
 /** The ledger of the spec: done, working, review (one member's model unpriced), waiting, and a Thai title with markup. */
 const LEDGER = () =>
@@ -121,9 +122,9 @@ test('each row shows its number, title, who, whole minutes and the cost to the c
 
   const lines = await linesOf(ui)
 
-  expect(rowOf(lines, 1)).toMatch(new RegExp(`1\\s+Data model\\s+dev-1\\s+12\\s+${money(price * 2)}$`)) // done: who finished it
-  expect(rowOf(lines, 2)).toMatch(new RegExp(`2\\s+Sidebar list\\s+dev-2\\s+5\\s+${money(price)}$`)) // working: the member on it
-  expect(rowOf(lines, 3)).toMatch(new RegExp(`\\s+rev-1\\s+3\\s+${money(price)}\\+$`)) // review: the reviewer; one model unpriced: partial
+  expect(rowOf(lines, 1)).toMatch(new RegExp(`1\\s+Data model\\s+dev-1\\s+12\\s+${moneyRe(price * 2)}$`)) // done: who finished it
+  expect(rowOf(lines, 2)).toMatch(new RegExp(`2\\s+Sidebar list\\s+dev-2\\s+5\\s+${moneyRe(price)}$`)) // working: the member on it
+  expect(rowOf(lines, 3)).toMatch(new RegExp(`\\s+rev-1\\s+3\\s+${moneyRe(price)}\\+$`)) // review: the reviewer; one model unpriced: partial
   expect(rowOf(lines, 4)).toMatch(/4\s+Tests <b>bold<\/b>\s+—\s+—\s+—$/) // waiting, nobody, nothing counted; markup shown as text
   await ui.unmount()
 })
@@ -197,7 +198,7 @@ for (const cols of [40, 60, 100]) {
     for (const n of [1, 2, 3, 4, 5]) {
       const [min, cost] = tail(rowOf(lines, n))
       expect(min, `row ${n} Min`).toMatch(/^(\d+|<1|—)$/)
-      expect(cost, `row ${n} cost`).toMatch(/^(\d+\.\d\d\+?|—)$/)
+      expect(cost, `row ${n} cost`).toMatch(/^(\$\d+\.\d\d\+?|—)$/)
     }
     if (cols < 100) expect(rowOf(lines, 3)).toMatch(/…\s/) // the Thai title does not fit: cut, the next column whole
     expect(tail(rowOf(lines, 1))).toEqual(['12', money(price * 2)])
