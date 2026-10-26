@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.0 (2026-10-26)
 
 ### Added
 - **A task table for the approved plan.** After the plan gate the lead calls the new `hq_plan` tool, and the sidebar
@@ -10,6 +10,19 @@
   task done, and the list is kept in `.claude/agent-hq/tasks.json` for the next session. The guard refuses a member's
   write to the list and the approved plan file by path; a glob over the plan's name is not caught. Click a task on the
   live page for each member's work and a timeline.
+- **A Paused section on the live page.** The whole roster shows, including seats never started. Members that are
+  idle, done, failed (red badge), stopped or not started sit in a collapsible "Paused" tile; working members and those
+  waiting on you stay in the main view. With "Hide done" on, done members are hidden there too. Up to 50 are listed.
+
+### Changed
+- **Task table polish.** Every cost has a `$` prefix and an `≈` heading (translated in Thai). The terminal table has a
+  progress bar, a legend, `dev-1 +1` when two members share a task, and "+N more (3 waiting, 2 done)". The live page
+  table has status words for screen readers, more readable dim text, a progress bar, a chevron on rows that open, an
+  aligned cost column, who works on a task as a second line on narrow screens, a scrollable left column, "last active",
+  and a still spinner when a task has had no activity for 10 minutes and no member is working.
+
+### Fixed
+- **No overlap below 1100px.** The "Needs you" and Activity panel no longer covers the bottom of the left column.
 
 ## 0.8.1 (2026-10-25)
 
