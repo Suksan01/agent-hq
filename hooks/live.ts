@@ -85,8 +85,6 @@ export type LiveTaskList = {
 export type LiveSnapshot = {
   v: 1
   at: number
-  /** The person's language (the `language` option): the page draws its own words in it. */
-  lang: Lang
   team: { name: string; purpose: string; lead: string } | null
   overall: Progress
   tasksProgress: Progress
@@ -260,7 +258,6 @@ export function buildSnapshot(data: HqData, at: number, notice: LiveSnapshot['no
   return {
     v: 1,
     at,
-    lang,
     team: data.team ? { name: data.team.name, purpose: data.team.purpose, lead: data.team.lead.title } : null,
     overall: teamProgress(data),
     tasksProgress: progressOf(Object.values(data.tasks)),

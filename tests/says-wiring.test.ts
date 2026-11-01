@@ -1,5 +1,5 @@
 // hq_doing end to end: the lead and a tool-limited member say what they do; the sidebar shows it on the row's second
-// line (the tool and its seconds on the third), the band's activity line and the snapshot use it, in English and Thai.
+// line (the tool and its seconds on the third), the band's activity line and the snapshot use it.
 import { expect, mock, test } from 'claude-code/testing'
 import type { AgentInfo, On, RenderElement } from 'claude-code'
 import type { Engine } from 'claude-code/testing'
@@ -32,7 +32,7 @@ const BAND_PROPS = { hasSurvey: false, isWorking: true, maxRows: 10, bodyColumns
 /** The team loaded with a developer and a reviewer at work; `box.probe` runs inside each Grep, while the call is live. */
 async function session($: Engine, on: On) {
   mock.clock(on)
-  mock.store(on, { approvedTeams: withApproval([], `/work/app/${TEAM_FILE}`, JSON.stringify(TEAM)), languageAsked: true })
+  mock.store(on, { approvedTeams: withApproval([], `/work/app/${TEAM_FILE}`, JSON.stringify(TEAM)) })
   const box: { probe?: () => Promise<void> } = {}
   on('env.get', () => ({ value: '/home/me' }))
   on('session.cwd', () => ({ value: '/work/app' }))
@@ -119,24 +119,6 @@ test('the band names who does what by their sentences', async ($, on) => {
   await call({ tool: 'Grep', pattern: 'x', agentId: 'd1', tool_use_id: 'g2' })
   expect(during).toMatch(/: Searching for x/) // no sentence: its tool line, as before
   await ui.unmount()
-})
-
-test('in Thai the sentence shows whole on the sidebar and band, never in a cell', { options: { language: 'thai' } }, async ($, on) => {
-  const { call } = await session($, on)
-  await call({ tool: DOING_TOOL, agentId: 'd1', text: 'กำลังทำ API เก่าและแก้ปัญหาที่เจอ' })
-  for (const surface of ['terminal', 'desktop'] as const) {
-    const ui = await $.ui.mount({ plugin: 'agent-hq', surface, component: 'Pane', requestId: 'agent-hq', props: PANE_PROPS as never })
-    expect(await ui.find({ text: /▸ กำลังทำ API เก่าและแก้ปัญหาที่เจอ/ }), surface).toBeDefined()
-    expect(await ui.find({ text: /▸ รอสมาชิก 1\/2|▸ รอสมาชิก 2\/2/ }), surface).toBeDefined()
-    await ui.unmount()
-  }
-  const band = await $.ui.mount({ plugin: 'agent-hq', surface: 'terminal', component: 'AbovePrompt', props: BAND_PROPS as never, viewport: { columns: 100, rows: 40, isFullscreen: true } as never })
-  expect(await band.find({ text: /: กำลังทำ API เก่าและแก้ปัญหาที่เจอ/ })).toBeDefined()
-  for (const r of await band.findAll({ type: 'Raster' })) {
-    const words = new Uint32Array(Uint8Array.from(atob(String(r.props.cells)), c => c.charCodeAt(0)).buffer)
-    for (let i = 0; i < words.length; i += 3) expect((words[i] ?? 0) >= 0x0e00 && (words[i] ?? 0) <= 0x0e7f).toBe(false)
-  }
-  await band.unmount()
 })
 
 test('the snapshot carries each agent says: the sentence, else its fallback, else null', () => {

@@ -435,13 +435,6 @@ test('the i18n middleware file is in the setup task\'s files and in the clean-up
   assert.match(cleanup, /byte for byte/)
 })
 
-test('the spec and plan are written in the chosen language, while the slug, branch, code, tests, commits and Status lines stay English', () => {
-  const top = skill.slice(0, skill.indexOf('\n## '))
-  assert.match(top, /spec and the plan are written in that language/)
-  assert.match(top, /feature slug, branch names, code, tests, commit messages/)
-  assert.match(top, /`Status:` and `Skipped:` words, phase names and `AC` ids stay English/) // a resume reads them back
-})
-
 test('SKILL.md stays small: phase details sit in references/ that it points to by a path that exists', () => {
   assert.ok(Buffer.byteLength(main) < 17_000, `SKILL.md is ${Buffer.byteLength(main)} bytes`) // it was 26.7 KB before the split
   const pointers = [...main.matchAll(POINTER)].map(m => m[1])

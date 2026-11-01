@@ -1,6 +1,6 @@
 // Next-task suggestions end to end: after the lead's answered turn, with the live page running and the setting on, one
 // detached fork drafts a recap and up to three tasks into the snapshot; never for a member, without the page or when
-// off; cleared when the lead's next turn starts; a failed fork logs and leaves none; /hq web next on|off in both languages.
+// off; cleared when the lead's next turn starts; a failed fork logs and leaves none; /hq web next on|off.
 import { expect, mock, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import type { Engine, MockClock } from 'claude-code/testing'
@@ -35,7 +35,7 @@ async function session($: Engine, on: On, options: { web?: boolean; stored?: Rec
   const snaps: Snapshot[] = []
   const forks: string[] = []
   const logs: string[] = []
-  const stored: Record<string, unknown> = { languageAsked: true, ...options.stored }
+  const stored: Record<string, unknown> = { ...options.stored }
   let reply: Reply | Error = REPLY
   let held: ((value: Reply | Error) => void)[] | null = null
   let pages: string | null = JSON.stringify({ count: 1, at: 1 })
@@ -109,15 +109,8 @@ test("after the lead's answered turn with the page running, one fork drafts a re
   expect((await s.snapshot()).suggestions).toBeNull()
   await leadTurn($, 't1')
   const got = (await s.snapshot()).suggestions
-  expect(s.forks).toEqual([suggestPrompt('en')])
+  expect(s.forks).toEqual([suggestPrompt()])
   expect(got).toEqual({ recap: 'The API is done. Tests pass.', items: ['Commit the API work', 'Write the README section'], at: expect.any(Number) })
-})
-
-test("in Thai the fork is asked for Thai", { options: { language: 'thai' } }, async ($, on) => {
-  const s = await session($, on)
-  await leadTurn($, 't1')
-  await s.snapshot()
-  expect(s.forks).toEqual([suggestPrompt('th')])
 })
 
 test("no fork for a member's turn, an interrupted or failed lead turn, without the page, or when off", async ($, on) => {
@@ -238,11 +231,4 @@ test('/hq web next on|off answers in English and keeps the choice; a bare one sa
   expect(await s.command('web next on')).toBe("Agent HQ will suggest up to 3 next tasks on the live page after each of the lead's turns.")
   expect(s.stored.nextTasks).toBe(true)
   expect(await s.command('web next maybe')).toBe('Agent HQ: use /hq web next on or /hq web next off.')
-})
-
-test('/hq web next on|off answers in Thai', { options: { language: 'thai' } }, async ($, on) => {
-  const s = await session($, on)
-  expect(await s.command('web next off')).toBe('Agent HQ จะไม่แนะนำงานถัดไปบนหน้าเรียลไทม์ เปิดอีกครั้งด้วย /hq web next on')
-  expect(await s.command('web next on')).toBe('Agent HQ จะแนะนำงานถัดไปสูงสุด 3 ข้อบนหน้าเรียลไทม์ หลังหัวหน้าตอบแต่ละรอบ')
-  expect(await s.command('web next maybe')).toBe('Agent HQ: ใช้ /hq web next on หรือ /hq web next off')
 })

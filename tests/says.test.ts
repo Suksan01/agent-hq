@@ -29,8 +29,8 @@ test('secrets never reach the line: tokens, keys, KEY=value, long opaque strings
   cases.forEach((text, i) => expect(maskSecrets(text), text).not.toContain(secrets[i]))
   expect(maskSecrets('set API_KEY=supersecretvalue and run')).toBe('set API_KEY=*** and run')
   expect(maskSecrets('fetch https://admin:s3cret@example.com/data')).toBe('fetch https://***@example.com/data')
-  // plain words, paths, Thai and short numbers stay
-  for (const plain of ['Fixing the old API in src/components/booking-calendar.tsx', 'กำลังแก้ API เก่า', 'Running 12 tests on port 3000', 'internationalization']) {
+  // plain words, paths and short numbers stay
+  for (const plain of ['Fixing the old API in src/components/booking-calendar.tsx', '修复旧的 API', 'Running 12 tests on port 3000', 'internationalization']) {
     expect(maskSecrets(plain)).toBe(plain)
   }
 })
@@ -48,9 +48,6 @@ test('more secrets never reach the line: AWS secret keys, a secret word then its
     ['calling Drive with ya29.a0AfH6SMBx-3kLmNoPqRsTuVwXyZ', 'a0AfH6SMBx'],
     ['curl -u admin:s3cretpass https://api.example.com', 's3cretpass'],
     ['curl --user=admin:s3cretpass https://api.example.com', 's3cretpass'],
-    ['รหัสผ่าน hunter2now สำหรับฐานข้อมูล', 'hunter2now'],
-    ['ใช้โทเคน: abc12345xyz ก่อน', 'abc12345xyz'],
-    ['รหัส 9a8b7c6d ของ staging', '9a8b7c6d'],
     ['the key wJalrXUtnFEMIK7MDENGbPxRfiCYEXAMPLEKEY is live', 'wJalrXUtnFEMIK7'],
     ['secret key wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY.', 'K7MDENG'], // at a sentence's end: a full stop is no extension
     ['the API key is abc123xyz9 for now', 'abc123xyz9'],
@@ -60,7 +57,7 @@ test('more secrets never reach the line: AWS secret keys, a secret word then its
   expect(maskSecrets('the password is hunter2now, try it')).toBe('the password is ***, try it')
   expect(maskSecrets('curl -u admin:s3cretpass https://api.example.com')).toBe('curl -u admin:*** https://api.example.com')
   expect(maskSecrets('posting to https://hooks.slack.com/services/' + 'T0123ABCD/B0456EFGH/abcdefghijklmnopqrstuvwx')).toBe('posting to https://hooks.slack.com/services/***')
-  // ordinary sentences about secrets, paths and Thai stay as they are
+  // ordinary sentences about secrets and paths stay as they are
   for (const plain of [
     'Fixing the token refresh logic',
     'Updating the password reset page so the password field is checked',
@@ -68,8 +65,6 @@ test('more secrets never reach the line: AWS secret keys, a secret word then its
     'Moving src/components/BookingCalendar/index.tsx to the new folder',
     'Reading /Users/me/work/agent-hq-0.6.0/hooks/talk.ts',
     'Run curl -u with the deploy user from the vault',
-    'กำลังแก้หน้ารีเซ็ตรหัสผ่าน',
-    'ตรวจ token ที่หมดอายุ แล้วแก้ password reset',
     // what the review found masked by mistake: paths, identifiers, numbers after a secret word
     'Edit src/pages/Checkout/Step2/PaymentForm/CardInput.tsx',
     'Fix src/components/BookingCalendar/WeekView2.tsx',
@@ -79,7 +74,6 @@ test('more secrets never reach the line: AWS secret keys, a secret word then its
     'Fixing token 401 error',
     'Update secret 2 of 3 in the vault docs',
     'Passwords: 3 tests failing',
-    'แก้รหัสผ่าน 3 ข้อที่ล้มเหลว',
     'Rotate the API key next week',
     'Fix the OAuth2 token: v2 migration',
     'secret: v2 of the plan',
@@ -96,11 +90,11 @@ test('a saying is one line, masked, at most 90 characters, cut between clusters'
   const long = cleanSaying('a'.repeat(200))
   expect(long.length).toBeLessThanOrEqual(SAYS_MAX)
   expect(long.endsWith('…')).toBe(true)
-  const thai = 'กำลังแก้ปัญหาของ API เก่าที่ทำให้หน้าค้นหาช้ามากและเขียนเทสต์ให้ครบทุกกรณีที่ผู้ใช้เจอบ่อยที่สุดในสัปดาห์นี้'
-  const cut = cleanSaying(thai)
+  const accented = 'cafe\u0301 '.repeat(60) // e + combining acute is one cluster
+  const cut = cleanSaying(accented)
   expect(cut.length).toBeLessThanOrEqual(SAYS_MAX)
   const kept = cut.replace(/…$/, '')
-  expect(graphemes(thai).slice(0, graphemes(kept).length).join('')).toBe(kept) // a whole-cluster prefix
+  expect(graphemes(accented).slice(0, graphemes(kept).length).join('')).toBe(kept) // a whole-cluster prefix
   expect(cleanSaying('deploying with ghp_abcdefghijklmnopqrstuvwxyz0123456789')).not.toContain('ghp_')
 })
 
@@ -154,7 +148,6 @@ test('the lead, saying nothing, waits for its members or plans', () => {
   const lead = data.agents[MAIN]
   if (!lead) throw new Error('no lead')
   expect(sayingOf(lead, data)).toEqual({ text: 'Waiting for 3 of 4 members', source: 'lead' })
-  expect(sayingOf(lead, data, 'th')).toEqual({ text: 'รอสมาชิก 3/4', source: 'lead' })
 
   const alone = base([member('d', 'completed')])
   const leadAlone = alone.agents[MAIN]
@@ -162,7 +155,6 @@ test('the lead, saying nothing, waits for its members or plans', () => {
   expect(sayingOf(leadAlone, alone)).toBeNull() // idle between turns: today's line stays
   const busy: HqData = { ...alone, activity: { [MAIN]: { text: 'Reading a.ts', since: 0, callId: 'c' } } }
   expect(sayingOf(leadAlone, busy)).toEqual({ text: 'Planning', source: 'lead' })
-  expect(sayingOf(leadAlone, busy, 'th')).toEqual({ text: 'กำลังวางแผน', source: 'lead' })
 
   const said: HqData = { ...data, says: { [MAIN]: { text: 'Reviewing the API fix', at: 3 } } }
   expect(sayingOf(lead, said)).toEqual({ text: 'Reviewing the API fix', source: 'doing' })

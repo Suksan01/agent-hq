@@ -25,7 +25,7 @@ async function boot($: Engine, on: On) {
   const listed: AgentInfo[] = []
   const board: Record<string, unknown>[] = []
   mock.clock(on)
-  mock.store(on, { approvedTeams: withApproval([], PROJECT_FILE, TEAM), languageAsked: true })
+  mock.store(on, { approvedTeams: withApproval([], PROJECT_FILE, TEAM) })
   on('env.get', () => ({ value: '/home/me' }))
   on('session.cwd', () => ({ value: '/work/app' }))
   on('session.id', () => ({ value: 'sess' }))

@@ -13,11 +13,6 @@ shows the team in its sidebar (`/hq`).
 Ask, don't assume: the person decides what the team is for, its size and its roles. Keep each question short, use
 AskUserQuestion for choices, and wait for the answer before moving on.
 
-**Language:** speak, ask and write the files the person reads in the language Agent HQ's language section names (English when there is none); keep code, commands, paths, JSON keys and commit messages English.
-In the team file, write the name, purpose, titles, missions, tasks and rules in that language (the person reads them in
-the sidebar and in reports); role ids, tool names, skill names, models, globs and paths stay English, since Agent HQ
-matches them.
-
 ## How to ask
 
 - **Open questions first, in plain text** (what the team is for, what the first task is): the person's own words
@@ -41,8 +36,7 @@ matches them.
 - **No catch-all options** such as "Change it" or "Something else": "Other" already lets the person type what to
   change. An option that goes back to an earlier step names that step ("Change the lineup").
 - Keep `header` to 12 columns and 2 to 4 options. The person can always pick "Other" to type their own answer.
-  These limits count display columns: a Thai vowel or tone mark above or below a letter takes none. Keep Thai labels
-  short.
+  These limits count display columns.
 - **Say where the person is**: start every question's text with its step, `Step 4 of 8 · ` then the question
   ("Step 4 of 8 · Which lineup fits the checkout work?"), so the interview never feels open-ended. Skipped steps keep
   their numbers.
@@ -133,8 +127,6 @@ role pre-filled (id, title, count, mission, tasks, rules, skills, tools, model) 
 - **purpose**: replace the `<purpose: ...>` placeholder with one sentence from the goal the person gave in step 2;
   never save the placeholder.
 - **name**: the template's name is only a suggestion; step 5 asks the person for the team's name.
-- **language**: the templates are English starting points: when the language is Thai, translate the picked template's
-  titles, missions, tasks and rules (the lead's too), and keep its ids, tools, skills and models as they are.
 - **adapt**: rewrite titles, missions, tasks and rules where the goal calls for it (name the real stack, area or
   documents; drop a task that does not apply). Keep each role's `id`, `tools` (reviewers stay read-only) and the
   rules about review, tests and never pushing or merging.
@@ -184,7 +176,7 @@ trade-offs for the person before work starts, and drafts the lead's updates and 
 Assistant" first (Recommended when the team has 3 or more members) and "No assistant". It counts toward the 12 roles.
 
 If the person adds it, use this card as the starting point for step 6 (adapt the mission to the goal; keep the id, the
-tools, the guard and the rules, in the team's language). Edit and Write let it save the spec and the plan of
+tools, the guard and the rules). Edit and Write let it save the spec and the plan of
 `/agent-hq:feature`; its guard keeps them to those two folders, and everything else it writes comes back in its reply:
 
 ```json
@@ -307,8 +299,7 @@ Access   full
 safer · asks before adding a dep
 ```
 
-- **id**: kebab-case, ASCII letters, digits and `-` only, in English whatever the title's language (`senior-dev`,
-  `qa`); becomes `agent-hq:<id>`.
+- **id**: kebab-case, ASCII letters, digits and `-` only (`senior-dev`, `qa`); becomes `agent-hq:<id>`.
 - **title**: what the sidebar shows (`Senior Developer`).
 - **count**: how many may run at once.
 - **mission**: one or two sentences, what this role is for.

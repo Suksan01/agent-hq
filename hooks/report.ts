@@ -133,8 +133,8 @@ export function buildReport(data: HqData, at: number, summary?: string): string 
 }
 
 /** What the model is asked for the report's top. */
-export const summaryPrompt = (report: string, lang: Lang = 'en') =>
-  `Below is a report of an agent team's work. Write an executive summary of exactly three sentences: what got done, what went wrong or is blocked, and what is left. Plain text only, no lists, no headings, no preamble.${lang === 'th' ? ' Write it in Thai, with no polite particles (ครับ/ค่ะ).' : ''}\n\n${report}`
+export const summaryPrompt = (report: string) =>
+  `Below is a report of an agent team's work. Write an executive summary of exactly three sentences: what got done, what went wrong or is blocked, and what is left. Plain text only, no lists, no headings, no preamble.\n\n${report}`
 
 /** The toast after a report: the file (relative to the project when inside it) and the headline counts. */
 export function reportToast(data: HqData, path: string, cwd: string): string {
@@ -146,9 +146,9 @@ export function reportToast(data: HqData, path: string, cwd: string): string {
 }
 
 // no model (a session without one, a refused call) means no summary, never a failed report
-async function summarise($: EngineInterface, report: string, lang: Lang): Promise<string> {
+async function summarise($: EngineInterface, report: string): Promise<string> {
   try {
-    const answer = await $.model.complete({ model: SUMMARY_MODEL, prompt: summaryPrompt(report, lang), maxTokens: SUMMARY_MAX_TOKENS, timeoutMs: SUMMARY_TIMEOUT_MS })
+    const answer = await $.model.complete({ model: SUMMARY_MODEL, prompt: summaryPrompt(report), maxTokens: SUMMARY_MAX_TOKENS, timeoutMs: SUMMARY_TIMEOUT_MS })
     return answer.isAnswered ? answer.text.trim() : ''
   } catch {
     return ''
@@ -158,7 +158,7 @@ async function summarise($: EngineInterface, report: string, lang: Lang): Promis
 /** Writes the report under the project (`cwd`) and returns where; the model's summary tops it only when one came back. */
 export async function createReport($: EngineInterface, data: HqData, cwd: string, at: number): Promise<{ path: string; hasSummary: boolean }> {
   const path = reportPath(cwd, at)
-  const summary = await summarise($, buildReport(data, at), langOf(data))
+  const summary = await summarise($, buildReport(data, at))
   await $.fs.write(path, buildReport(data, at, summary))
   return { path, hasSummary: summary !== '' }
 }

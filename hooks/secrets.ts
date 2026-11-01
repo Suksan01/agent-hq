@@ -4,8 +4,8 @@
 
 const MASK = '***'
 
-// a word that names a secret, in English or Thai (Thai has no word breaks for \b to find): what follows it is its value
-const SECRET_WORD = String.raw`((?:\b\w*(?:token|secret|password|passwd|pwd|api[_\s-]?key|credential)\w*)|รหัสผ่าน|รหัส|โทเคน)`
+// a word that names a secret: what follows it is its value
+const SECRET_WORD = String.raw`((?:\b\w*(?:token|secret|password|passwd|pwd|api[_\s-]?key|credential)\w*))`
 // a value after `:` or a space that reads like a secret: quoted, or letters and digits both (so "401" and "2 of 3" stay),
 // never a version (v2, v1.2.3)
 const SECRET_VALUE = String.raw`("[^"]*"|'[^']*'|(?!v\d+(?:\.\d+)*(?:[\s,;]|$))(?=[^\s,;]*\d)(?=[^\s,;]*[A-Za-z])[^\s,;]+)`
@@ -26,7 +26,7 @@ const SECRETS: readonly [RegExp, string][] = [
   [/\b(Bearer|Basic)\s+\S+/gi, `$1 ${MASK}`],
   [/\b([A-Z][A-Z0-9_]+)=("[^"]*"|'[^']*'|\S+)/g, `$1=${MASK}`], // ENV_NAME=value
   [new RegExp(String.raw`${SECRET_WORD}(\s*=\s*)("[^"]*"|'[^']*'|\S+)`, 'gi'), `$1$2${MASK}`], // password=…
-  // `token: …`, `--password hunter2now`, `the password is hunter2now`, `รหัสผ่าน hunter2now`
+  // `token: …`, `--password hunter2now`, `the password is hunter2now`
   [new RegExp(String.raw`${SECRET_WORD}(\s*:\s*|\s+(?:is\s+)?)${SECRET_VALUE}`, 'gi'), `$1$2${MASK}`],
 ]
 

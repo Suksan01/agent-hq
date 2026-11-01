@@ -40,13 +40,3 @@ test('badges come from ids or objects, with a title for any id', () => {
   ])
   assert.deepEqual(badgesOf(undefined), [])
 })
-
-test('in Thai the known badges have Thai titles; an unknown id is still named from itself', async () => {
-  const { setLang } = await import('./i18n.js')
-  try {
-    setLang('th')
-    assert.deepEqual(badgesOf(['speedy', 'night_owl']).map(b => b.title), ['ไวสุด', 'Night owl'])
-  } finally {
-    setLang('en')
-  }
-})

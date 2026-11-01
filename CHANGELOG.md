@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Removed
+- **Thai language support.** Agent HQ is English only: the `language` option, the first-run language question, `/hq lang`,
+  the Thai strings of the mod and the live page, and the Thai notes in the skills are gone. A saved `language` value is ignored.
+
 ## 0.9.1 (2026-11-01)
 
 ### Changed

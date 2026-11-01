@@ -24,7 +24,7 @@ async function session($: Engine, on: On): Promise<{ clock: MockClock; snaps: un
   const clock = mock.clock(on, { now: 1_000 })
   const snaps: unknown[] = []
   const files = new Map<string, string>()
-  mock.store(on, { approvedTeams: withApproval([], `/work/app/${TEAM_FILE}`, JSON.stringify(TEAM)), languageAsked: true })
+  mock.store(on, { approvedTeams: withApproval([], `/work/app/${TEAM_FILE}`, JSON.stringify(TEAM)) })
   on('env.get', () => ({ value: '/home/me' }))
   on('session.cwd', () => ({ value: '/work/app' }))
   on('session.id', () => ({ value: 'sess' }))

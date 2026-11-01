@@ -2,7 +2,7 @@ import type { Elements, RenderElement } from 'claude-code'
 
 import type { HqActivity, HqAgent, HqAssignment, HqBubble, HqSays, HqStatus, HqTask, HqTaskStatus, HqTeam, HqTodo } from '../types'
 import { roleTitle } from './team'
-import { LEAD_COLOR, MIN_NAME, TONE_GLYPH, TRACK_PX, fitText, hasThai, spriteCells, textWidth, tonesFor, trackCells, trackSvg } from './cells'
+import { LEAD_COLOR, MIN_NAME, TONE_GLYPH, TRACK_PX, fitText, spriteCells, textWidth, tonesFor, trackCells, trackSvg } from './cells'
 import { SMALL_H, SMALL_W, SPRITE_H, SPRITE_W, paletteOf, speciesOf, spriteFrames } from './sprites'
 import type { Tone, TrackSpec } from './cells'
 import { MAIN, agentWork, elapsed, isFinished, isWorking, overallProgress, progressOf, teamTree, workingCount } from './model'
@@ -118,46 +118,13 @@ export type HqActions = {
 export type BandActions = { onOpenSidebar: () => void; onHide: () => void }
 
 /**
- * A drawing in cells; a track also carries its spec, which a surface without Rasters draws as an Svg (textTrack), and the
- * words that left its pill (`aside`), drawn in a Text beside it.
+ * A drawing in cells; a track also carries its spec, which a surface without Rasters draws as an Svg (textTrack).
  */
-export type Raster = { key: string; columns: number; rows: number; cells: string; spec?: TrackSpec; aside?: string }
+export type Raster = { key: string; columns: number; rows: number; cells: string; spec?: TrackSpec }
 
-const ASIDE_SHARE = 0.4 // the words beside a track take at most this share of its width
-const MIN_TRACK = 6
-
-/**
- * Thai never goes in a Raster cell (a mark has no column of its own, and the engine refuses the whole tree): in Thai, or
- * for Thai words, the pill keeps its count and glyph and the words go beside the track, which gives up their room.
- */
-function besideTrack(spec: TrackSpec, W: number, lang: Lang): { spec: TrackSpec; W: number; aside?: string } {
-  const isLabelOut = spec.label !== '' && (lang !== 'en' || hasThai(spec.label))
-  const isCountOut = hasThai(spec.count)
-  if (!isLabelOut && !isCountOut) return { spec, W }
-  const words = [isLabelOut ? spec.label : '', isCountOut ? spec.count : ''].filter(Boolean).join(' ')
-  const aside = fitText(words, Math.max(1, Math.min(Math.floor(W * ASIDE_SHARE), W - MIN_TRACK - 1)))
-  const kept = { ...spec, label: isLabelOut ? '' : spec.label, count: isCountOut ? '' : spec.count }
-  return { spec: kept, W: Math.max(MIN_TRACK, W - width(aside) - 1), aside }
-}
-
-/** A track's Raster (its spec kept for an Svg), its words beside it where they left the pill. */
-function trackRaster(key: string, spec: TrackSpec, W: number, lang: Lang, draw: (spec: TrackSpec, W: number) => string): Raster {
-  const placed = besideTrack(spec, W, lang)
-  return { key, columns: placed.W, rows: 1, cells: draw(placed.spec, placed.W), spec: placed.spec, ...(placed.aside ? { aside: placed.aside } : {}) }
-}
-
-/** A drawn track, with the words that left its pill in a Text beside it. */
-export function withAside(els: Els, r: Raster, track: RenderElement): RenderElement {
-  if (!r.aside) return track
-  const { Box, Text } = els
-  return (
-    <Box key={`${r.key}-aside`} flexDirection="row" gap={1}>
-      {track}
-      <Text dimColor wrap="truncate-end">
-        {r.aside}
-      </Text>
-    </Box>
-  )
+/** A track's Raster (its spec kept for an Svg). */
+function trackRaster(key: string, spec: TrackSpec, W: number, draw: (spec: TrackSpec, W: number) => string): Raster {
+  return { key, columns: W, rows: 1, cells: draw(spec, W), spec }
 }
 
 // ---------- tones, shared by band and sidebar ----------
@@ -219,7 +186,7 @@ export function bandRasters(data: HqData, W: number, at: number, isLight: boolea
   const draw = (spec: TrackSpec, w: number) => trackCells(spec, w, at, isLight)
   if (p.total > 0) {
     const spec = { ...p, tone: toneOf(p, team), label: teamTrackLabel(team, p, lang), count: `${p.done}/${p.total}` }
-    out.push(trackRaster('track-team', spec, W, lang, draw))
+    out.push(trackRaster('track-team', spec, W, draw))
   }
   const tasks = Object.values(data.tasks)
   if (tasks.length > 0) {
@@ -227,7 +194,7 @@ export function bandRasters(data: HqData, W: number, at: number, isLight: boolea
     const current = tasks.find(x => x.status === 'in_progress')
     const label = current ? (current.activeForm ?? current.subject) : tp.done === tp.total ? t(lang, 'band.done') : t(lang, 'band.tasks')
     const spec: TrackSpec = { ...tp, tone: tp.done === tp.total ? 'done' : 'running', label, count: `${tp.done}/${tp.total}` }
-    out.push(trackRaster('track-tasks', spec, W, lang, draw))
+    out.push(trackRaster('track-tasks', spec, W, draw))
   }
   return out
 }
@@ -379,7 +346,7 @@ function treeRasters(data: HqData, at: number, lang: Lang, base: string): Raster
     const fallback = work.todos ? undefined : fallbackOf(agent, data.tasks)
     if (fallback) {
       const W = rowTextWidth(data.columns, prefix, size.columns)
-      const bar = trackRaster(`todo-${agent.id}`, fallbackSpec(fallback, agent, lang), W, lang, (spec, w) => trackCells(spec, w, at, data.isLight, base))
+      const bar = trackRaster(`todo-${agent.id}`, fallbackSpec(fallback, agent, lang), W, (spec, w) => trackCells(spec, w, at, data.isLight, base))
       return [mascot, bar]
     }
     if (!work.todos) return [mascot]
@@ -414,7 +381,7 @@ export function activityLine(agent: HqAgent, work: AgentWork, data: HqData, room
   const lang = data.lang ?? 'en'
   const live = currentActivity(data.activity, agent.id)
   if (!live || isFinished(agent.status)) return { ...nowLine(agent, work, data.now, lang), isLive: false }
-  const secs = ` · ${timeFor(data.now - live.since, lang, room)}`
+  const secs = ` · ${elapsed(data.now - live.since, lang)}`
   const cursor = CURSOR[Math.floor(data.now / SECOND) % CURSOR.length]
   return { tone: 'running', text: `${cursor} ${fitText(live.text, Math.max(1, room - 2 - width(secs)))}${secs}`, isLive: true }
 }
@@ -482,16 +449,7 @@ function Header({ Box, Text }: Els, team: HqAgent[], isLight: boolean) {
   )
 }
 
-// a Thai time ("4 นาที 12 วิ") takes at most this share of its row; past it the row shows "4:12"
-const TIME_SHARE = 1 / 3
-
-/** How long, in words that fit a row `room` columns wide: the narrow "4:12" once the words would take too much of it. */
-function timeFor(ms: number, lang: Lang, room: number): string {
-  const full = elapsed(ms, lang)
-  return width(full) > room * TIME_SHARE ? elapsed(ms, lang, true) : full
-}
-
-const ranFor = (agent: HqAgent, data: HqData, room: number) => timeFor((agent.endedAt ?? Math.max(data.now, agent.startedAt)) - agent.startedAt, data.lang ?? 'en', room)
+const ranFor = (agent: HqAgent, data: HqData) => elapsed((agent.endedAt ?? Math.max(data.now, agent.startedAt)) - agent.startedAt, data.lang ?? 'en')
 const statusWord = (status: HqStatus, lang: Lang) => t(lang, `status.${status}`)
 
 /** An agent not at work: one line with its bot's colour as a dot, its status in a word or its last finished item. */
@@ -501,7 +459,7 @@ function CompactNode(els: Els, data: HqData, actions: HqActions, { agent, prefix
   const tone = TONE_OF[agent.status]
   const TONE_COLOR = tonesFor(data.isLight)
   const label = labelOf(agent, data.team, lang)
-  const time = ranFor(agent, data, data.columns - [...prefix].length)
+  const time = ranFor(agent, data)
   const head = !work.last ? undefined : agent.status === 'completed' ? '✓ ' : agent.status === 'failed' ? t(lang, 'row.failedLast') : undefined
   const status = head ?? statusWord(agent.status, lang)
   const botColor = speciesOf(agent.mascot).color
@@ -623,7 +581,7 @@ function rowWords(data: HqData, { agent, work }: TreeRow, room: number) {
   const lang = data.lang ?? 'en'
   const isMain = agent.id === MAIN
   const team = teamOf(data)
-  const time = isMain ? t(lang, 'row.tools', { n: agent.tools }) : ranFor(agent, data, room)
+  const time = isMain ? t(lang, 'row.tools', { n: agent.tools }) : ranFor(agent, data)
   const live = activityLine(agent, work, data, room)
   // what it says it does takes line 2; its tool and seconds then move to line 3, while that line is free
   const saying = sayingOf(agent, data, lang)
@@ -822,8 +780,8 @@ export function textTrack(els: Els, rasters: Raster[], data: HqData): DrawRaster
     const { spec } = r
     // a working agent with no todos says what stands in for them: a task's status, or "getting started"
     const isFallback = key.startsWith('todo-') && !data.todos[key.slice('todo-'.length)]?.length
-    const alt = spec.sweep ? spec.label || r.aside : isFallback ? spec.count || r.aside : t(data.lang ?? 'en', 'track.alt', { done: spec.done, total: spec.total })
+    const alt = spec.sweep ? spec.label : isFallback ? spec.count : t(data.lang ?? 'en', 'track.alt', { done: spec.done, total: spec.total })
     const W = r.columns * COLUMN_PX
-    return withAside(els, r, <Svg key={key} source={trackSvg(spec, W, data.isLight)} alt={alt ?? ''} width={W} height={TRACK_PX} />)
+    return <Svg key={key} source={trackSvg(spec, W, data.isLight)} alt={alt ?? ''} width={W} height={TRACK_PX} />
   }
 }

@@ -1,21 +1,19 @@
 // 0.6.0 on the live page, in a real browser (browser-kit.mjs: a real hub, scripted mods, a headless Chrome of its own):
-// the page in the snapshot's language (Thai), each agent's "what I'm doing" sentence on its card, and talk bubbles over the
+// each agent's "what I'm doing" sentence on its card, and talk bubbles over the
 // cards in the Diagram and Space views. Skipped when no Chrome is found (CHROME_BIN overrides).
 //   node --test --test-concurrency=1 web/talk.test.mjs
-// AGENT_HQ_SHOT_DIR=<folder> also saves a screenshot of the Thai page there.
 import assert from 'node:assert/strict'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { buildSnapshot, launchBrowser, newWorld, skip, sleep, slow, twoSessions, until } from './browser-kit.mjs'
-import { STRINGS } from './i18n.js'
 
 const LONG = 'Working on the old API and fixing its issues, then the search page and its slow queries too' // 90 characters
 
-/** A snapshot with `lang`, a sentence per agent id (`says`), `bubbles`, and `over` merged into agents by id. */
-function snapshot({ team, agents, lang, says = {}, bubbles, over = {}, roleTitle = 'Developer' }) {
+/** A snapshot with a sentence per agent id (`says`), `bubbles`, and `over` merged into agents by id. */
+function snapshot({ team, agents, says = {}, bubbles, over = {}, roleTitle = 'Developer' }) {
   const snap = buildSnapshot({ team, agents, roles: [{ id: 'dev', title: roleTitle, count: 5, active: 1 }] })
   const rows = snap.agents.map(a => ({ ...a, ...(over[a.id] ?? {}), ...(a.id in says ? { says: says[a.id] } : {}) }))
-  return { ...snap, agents: rows, ...(lang ? { lang } : {}), ...(bubbles ? { bubbles } : {}) }
+  return { ...snap, agents: rows, ...(bubbles ? { bubbles } : {}) }
 }
 
 /** Two sessions (alpha is the hub), a browser logged in and showing the page. */
@@ -125,43 +123,4 @@ test('the Space view draws bubbles on its cards too, and under reduced motion th
   // the person asks for less motion (switched on a page already placed: the Space view under reduced motion from the start places no cards at all, an older issue)
   await page.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] })
   await until(() => page.eval(`getComputedStyle(${inSpace}).animationName === 'none'`), 5000, 'no fade under reduced motion')
-})
-
-// ---- the page in Thai ---------------------------------------------------------------------------------------------------------
-
-/** Every English string of the page's table, as the fragments between its placeholders that a Thai page must not show. */
-const ENGLISH = Object.entries(STRINGS.en).flatMap(([key, en]) => en.split(/\{\w+\}/).map(f => f.trim()).filter(f => /[A-Za-z]{3}/.test(f) && !STRINGS.th[key].includes(f)))
-const pageWords = page => page.eval(`[document.body.innerText, ...[...document.querySelectorAll('[aria-label], [title], [placeholder]')].flatMap(e => [e.getAttribute('aria-label'), e.getAttribute('title'), e.getAttribute('placeholder')])].filter(Boolean).join('\\n')`)
-const englishIn = text => ENGLISH.filter(f => new RegExp(`(^|[^A-Za-z])${f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^A-Za-z])`, 'i').test(text))
-
-test('the page follows the first live session into Thai: lang="th", Thai fonts, and no English from its table anywhere', { skip, timeout: slow(90_000) }, async t => {
-  const thai = { main: { role: 'หัวหน้าทีมเทค', now: 'นำทีม', next: null }, dev1: { role: 'นักพัฒนา', now: 'แก้ไข search.tsx', next: 'รันเทสต์', activity: { text: 'แก้ไข search.tsx', since: Date.now() } }, qa1: { role: 'ผู้ทดสอบ', now: 'รออนุมัติ', next: null }, dev2: { role: 'นักพัฒนา', now: 'อ่าน README', next: null } }
-  const alpha = () => snapshot({
-    team: 'ทีมอัลฟา', lang: 'th', roleTitle: 'นักพัฒนา', over: thai,
-    agents: [['dev1', 'Sam', 'running'], ['qa1', 'Tanuki', 'waiting']],
-    says: { main: 'รอสมาชิก 1/2', dev1: 'กำลังทำ API เก่าและแก้ปัญหาที่เจอ' },
-    bubbles: [{ agent: 'dev1', other: 'main', dir: 'from', text: 'แก้ปัญหาของ API เก่า', at: Date.now() }],
-  })
-  const beta = () => snapshot({ team: 'ทีมเบตา', lang: 'en', roleTitle: 'นักพัฒนา', over: thai, agents: [['dev2', 'Momo', 'running']] }) // listed second: alpha decides
-  const { page } = await openPage(t, [alpha, beta])
-  await until(() => page.eval(`document.documentElement.lang === 'th' && !!document.querySelector('.sk-bubble')`), 10_000, 'the page in Thai with its bubble')
-  await sleep(slow(500))
-
-  const font = await page.eval(`getComputedStyle(document.documentElement).getPropertyValue('--sk-font-title')`)
-  assert.match(font, /Thonburi|Sukhumvit|Noto Sans Thai|Leelawadee/, `a Thai system font in the stack: ${font}`)
-  const sam = await page.eval(`${card('Sam')}.innerText.replace(/\\s+/g, ' ')`)
-  const bubble = await page.eval(`document.querySelector('.sk-bubble').innerText.replace(/\\s+/g, ' ').trim()`)
-  console.log(`[talk thai] card: ${sam}\n[talk thai] bubble: ${bubble}`)
-  assert.equal(bubble, '← หัวหน้า แก้ปัญหาของ API เก่า')
-  assert.match(sam, /กำลังทำ API เก่าและแก้ปัญหาที่เจอ/)
-  if (process.env.AGENT_HQ_SHOT_DIR) await page.shot(join(process.env.AGENT_HQ_SHOT_DIR, 'thai-page.png'))
-
-  assert.deepEqual(englishIn(await pageWords(page)), [], 'the page as it opens')
-  await page.eval(`[...document.querySelectorAll('.lc')].find(l => /ทีมอัลฟา/.test(l.textContent)).querySelector('.lc-actions .sk-iconbtn--primary').click()`)
-  await until(() => page.eval(`!!document.querySelector('.sk-drawer')`), 8000, "the lead's drawer")
-  assert.match(await page.eval(`document.querySelector('.sk-drawer').innerText`), /รอสมาชิก 1\/2/)
-  assert.deepEqual(englishIn(await pageWords(page)), [], 'with the drawer open')
-  await page.eval(`[...document.querySelectorAll('.hq-bar .sk-iconbtn--primary')].at(-1).click()`)
-  await until(() => page.eval(`!!document.querySelector('.sk-modal')`), 8000, 'the add dialog')
-  assert.deepEqual(englishIn(await pageWords(page)), [], 'with the add dialog open')
 })

@@ -8,7 +8,7 @@
 //  - panelState(snapshot, { isOnline }): 'loading' before the first snapshot, 'hidden' with no list (AC19), 'empty' for a list with no
 //    rows, 'offline' when the connection is lost (the table stays as last seen), else 'ready';
 //  - the panel draws text as text (no innerHTML), a real <button> per row title, and its spinner stops under prefers-reduced-motion
-//    (web/space.css, class `tk-spin`); every string is in web/i18n.js under `tasks.*`, en and th.
+//    (web/space.css, class `tk-spin`); every string is in web/i18n.js under `tasks.*`.
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
@@ -17,7 +17,6 @@ import { STRINGS } from './i18n.js'
 import { QUIET_MS, agoMinutes, costText, donePercent, footnoteKeys, memberLine, minText, needsTick, nextOpen, panelNow, panelState, quietMinutes, timeline, totalMinText, whoText } from './tasks.js'
 
 const MIN = 60_000
-const THAI = /[฀-๿]/
 const read = name => readFileSync(new URL(name, import.meta.url), 'utf8')
 
 test('minutes: nothing counted is a dash, under a minute is <1, else whole minutes', () => {
@@ -104,7 +103,7 @@ test('the working spinner stops under prefers-reduced-motion (AC18)', () => {
   assert.ok(stopped, 'a reduced-motion rule sets .tk-spin to animation: none')
 })
 
-test('every string of the panel is in en and th, the footnote says it is an estimate, and the Thai is Thai', () => {
+test('every string of the panel is in the table and the footnote says it is an estimate', () => {
   const keys = Object.keys(STRINGS.en).filter(k => k.startsWith('tasks.'))
 
   for (const word of ['title', 'loading', 'empty', 'offline', 'footnote', 'colTask', 'colWho', 'colMin', 'colCost', 'total', 'noWork']) assert.ok(keys.includes(`tasks.${word}`), `tasks.${word}`)
@@ -112,10 +111,6 @@ test('every string of the panel is in en and th, the footnote says it is an esti
   for (const step of ['tests', 'build', 'review', 'fix']) assert.ok(keys.includes(`tasks.step.${step}`), `tasks.step.${step}`)
   assert.equal(STRINGS.en['tasks.footnote'], '≈ estimate from list prices, not your bill')
   assert.equal(STRINGS.en['tasks.loading'], 'Loading tasks…')
-  for (const key of keys) {
-    assert.match(STRINGS.th[key], THAI, `${key} is Thai`)
-    assert.notEqual(STRINGS.th[key], STRINGS.en[key], `${key} is translated`)
-  }
 })
 
 test('the whole row opens on a click, and aria-controls names the detail only while it is open', () => {
@@ -133,11 +128,10 @@ test('the total row shows whole minutes and a cost even with no work counted, as
   assert.equal(costText({ costUsd: 0, isPartial: false }), '$0.00')
 })
 
-test('the status cell says the status in words for a screen reader, in en and th', () => {
+test('the status cell says the status in words for a screen reader', () => {
   const source = read('./tasks.js')
 
   assert.match(read('./space.css'), /\.tk-sr\s*\{[^}]*clip: rect\(0 0 0 0\)/, 'tk-sr hides it visually only')
-  for (const status of ['done', 'working', 'review', 'waiting']) assert.match(STRINGS.th[`tasks.status.${status}`], THAI)
 })
 
 test('the greys of the tasks table keep at least 4.5:1 on the lightest tile it can sit on, in order: text > secondary > dim', () => {
@@ -178,7 +172,6 @@ test('the footnote explains + for unknown prices, — for no price, and removed 
   assert.deepEqual(footnoteKeys({ rows: rows([null, false], [1, false]), total: { costUsd: 1, isPartial: false }, removed: { workMs: 0, costUsd: 0 } }), ['tasks.footNoPrice'])
   assert.deepEqual(footnoteKeys({ rows: rows([1, true], [null, false]), total: { costUsd: 1, isPartial: true }, removed: { workMs: 5, costUsd: 0 } }), ['tasks.footPartial', 'tasks.footNoPrice', 'tasks.footRemoved'])
   for (const key of ['footPartial', 'footNoPrice', 'footRemoved']) {
-    assert.match(STRINGS.th[`tasks.${key}`], THAI)
     assert.ok(STRINGS.en[`tasks.${key}`])
   }
 })
@@ -190,10 +183,6 @@ test('an expandable row shows a chevron that turns when open, an open-row style,
   assert.match(css, /\.tk-task\.is-open \.tk-chev\s*\{[^}]*rotate\(90deg\)/)
   assert.match(css, /\.tk-task\.is-open \.tk-row\s*\{[^}]*background/)
   assert.ok(reducedMotionBlocks(css).some(body => /\.tk-chev[^{]*\{[^}]*transition:\s*none/.test(body)), 'the chevron does not animate under reduced motion')
-})
-
-test('Thai headings of the table are 12px, not the 10px mono of the Latin ones', () => {
-  assert.match(read('./space.css'), /html\[lang='th'\] \.tk-table th\s*\{[^}]*font-size:\s*12px/)
 })
 
 test('parallel work shows the first member and +n for the others with counted work; the title lists them all', () => {
@@ -245,7 +234,7 @@ test('only a working task quiet for QUIET_MS or more is flagged; done, review, w
   for (const status of ['done', 'waiting', 'review']) assert.equal(quietMinutes(row(status, now - 60 * MIN), now), null, `${status} is never flagged`)
 })
 
-test('the quiet spinner is dimmed, the detail and member lines show last active, and the words are in en and th', () => {
+test('the quiet spinner is dimmed, the detail and member lines show last active, and the words are in the table', () => {
   const source = read('./tasks.js')
 
   assert.match(read('./space.css'), /\.tk-mark\.is-quiet\s*\{[^}]*color:\s*var\(--tk-dim\)/)
@@ -255,7 +244,6 @@ test('the quiet spinner is dimmed, the detail and member lines show last active,
   assert.match(source, /t\('tasks\.ago'/)
   for (const key of ['lastActive', 'ago', 'quiet']) {
     assert.match(STRINGS.en[`tasks.${key}`], /\{n\}/)
-    assert.match(STRINGS.th[`tasks.${key}`], THAI)
   }
 })
 
@@ -309,7 +297,7 @@ test('the quiet words reach a sighted user too: the status cell title and the op
   assert.match(source, /<\$\{Detail\} row=\$\{row\} id=\$\{id\} now=\$\{now\} quiet=\$\{quiet\} \/>/)
 })
 
-test('a quiet spinner is still and in the dim grey, not a faded animation; the quiet words are lowercase in en and Thai has its own', () => {
+test('a quiet spinner is still and in the dim grey, not a faded animation; the quiet words are lowercase', () => {
   const css = read('./space.css')
 
   assert.match(css, /\.tk-mark\.is-quiet \.tk-spin\s*\{[^}]*animation:\s*none/)
@@ -317,7 +305,6 @@ test('a quiet spinner is still and in the dim grey, not a faded animation; the q
   assert.equal(STRINGS.en['tasks.quiet'], 'no activity for {n} min')
   assert.match(css, /\.tk-last--quiet::first-letter\s*\{[^}]*uppercase/, 'the detail line starts with a capital')
   assert.equal(STRINGS.en['tasks.footRemoved'], 'the total includes removed tasks')
-  assert.doesNotMatch(STRINGS.th['tasks.footRemoved'], /รวมรวม/, 'no doubled word')
 })
 
 test('the who column is gone: who sits under the title, and no rule styles a heading as a who cell', () => {
@@ -363,10 +350,9 @@ test('a member counts as working only by its name: a nickname or id equal to ano
   assert.equal(quietMinutes(task, now, [agent({ name: 'dev-1' })]), null, 'its name is')
 })
 
-test('the who line under the title is labelled for a screen reader, in en and th', () => {
+test('the who line under the title is labelled for a screen reader', () => {
   const source = read('./tasks.js')
 
   assert.match(source, /<span className="tk-who"[^>]*><span className="tk-sr">\$\{t\('tasks\.colWho'\)\}: <\/span>\$\{who\.text\}<\/span>/)
   assert.equal(STRINGS.en['tasks.colWho'], 'Who')
-  assert.match(STRINGS.th['tasks.colWho'], THAI)
 })

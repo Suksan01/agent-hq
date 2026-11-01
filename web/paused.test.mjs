@@ -51,12 +51,10 @@ test('sections: one per session with rows, named by the session, none when empty
   assert.equal(section.rows.length, 1)
 })
 
-test('the Paused words exist in English and Thai with the same placeholders', () => {
+test('the Paused words exist in English', () => {
   for (const key of ['paused.title', 'paused.notStarted', 'paused.ago']) {
-    assert.ok(STRINGS.en[key] && STRINGS.th[key], key)
-    assert.deepEqual(STRINGS.en[key].match(/\{\w+\}/g), STRINGS.th[key].match(/\{\w+\}/g), key)
+    assert.ok(STRINGS.en[key], key)
   }
-  assert.match(STRINGS.th['paused.title'], /[฀-๿]/)
 })
 
 test('the Not started pill text and the Paused greys keep at least 4.5:1 on the lightest tile they can sit on', () => {

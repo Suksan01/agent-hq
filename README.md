@@ -26,20 +26,9 @@ Open the sidebar with `/hq`. In the sidebar, `h` hides finished items, `c` clear
 opens its transcript.
 
 Commands: `/hq` (sidebar), `/hq web` (live page), `/hq web next on|off` (the page's next-task suggestions),
-`/hq report` (session report), `/hq trust` (use a project's team file), `/hq lang thai|english` (language). Skills:
+`/hq report` (session report), `/hq trust` (use a project's team file). Skills:
 `/agent-hq:team`, `/agent-hq:feature`, `/agent-hq:standup`, `/agent-hq:retro`, `/agent-hq:handoff`, and
 `agent-hq:self-evaluation`, which every team member carries.
-
-### English or Thai
-
-The first session asks once, in both languages, which one Agent HQ speaks (English when the question is dismissed or
-nobody can be asked, as in `claude -p`). Change it later in `/config` (the **Language / ภาษา** option) or with
-`/hq lang thai` / `/hq lang english`; the plugin reloads in the new language. In Thai the sidebar, band, status line,
-toasts, command replies, dialogs, the session report and the live page are Thai, and the lead and every member are told
-to speak Thai to you and to write the files you read (specs, plans, reports, team titles and missions) in Thai. Code,
-paths, commands, comments and commit messages stay English, and so does everything the model reads (tool answers,
-errors, prompts). In the terminal Thai is drawn in text lines, never cut inside a letter and its marks; a track's pill keeps its
-count and the word sits beside it, since a Thai mark has no cell of its own.
 
 ## Teams
 

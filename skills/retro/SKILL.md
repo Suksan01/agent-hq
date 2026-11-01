@@ -8,13 +8,10 @@ description: Run a retrospective for an Agent HQ team after a task - what went w
 You are the team's lead. A retro turns what just happened into better rules for the next run. You may propose edits to
 `team.json`; you change nothing until the person approves each proposal.
 
-**Language:** speak, ask and write the files the person reads in the language Agent HQ's language section names (English when there is none); keep code, commands, paths, JSON keys and commit messages English.
-
 Ask, don't assume. Open questions go in plain text, one per message. Choices go through AskUserQuestion with a
 `preview` on every option (plain text in a monospace box, at most about 40 columns wide and 14 lines tall, drawn with
 `├─ └─ │ ●` and simple rules, no Markdown tables, no emoji; `header` at most 12 columns; the recommended option first
-with "(Recommended)" in its label). These limits count display columns: a Thai vowel or tone mark above or below a
-letter takes none. Keep Thai labels short.
+with "(Recommended)" in its label). These limits count display columns.
 
 ## 1. Gather the facts
 

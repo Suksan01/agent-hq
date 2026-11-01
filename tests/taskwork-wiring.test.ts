@@ -42,7 +42,7 @@ async function boot($: Engine, on: On, initial: Record<string, string>) {
   const files = new Map<string, string>(Object.entries({ [`${ROOT}/${TEAM_FILE}`]: JSON.stringify(TEAM), ...initial }))
   const listWrites: string[] = []
   const registered: string[] = []
-  mock.store(on, { approvedTeams: withApproval([], `${ROOT}/${TEAM_FILE}`, JSON.stringify(TEAM)), languageAsked: true })
+  mock.store(on, { approvedTeams: withApproval([], `${ROOT}/${TEAM_FILE}`, JSON.stringify(TEAM)) })
   on('env.get', () => ({ value: '/home/me' }))
   on('session.cwd', () => ({ value: ROOT }))
   on('session.id', () => ({ value: 'sess' }))

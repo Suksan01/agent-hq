@@ -16,7 +16,7 @@ const RECAP = 'Search page shipped and 3 tests added; the reviewer has not looke
 const alphaOf = state => () => {
   const snap = buildSnapshot({ team: 'Alpha Team', lead: state.working ? 'running' : 'completed', agents: [['dev1', 'Sam', 'completed']] })
   const agents = snap.agents.map(a => (a.isMain ? { ...a, endedAt: null } : a)) // the session's lead never ends: between turns it is only not working
-  return { ...snap, agents, ...(state.lang ? { lang: state.lang } : {}), suggestions: state.suggestions ?? null }
+  return { ...snap, agents, suggestions: state.suggestions ?? null }
 }
 
 /** Two sessions (alpha is the hub), a browser logged in and showing the page. */
@@ -168,30 +168,20 @@ test('the Space view shows them on the compact lead deck, and a press drafts the
   assert.equal(alphaMod.handled.length, 0)
 })
 
-test('in Thai, at phone width: Thai labels, no English from the table, nothing wider than the deck, and no motion under reduced motion', { skip, timeout: slow(90_000) }, async t => {
-  const thai = ['ให้ผู้รีวิวตรวจหน้าค้นหา', 'เขียน changelog ของ 0.7.0', 'รันเทสต์ทั้งหมดอีกรอบก่อนรวม branch']
-  const state = { lang: 'th', suggestions: { recap: 'หน้าค้นหาเสร็จแล้ว เพิ่มเทสต์ 3 ข้อ ผู้รีวิวยังไม่ได้ดู', items: thai, at: 4001 } }
-  const { page } = await openPage(t, state, { width: 390, height: 844, mobile: true })
-  await until(async () => (await page.eval(`document.documentElement.lang === 'th'`)) && shown(page), 15_000, 'the page in Thai with the next steps')
-  const th = STRINGS.th
+test('at phone width: nothing wider than the deck, no sideways scroll, and no motion under reduced motion', { skip, timeout: slow(90_000) }, async t => {
+  const { page } = await openPage(t, { suggestions: { recap: RECAP, items: ITEMS, at: 4001 } }, { width: 390, height: 844, mobile: true })
+  await until(() => shown(page), 15_000, 'the page with the next steps')
   const seen = await page.eval(`(() => {
     const n = ${next}, r = n.getBoundingClientRect()
     return { head: n.querySelector('.lc-next__title').textContent, title: n.getAttribute('aria-label'), list: n.querySelector('ul').getAttribute('aria-label'),
-      notNow: [...n.querySelectorAll('button')].some(b => b.textContent === ${JSON.stringify(th['next.notNow'])}),
-      names: [...n.querySelectorAll('.lc-next__item')].map(b => b.getAttribute('aria-label')),
-      words: [n.innerText, ...[...n.querySelectorAll('[aria-label], [title]')].flatMap(e => [e.getAttribute('aria-label'), e.getAttribute('title')])].filter(Boolean).join('\\n'),
+      notNow: [...n.querySelectorAll('button')].some(b => b.textContent === ${JSON.stringify(STRINGS.en['next.notNow'])}),
       wider: [...n.querySelectorAll('*')].filter(e => { const b = e.getBoundingClientRect(); return b.width > 0 && (b.left < r.left - 0.5 || b.right > r.right + 0.5) }).map(e => e.className),
       scroll: n.scrollWidth - n.clientWidth }
   })()`)
-  assert.equal(seen.head, th['next.title'])
-  assert.equal(seen.title, th['next.title'])
-  assert.equal(seen.list, th['next.list'])
-  assert.ok(seen.notNow, `"Not now" in Thai: ${th['next.notNow']}`)
-  assert.deepEqual(seen.names, thai.map(text => th['next.use'].replace('{text}', text)))
-  for (const key of ['next.title', 'next.notNow', 'next.list', 'next.use']) {
-    const english = STRINGS.en[key].replace(/\{\w+\}/g, '').replace(/[:\s]+$/, '')
-    assert.ok(!seen.words.includes(english), `no English "${english}" on the Thai page`)
-  }
+  assert.equal(seen.head, STRINGS.en['next.title'])
+  assert.equal(seen.title, STRINGS.en['next.title'])
+  assert.equal(seen.list, STRINGS.en['next.list'])
+  assert.ok(seen.notNow, `"Not now": ${STRINGS.en['next.notNow']}`)
   assert.deepEqual(seen.wider, [], 'nothing pokes out of the section at phone width')
   assert.ok(seen.scroll <= 1, `no sideways scroll inside it (${seen.scroll}px)`)
 
