@@ -31,7 +31,7 @@ const TOOLS_BIG = 100
 const STREAK = 5
 const REVIEWS = 5
 const SPEEDY_MS = 120_000
-const BUG_WORDS = /\b(fix|fixes|fixed|bug|bugs)\b/i
+const BUG_WORDS = /\b(fix|fixes|fixed|bug|bugs)\b|แก้|บั๊ก/i // Thai has no word breaks for \b to find
 
 export const BADGES: readonly Badge[] = [
   { id: 'first_task', title: 'First Task', hint: 'Finish your first task' },

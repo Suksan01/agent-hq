@@ -39,7 +39,8 @@ export function cleanSaying(raw: unknown, max = SAYS_MAX): string {
   if (typeof raw !== 'string') return ''
   const line = maskSecrets(raw.replace(/\s+/g, ' ').trim())
   if (line.length <= max) return line
-  return `${headOf(line, max - 1).trimEnd()}…`
+  // a Thai leading vowel (เ แ โ ใ ไ) belongs to the consonant after it: never left at the end
+  return `${headOf(line, max - 1).replace(/[เ-ไ]$/, '').trimEnd()}…`
 }
 
 /** The step an agent has in progress (its todo, or the plan-progress bar it moves). */

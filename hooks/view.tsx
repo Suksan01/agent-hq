@@ -2,7 +2,7 @@ import type { Elements, RenderElement } from 'claude-code'
 
 import type { HqActivity, HqAgent, HqAssignment, HqBubble, HqSays, HqStatus, HqTask, HqTaskStatus, HqTeam, HqTodo } from '../types'
 import { roleTitle } from './team'
-import { LEAD_COLOR, MIN_NAME, TONE_GLYPH, TRACK_PX, fitText, spriteCells, textWidth, tonesFor, trackCells, trackSvg } from './cells'
+import { LEAD_COLOR, MIN_NAME, TONE_GLYPH, TRACK_PX, fitText, hasThai, spriteCells, textWidth, tonesFor, trackCells, trackSvg } from './cells'
 import { SMALL_H, SMALL_W, SPRITE_H, SPRITE_W, paletteOf, speciesOf, spriteFrames } from './sprites'
 import type { Tone, TrackSpec } from './cells'
 import { MAIN, agentWork, elapsed, isFinished, isWorking, overallProgress, progressOf, teamTree, workingCount } from './model'
@@ -118,13 +118,46 @@ export type HqActions = {
 export type BandActions = { onOpenSidebar: () => void; onHide: () => void }
 
 /**
- * A drawing in cells; a track also carries its spec, which a surface without Rasters draws as an Svg (textTrack).
+ * A drawing in cells; a track also carries its spec, which a surface without Rasters draws as an Svg (textTrack), and the
+ * words that left its pill (`aside`), drawn in a Text beside it.
  */
-export type Raster = { key: string; columns: number; rows: number; cells: string; spec?: TrackSpec }
+export type Raster = { key: string; columns: number; rows: number; cells: string; spec?: TrackSpec; aside?: string }
 
-/** A track's Raster (its spec kept for an Svg). */
+const ASIDE_SHARE = 0.4 // the words beside a track take at most this share of its width
+const MIN_TRACK = 6
+
+/**
+ * Thai never goes in a Raster cell (a mark has no column of its own, and the engine refuses the whole tree): for Thai
+ * words, the pill keeps its other part and the words go beside the track, which gives up their room.
+ */
+function besideTrack(spec: TrackSpec, W: number): { spec: TrackSpec; W: number; aside?: string } {
+  const isLabelOut = spec.label !== '' && hasThai(spec.label)
+  const isCountOut = hasThai(spec.count)
+  if (!isLabelOut && !isCountOut) return { spec, W }
+  const words = [isLabelOut ? spec.label : '', isCountOut ? spec.count : ''].filter(Boolean).join(' ')
+  const aside = fitText(words, Math.max(1, Math.min(Math.floor(W * ASIDE_SHARE), W - MIN_TRACK - 1)))
+  const kept = { ...spec, label: isLabelOut ? '' : spec.label, count: isCountOut ? '' : spec.count }
+  return { spec: kept, W: Math.max(MIN_TRACK, W - width(aside) - 1), aside }
+}
+
+/** A track's Raster (its spec kept for an Svg), its words beside it where they left the pill. */
 function trackRaster(key: string, spec: TrackSpec, W: number, draw: (spec: TrackSpec, W: number) => string): Raster {
-  return { key, columns: W, rows: 1, cells: draw(spec, W), spec }
+  const placed = besideTrack(spec, W)
+  return { key, columns: placed.W, rows: 1, cells: draw(placed.spec, placed.W), spec: placed.spec, ...(placed.aside ? { aside: placed.aside } : {}) }
+}
+
+/** A drawn track, with the words that left its pill in a Text beside it. */
+export function withAside(els: Els, r: Raster, track: RenderElement): RenderElement {
+  if (!r.aside) return track
+  const { Box, Text } = els
+  return (
+    <Box key={`${r.key}-aside`} flexDirection="row" gap={1}>
+      {track}
+      <Text dimColor wrap="truncate-end">
+        {r.aside}
+      </Text>
+    </Box>
+  )
 }
 
 // ---------- tones, shared by band and sidebar ----------
@@ -780,8 +813,8 @@ export function textTrack(els: Els, rasters: Raster[], data: HqData): DrawRaster
     const { spec } = r
     // a working agent with no todos says what stands in for them: a task's status, or "getting started"
     const isFallback = key.startsWith('todo-') && !data.todos[key.slice('todo-'.length)]?.length
-    const alt = spec.sweep ? spec.label : isFallback ? spec.count : t(data.lang ?? 'en', 'track.alt', { done: spec.done, total: spec.total })
+    const alt = spec.sweep ? spec.label || r.aside : isFallback ? spec.count || r.aside : t(data.lang ?? 'en', 'track.alt', { done: spec.done, total: spec.total })
     const W = r.columns * COLUMN_PX
-    return <Svg key={key} source={trackSvg(spec, W, data.isLight)} alt={alt ?? ''} width={W} height={TRACK_PX} />
+    return withAside(els, r, <Svg key={key} source={trackSvg(spec, W, data.isLight)} alt={alt ?? ''} width={W} height={TRACK_PX} />)
   }
 }

@@ -31,7 +31,7 @@ import { addAsk, buildInbox, cardOf, describeAsk, dropAsksOf, pageCount, removeA
 import { announceXp, createLedger, creditActivity, creditTestRun, xpStoreOf, xpSummaries } from './xpstore'
 import { ASSIGN_TOOL, HIRE_TOOL, LEAD_TOOLS_NOTE, HQ_PLAN_TOOL, REVIEW_TOOL, STATUS_TOOL, TOOL_SPECS, hqAssign, hqHire, hqPlan, hqReview, hqStatus, keepResult, readBriefFile, textOfContent } from './tools'
 import type { ToolAnswer, ToolDeps } from './tools'
-import { BandView, SidebarView, bandRasters, bandTrackWidth, folderOf, hasBand, sidebarRasters, textTrack } from './view'
+import { BandView, SidebarView, bandRasters, bandTrackWidth, folderOf, hasBand, sidebarRasters, textTrack, withAside } from './view'
 import type { BandActions, HqActions, HqData, Raster } from './view'
 
 const PANE = 'agent-hq'
@@ -1235,7 +1235,7 @@ export const register: Register = (on, options) => {
       seat($, 'band', { requestId: e.requestId, data, draw: t => bandRasters(data, W, t, isLight) })
       const draw = (key: string) => {
         const r = drawn.find(x => x.key === key)
-        return r ? <Raster key={r.key} columns={r.columns} rows={r.rows} cells={r.cells} /> : null
+        return r ? withAside(els, r, <Raster key={r.key} columns={r.columns} rows={r.rows} cells={r.cells} />) : null
       }
       tree = BandView(els, data, actions, draw, hasClicks)
     } else {
@@ -1276,7 +1276,7 @@ export const register: Register = (on, options) => {
     seat($, 'sidebar', { requestId: e.requestId, data, draw: t => sidebarRasters(data, t) })
     const draw = (key: string) => {
       const r = drawn.find(x => x.key === key)
-      return r ? <Raster key={r.key} columns={r.columns} rows={r.rows} cells={r.cells} /> : null
+      return r ? withAside(els, r, <Raster key={r.key} columns={r.columns} rows={r.rows} cells={r.cells} />) : null
     }
     return SidebarView(els, data, actions, draw)
   })

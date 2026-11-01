@@ -1,10 +1,12 @@
 // Agent HQ speaks English only: no language question, no /hq lang, no language section for the lead; an install that
 // saved the old `language: thai` option loads cleanly in English.
-import { expect, test } from 'claude-code/testing'
+import { expect, mock, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import type { Engine } from 'claude-code/testing'
 
 async function boot($: Engine, on: On) {
+  mock.clock(on)
+  mock.store(on, {})
   const asked: string[] = []
   const toasts: string[] = []
   const registered: { argumentHint?: string; description?: string }[] = []
@@ -35,7 +37,8 @@ async function boot($: Engine, on: On) {
   on('session.start', (_, e) => e)
   await $.session.start({ cwd: '/work/app', surface: 'terminal', isInteractive: true } as never)
   const compose = () => $.prompt.compose({ model: 'm', promptModel: 'm', surfaces: [], tools: [], outputStyle: null, traits: [] } as never)
-  return { asked, toasts, registered, compose }
+  const hq = (args: string) => $.command.run({ command: 'hq', args, origin: { kind: 'composer' }, presentation: {} } as never) as Promise<{ text: string }>
+  return { asked, toasts, registered, compose, hq }
 }
 
 test('a start asks no language question and registers /hq without a lang word', async ($, on) => {
@@ -51,4 +54,12 @@ test('a saved language: thai loads cleanly in English, with no error, question o
   expect(s.toasts).toEqual([])
   expect(s.registered[0]?.description).toMatch(/^[\x20-\x7e]+$/)
   expect((await s.compose()).sections.map(x => x.id)).not.toContain('agent-hq:language')
+})
+
+test('/hq lang thai is an unknown argument: the normal reply, no error, nothing asked', async ($, on) => {
+  const s = await boot($, on)
+  const reply = await s.hq('lang thai')
+  expect(reply.text).toMatch(/^Agent HQ sidebar opened/) // as for any unknown argument
+  expect(s.asked).toEqual([])
+  expect(s.toasts.filter(t => /language/i.test(t))).toEqual([])
 })

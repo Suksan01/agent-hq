@@ -49,20 +49,35 @@ export const fit = (s: string, w: number) => {
   return w <= 1 ? '…'.slice(0, Math.max(0, w)) : chars.slice(0, w - 1).join('').trimEnd() + '…'
 }
 
-// ---------- Text lines ----------
+// ---------- Text lines: Thai shown whole. Never in a Raster cell: a mark has no column of its own there ----------
 
+const isThai = (cp: number) => cp >= 0x0e00 && cp <= 0x0e7f
+// the marks drawn over or under the consonant before them: no column of their own (sara am, U+0E33, is a spacing vowel)
+const isThaiMark = (cp: number) => cp === 0x0e31 || (cp >= 0x0e34 && cp <= 0x0e3a) || (cp >= 0x0e47 && cp <= 0x0e4e)
 const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
 const clustersOf = (s: string) => Array.from(segmenter.segment(s), part => part.segment)
+export const hasThai = (s: string) => [...s].some(ch => isThai(ch.codePointAt(0) ?? 0))
 
-/** A Text line's pieces with their columns, as the cells draw them. */
+// เ แ โ ใ ไ are written before the consonant they are said after: a cut must not part them from it
+const isLeadingVowel = (s: string) => /^[เ-ไ]$/.test(s)
+
+/** A Text line's pieces with their columns: a Thai cluster whole (its marks take none), anything else as the cells draw it. */
 function textPieces(s: string): { text: string; width: number }[] {
-  return [...s].map(ch => ({ text: cellChar(ch), width: 1 }))
+  const pieces = clustersOf(s).flatMap(cluster => {
+    const points = [...cluster].map(ch => ch.codePointAt(0) ?? 0)
+    if (isThai(points[0] ?? 0)) return [{ text: cluster, width: points.filter(cp => !isThaiMark(cp)).length }]
+    return [...cluster].map(ch => ({ text: cellChar(ch), width: 1 }))
+  })
+  return pieces.reduce<{ text: string; width: number }[]>((out, piece) => {
+    const last = out.at(-1)
+    return last && isLeadingVowel(last.text) ? [...out.slice(0, -1), { text: last.text + piece.text, width: last.width + piece.width }] : [...out, piece]
+  }, [])
 }
 
-/** How many columns a Text line takes, exactly what `cellText` gives. */
+/** How many columns a Text line takes; outside Thai, exactly what `cellText` gives. */
 export const textWidth = (s: string) => textPieces(s).reduce((w, piece) => w + piece.width, 0)
 
-/** `fit` for a Text line: cut to `w` columns with an ellipsis. */
+/** `fit` for a Text line: Thai kept, and cut only between clusters, so a consonant never loses its marks. */
 export function fitText(s: string, w: number): string {
   const pieces = textPieces(s)
   if (pieces.reduce((sum, piece) => sum + piece.width, 0) <= w) return pieces.map(piece => piece.text).join('')

@@ -11,7 +11,8 @@ export type HirePlan =
 
 const ID = /^[A-Za-z0-9_-]{1,48}$/
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
-const READ_ONLY_TITLE = /review|audit|inspect/i
+// read against the id too: a title may be in Thai (ผู้ตรวจ is an inspector), the id stays ASCII
+const READ_ONLY_TITLE = /review|audit|inspect|ตรวจ|รีวิว/i
 const LIST_FIELDS = ['tasks', 'rules', 'skills', 'tools'] as const
 const TEXT_FIELDS = ['model', 'effort', 'playbook'] as const
 const CARD_FIELDS = [...LIST_FIELDS, ...TEXT_FIELDS]
