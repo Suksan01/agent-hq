@@ -173,7 +173,7 @@ test('two pushes that differ only in the engine clock have the same signature; a
   assert.notEqual(signatureOf(a), signatureOf(c))
 })
 
-// ---- 0.6.0: what each agent says it is doing, talk bubbles, the page in Thai ------------------------------------------------
+// ---- 0.6.0: what each agent says it is doing, talk bubbles, ------------------------------------------------
 
 test("each agent's sentence (lead included) reaches the cards and the drawer; none when the mod sends null", () => {
   const s1 = session('s1', 'app', [{ ...lead, says: 'Waiting for 1 of 2 members' }, agent('dev', { says: 'Working on the old API and fixing its issues' }), agent('qa', { says: null })])
@@ -219,31 +219,11 @@ test('a bubble may sit on the lead; an unknown other party is named by its id; t
   assert.ok(none.agents.every(a => a.bubble === undefined), 'no bubbles in the snapshot, none on the page')
 })
 
-test('in Thai the page-made words are Thai: systems, the lead in a bubble, elapsed time, the stats and the default ask', async () => {
-  const { setLang } = await import('./i18n.js')
-  try {
-    setLang('th')
-    const a = session('a', 'app', [lead, agent('dev', { status: 'waiting' })], { bubbles: [{ agent: 'dev', other: 'main', dir: 'from', text: 'แก้ปัญหาของ API เก่า', at: 0 }] })
-    const b = session('b', 'docs', [lead])
-    assert.equal(hudOf([a, b], sessionNames([a, b])).title, '2 ระบบ')
-    const sessions = sessionsOf({ v: 2, sessions: [a] })
-    assert.equal(groupsOf(sessions, sessionNames(sessions), () => 0)[0].agents[1].bubble.who, 'หัวหน้า')
-    assert.equal(feedItems([{ session: 'a', at: 0, kind: 'tool', text: 'x', agent: null, agentId: 'dev' }], () => 252_000, false, () => '')[0].time, '4 นาที')
-    assert.deepEqual(drawerOf(agent('dev'), sessions[0], 61_000).stats.map(s => s[0]), ['เครื่องมือ', 'เวลา', 'ล่าสุด'])
-    assert.equal(inboxItems(sessions, sessionNames(sessions), false)[0].ask, 'รออนุมัติ')
-  } finally {
-    setLang('en')
-  }
-})
-
-test("the overview's waiting count is agents held for the person (also in the inbox), so Thai calls it รอคุณ like the lead deck, not รออนุมัติ", async () => {
-  const { STRINGS } = await import('./i18n.js')
+test("the overview's waiting count is agents held for the person (also in the inbox), not approvals only", async () => {
   // held agents (engine status `waiting`: a plan's approval, background work or an Agent call) are the people-waiting items, not approvals only
   const s = session('a', 'app', [lead, agent('held', { status: 'waiting' }), agent('busy')])
   assert.equal(countsOf([s]).waiting, 1)
   assert.deepEqual(inboxItems(sessionsOf({ v: 2, sessions: [s] }), new Map(), false).map(i => i.agent), ['held'], 'the counted agent is one that waits on the person')
-  assert.equal(STRINGS.th['crew.waiting'], 'รอคุณ')
-  assert.equal(STRINGS.th['crew.waiting'], STRINGS.th['status.waiting'], "the same word as the lead deck's count and the inbox title")
 })
 
 test("the lead's next steps: up to three non-empty strings kept as plain text, a recap or null; nothing to show is null", () => {

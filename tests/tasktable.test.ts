@@ -27,8 +27,7 @@ import type { HqData } from '../hooks/view'
 const ROOT = '/work/app'
 const LIST_FILE = `${ROOT}/.claude/agent-hq/tasks.json`
 const MODEL = PRICES[0]!.prefix
-const THAI = /[฀-๿]/
-const THAI_TITLE = 'ทำตารางงานในแถบด้านข้างให้แสดงผลได้ครบทุกความกว้าง'
+const WIDE_TITLE = '在侧边栏中显示任务表并适应所有宽度'.repeat(3)
 
 type Row = Record<string, unknown>
 const MIN = 60_000
@@ -41,12 +40,12 @@ const price = PRICES[0]!.output
 const money = (n: number) => `$${n.toFixed(2)}`
 const moneyRe = (n: number) => money(n).replace('$', '\\$') // for a RegExp source
 
-/** The ledger of the spec: done, working, review (one member's model unpriced), waiting, and a Thai title with markup. */
+/** The ledger of the spec: done, working, review (one member's model unpriced), waiting, and a wide-glyph title with markup. */
 const LEDGER = () =>
   listOf(
     task(1, { title: 'Data model', status: 'done', doneBy: 'dev-1', work: { 'qa-1': work(3, { role: 'qa', step: 'tests' }), 'dev-1': work(9) }, events: [ev('qa-1', 1), ev('dev-1', 2)] }),
     task(2, { title: 'Sidebar list', status: 'working', work: { 'dev-2': work(5) }, events: [ev('dev-2', 3)] }),
-    task(3, { title: THAI_TITLE, status: 'review', work: { 'dev-3': work(2), 'rev-1': work(1, { role: 'reviewer', step: 'review', model: 'mystery-model' }) }, events: [ev('dev-3', 4), ev('rev-1', 5)] }),
+    task(3, { title: WIDE_TITLE, status: 'review', work: { 'dev-3': work(2), 'rev-1': work(1, { role: 'reviewer', step: 'review', model: 'mystery-model' }) }, events: [ev('dev-3', 4), ev('rev-1', 5)] }),
     task(4, { title: 'Tests <b>bold</b>' }),
     task(5, { title: 'Just started', status: 'working', work: { 'dev-4': work(0, { outputTokens: 0 }) }, events: [ev('dev-4', 6)] }),
   )
@@ -280,20 +279,20 @@ test('+N more with a long list of hidden statuses is cut to the sidebar width', 
   await ui.unmount()
 })
 
-test('in Thai +N more with a long list of hidden statuses is cut to the sidebar width too', { options: { language: 'thai' } }, async ($, on) => {
+test('+N more with a long list of hidden statuses is cut to the sidebar width too', async ($, on) => {
   const ui = await mountTable($, on, MANY_HIDDEN(), 30)
 
   const more = (await linesOf(ui)).find(l => l.key === 'tasks-more')?.text ?? ''
 
-  expect(more).toMatch(THAI)
+  expect(more).toMatch(/^\+\d+ more/)
   expect(textWidth(more)).toBeLessThanOrEqual(30)
   await ui.unmount()
 })
 
-test('the cost header comes from the string table, in Thai too', { options: { language: 'thai' } }, async ($, on) => {
+test('the cost header comes from the string table', async ($, on) => {
   const ui = await mountTable($, on, listOf(doneTask(1)), 60)
 
-  expect((await linesOf(ui)).find(l => l.key === 'tasks-head')?.text).toContain('ราคา ≈')
+  expect((await linesOf(ui)).find(l => l.key === 'tasks-head')?.text).toContain(TABLES.en['tasktable.cost'])
   expect(TABLES.en['tasktable.cost']).toBe('≈')
   await ui.unmount()
 })
@@ -313,7 +312,7 @@ for (const cols of [40, 60, 100]) {
       expect(min, `row ${n} Min`).toMatch(/^(\d+|<1|—)$/)
       expect(cost, `row ${n} cost`).toMatch(/^(\$\d+\.\d\d\+?|—)$/)
     }
-    if (cols < 100) expect(rowOf(lines, 3)).toMatch(/…\s/) // the Thai title does not fit: cut, the next column whole
+    if (cols < 100) expect(rowOf(lines, 3)).toMatch(/…\s/) // the long title does not fit: cut, the next column whole
     expect(tail(rowOf(lines, 1))).toEqual(['12', money(price * 2)])
     await ui.unmount()
   })
@@ -378,29 +377,20 @@ test('no list gives no spinner Raster', () => {
 
 // ---- strings: en and th
 
-test('every string of the table is in both tables, and the Thai ones are Thai', () => {
+test('the table has every tasktable string', () => {
   const keys = (Object.keys(TABLES.en) as Key[]).filter(k => k.startsWith('tasktable.'))
 
   expect(keys.length).toBeGreaterThanOrEqual(5)
   for (const word of ['task', 'who', 'min', 'total', 'more']) expect(keys, word).toContain(`tasktable.${word}`)
-  for (const key of keys) {
-    expect(TABLES.th[key], key).toMatch(THAI)
-    expect(TABLES.th[key], key).not.toBe(TABLES.en[key])
-  }
 })
 
-test('in Thai the header, total and "+N more" are Thai, the Thai title is shown whole, and no row is wider than the sidebar', { options: { language: 'thai' } }, async ($, on) => {
-  const many = Array.from({ length: 12 }, (_, i) => task(i + 1, { title: i === 0 ? THAI_TITLE : `Task ${i}`, status: i === 0 ? 'working' : 'waiting', work: i === 0 ? { 'dev-1': work(2) } : {}, events: i === 0 ? [ev('dev-1', 1)] : [] }))
+test('a wide-glyph title is dotted, and no row is wider than the sidebar', async ($, on) => {
+  const many = Array.from({ length: 12 }, (_, i) => task(i + 1, { title: i === 0 ? WIDE_TITLE : `Task ${i}`, status: i === 0 ? 'working' : 'waiting', work: i === 0 ? { 'dev-1': work(2) } : {}, events: i === 0 ? [ev('dev-1', 1)] : [] }))
   const ui = await mountTable($, on, listOf(...many), 40)
 
   const lines = await linesOf(ui)
 
-  expect(lines.find(l => l.key === 'tasks-head')?.text).toMatch(THAI)
-  expect(lines.find(l => l.key === 'tasks-total')?.text).toMatch(THAI)
-  expect(lines.find(l => l.key === 'tasks-more')?.text).toMatch(THAI)
-  expect(lines.find(l => l.key === 'tasks-head')?.text).not.toMatch(/Task|Who/)
-  expect(lines.find(l => l.key === 'tasks-total')?.text).not.toContain('Total')
-  expect(rowOf(lines, 1)).toContain('ทำตาราง')
+  expect(rowOf(lines, 1)).toContain('···') // a wide glyph is dotted, as in every cell
   for (const l of lines) expect(textWidth(l.text), l.text).toBeLessThanOrEqual(40)
   await ui.unmount()
 })

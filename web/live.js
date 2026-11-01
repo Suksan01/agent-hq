@@ -16,7 +16,7 @@ import { PausedPanel, pausedSections } from './paused.js'
 import { ApprovalCard, cardsOf } from './approval.js'
 import { post, useLive, useStored } from './livestate.js'
 import { pauseOffscreen } from './motion.js'
-import { langOf, setLang, t } from './i18n.js'
+import { t } from './i18n.js'
 
 const { AddAgentDialog, ChipBar, Dialog, DotNumber, DotProgress, Drawer, EmptyState, FeedTile, IconButton, InboxTile, PillButton, SegmentedToggle, SpaceCanvas, TitleHud, Toast, ToastStack, Toolbar, html } = kit
 const { useCallback, useEffect, useMemo, useRef, useState } = React
@@ -98,18 +98,11 @@ function App() {
   const view = useRef(null)
   const [barHeight, bar] = useHeight()
   const rightRef = useRightClearance()
-  const [lastLang, keepLang] = useStored('agent-hq.lang', 'en') // so the screens before any session (connecting, none) speak it too
 
   useEffect(() => pauseOffscreen(document.body), [])
   useEffect(() => { if (draft && draft.for !== selected) setDraft(null) }, [selected]) // the draft goes with the box it was put in
 
   const list = sessions ?? []
-  const lang = langOf(list) ?? lastLang
-  setLang(lang) // before anything below renders a word
-  useEffect(() => {
-    document.documentElement.lang = lang
-    if (lang !== lastLang) keepLang(lang)
-  }, [lang])
   const names = useMemo(() => sessionNames(list), [sessions])
   const focused = focus !== null && list.some(s => s.session === focus) ? focus : null
   const shown = focused === null ? list : list.filter(s => s.session === focused)

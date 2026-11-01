@@ -1,6 +1,6 @@
 // Talk bubbles end to end: each source makes its bubble on the right card (SendMessage both ways, a plugin's send, an
 // assignment, a hand-back, a finish without one), never from a prompt or the person's own message; each is a feed
-// `message` too; the poll ends it after six seconds; the sidebars show it on line 3 in English and Thai, terminal and
+// `message` too; the poll ends it after six seconds; the sidebars show it on line 3, terminal and
 // desktop, with the live tool line taking line 3 over the step while a call runs.
 import { expect, mock, test } from 'claude-code/testing'
 import type { AgentInfo, On, RenderElement } from 'claude-code'
@@ -44,7 +44,7 @@ type Session = { box: Box; call: Call; clock: MockClock; snapshot: () => Promise
 async function session($: Engine, on: On): Promise<Session> {
   const clock = mock.clock(on, { now: 1_000 })
   const snaps: Snapshot[] = []
-  mock.store(on, { approvedTeams: withApproval([], `/work/app/${TEAM_FILE}`, JSON.stringify(TEAM)), languageAsked: true })
+  mock.store(on, { approvedTeams: withApproval([], `/work/app/${TEAM_FILE}`, JSON.stringify(TEAM)) })
   // the page server's stdout: its URL first, then each request the page makes (box.page)
   const out: string[] = ['AGENT_HQ_URL http://127.0.0.1:4321\n']
   let wake = () => {}
@@ -221,65 +221,50 @@ function lineAfter(lines: string[], said: string): string | undefined {
   return at < 0 ? undefined : all.slice(at + 1).find(line => line !== '' && line !== `▸ ${said}`)
 }
 
-/** No Thai code point in any Raster cell the tree holds. */
-async function expectNoThaiCells(ui: Ui) {
-  for (const r of await ui.findAll({ type: 'Raster' })) {
-    const words = new Uint32Array(Uint8Array.from(atob(String(r.props.cells)), c => c.charCodeAt(0)).buffer)
-    for (let i = 0; i < words.length; i += 3) expect((words[i] ?? 0) >= 0x0e00 && (words[i] ?? 0) <= 0x0e7f).toBe(false)
+const words = { lead: 'Lead', task: /^task: Fixing the old API$/, said: 'Working on the old API', order: 'Fix the old API' }
+
+test('line 3 is the step between calls, the live tool line during one, and a bubble over both while it lasts', async ($, on) => {
+  const { box, call, clock } = await session($, on)
+  const step = { content: 'Fix the old API', activeForm: 'Fixing the old API' }
+  await call({ tool: 'TodoWrite', agentId: 'd1', todos: [{ ...step, status: 'in_progress' }] })
+  await call({ tool: DOING_TOOL, agentId: 'd1', text: words.said })
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await $.ui.mount({ plugin: 'agent-hq', surface, component: 'Pane', requestId: 'agent-hq', props: PANE_PROPS as never })
+    expect(lineAfter(await texts(ui), words.said), surface).toMatch(words.task) // no call runs: the step
+
+    let during: string[] = []
+    box.probe = async () => void (during = await texts(ui))
+    await call({ tool: 'Grep', pattern: 'routes', agentId: 'd1', tool_use_id: `g-${surface}` })
+    expect(lineAfter(during, words.said), surface).toMatch(/^[▸▹] \S.* · \d/) // the live tool line took line 3
+    expect(during.some(line => words.task.test(clean(line))), surface).toBe(false)
+
+    await send($, { to: 'dev-1', text: `${words.order}. More after.` })
+    await call({ tool: 'Grep', pattern: 'routes', agentId: 'd1', tool_use_id: `g2-${surface}` })
+    const talk = `» ← ${words.lead}: ${words.order}.`
+    expect(lineAfter(during, words.said), surface).toBe(talk) // a bubble over the live line
+    expect(lineAfter(await texts(ui), words.said), surface).toBe(talk) // and over the step
+
+    await clock.advance(6_000)
+    const gone = await texts(ui)
+    expect(gone.some(line => line.includes('»')), surface).toBe(false)
+    expect(lineAfter(gone, words.said), surface).toMatch(words.task)
+    await ui.unmount()
   }
-}
+})
 
-for (const lang of ['en', 'th'] as const) {
-  const words =
-    lang === 'en'
-      ? { lead: 'Lead', task: /^task: Fixing the old API$/, said: 'Working on the old API', order: 'Fix the old API' }
-      : { lead: 'หัวหน้า', task: /^งาน: กำลังแก้ API เก่า$/, said: 'กำลังทำ API เก่า', order: 'แก้ปัญหาของ API เก่า' }
-  test(`${lang}: line 3 is the step between calls, the live tool line during one, and a bubble over both while it lasts`, { options: { language: lang === 'th' ? 'thai' : 'english' } }, async ($, on) => {
-    const { box, call, clock } = await session($, on)
-    const step = lang === 'en' ? { content: 'Fix the old API', activeForm: 'Fixing the old API' } : { content: 'แก้ API เก่า', activeForm: 'กำลังแก้ API เก่า' }
-    await call({ tool: 'TodoWrite', agentId: 'd1', todos: [{ ...step, status: 'in_progress' }] })
-    await call({ tool: DOING_TOOL, agentId: 'd1', text: words.said })
-    for (const surface of ['terminal', 'desktop'] as const) {
-      const ui = await $.ui.mount({ plugin: 'agent-hq', surface, component: 'Pane', requestId: 'agent-hq', props: PANE_PROPS as never })
-      expect(lineAfter(await texts(ui), words.said), surface).toMatch(words.task) // no call runs: the step
-
-      let during: string[] = []
-      box.probe = async () => void (during = await texts(ui))
-      await call({ tool: 'Grep', pattern: 'routes', agentId: 'd1', tool_use_id: `g-${surface}` })
-      expect(lineAfter(during, words.said), surface).toMatch(/^[▸▹] \S.* · \d/) // the live tool line took line 3
-      expect(during.some(line => words.task.test(clean(line))), surface).toBe(false)
-
-      await send($, { to: 'dev-1', text: `${words.order}. More after.` })
-      await call({ tool: 'Grep', pattern: 'routes', agentId: 'd1', tool_use_id: `g2-${surface}` })
-      const talk = `» ← ${words.lead}: ${words.order}.`
-      expect(lineAfter(during, words.said), surface).toBe(talk) // a bubble over the live line
-      expect(lineAfter(await texts(ui), words.said), surface).toBe(talk) // and over the step
-      if (surface === 'terminal') await expectNoThaiCells(ui)
-
-      await clock.advance(6_000)
-      const gone = await texts(ui)
-      expect(gone.some(line => line.includes('»')), surface).toBe(false)
-      expect(lineAfter(gone, words.said), surface).toMatch(words.task)
-      await ui.unmount()
-    }
-  })
-}
-
-for (const lang of ['en', 'th'] as const) {
-  test(`${lang}: the lead keeps its crew count on line 3 while its own call runs`, { options: { language: lang === 'th' ? 'thai' : 'english' } }, async ($, on) => {
-    const { box, call } = await session($, on)
-    const crew = lang === 'en' ? '2 of 2 working' : 'ทำงานอยู่ 2 จาก 2'
-    await call({ tool: DOING_TOOL, text: 'Splitting the release' })
-    for (const surface of ['terminal', 'desktop'] as const) {
-      const ui = await $.ui.mount({ plugin: 'agent-hq', surface, component: 'Pane', requestId: 'agent-hq', props: PANE_PROPS as never })
-      let during: string[] = []
-      box.probe = async () => void (during = await texts(ui))
-      await call({ tool: 'Grep', pattern: 'release', tool_use_id: `lead-${surface}` })
-      expect(lineAfter(during, 'Splitting the release'), surface).toBe(crew)
-      await ui.unmount()
-    }
-  })
-}
+test('the lead keeps its crew count on line 3 while its own call runs', async ($, on) => {
+  const { box, call } = await session($, on)
+  const crew = '2 of 2 working'
+  await call({ tool: DOING_TOOL, text: 'Splitting the release' })
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await $.ui.mount({ plugin: 'agent-hq', surface, component: 'Pane', requestId: 'agent-hq', props: PANE_PROPS as never })
+    let during: string[] = []
+    box.probe = async () => void (during = await texts(ui))
+    await call({ tool: 'Grep', pattern: 'release', tool_use_id: `lead-${surface}` })
+    expect(lineAfter(during, 'Splitting the release'), surface).toBe(crew)
+    await ui.unmount()
+  }
+})
 
 test('a member with a live bubble draws its full row, so line 3 shows it even once it finished; then one line again', async ($, on) => {
   const s = await session($, on)

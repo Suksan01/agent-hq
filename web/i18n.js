@@ -1,8 +1,5 @@
-// Every word the live page writes itself, in English and Thai. The page speaks the language of its sessions' snapshots
-// (`lang`, set by the mod from the person's choice; the first live session decides when two differ). Pure, no DOM, so
-// `node --test` checks that both tables have the same keys and placeholders. The Thai follows the approved glossary
-// (side-session notes, hq-0.6.0-thai-glossary.md): เอเจนต์, หัวหน้า, agents counted with คน, no ครับ/ค่ะ, no ผม/ฉัน.
-// What the mod and the agents write (names, tool lines, sentences, bubbles, feed text) comes already in its language.
+// Every word the live page writes itself. Pure, no DOM. What the mod and the agents write (names, tool lines, sentences,
+// bubbles, feed text) comes already worded by the mod.
 
 export const STRINGS = {
   en: {
@@ -57,75 +54,10 @@ export const STRINGS = {
     'tasks.step.tests': 'tests', 'tasks.step.build': 'build', 'tasks.step.review': 'review', 'tasks.step.fix': 'fix',
     'tasks.event.start': 'started', 'tasks.event.review': 'sent to review', 'tasks.event.done': 'done',
   },
-  th: {
-    'status.working': 'ทำงานอยู่', 'status.waiting': 'รอคุณ', 'status.done': 'เสร็จแล้ว', 'status.failed': 'ล้มเหลว', 'status.idle': 'ว่าง', 'status.stopped': 'หยุดแล้ว', 'status.lead': 'หัวหน้าทีม', 'paused.title': 'พักอยู่', 'paused.notStarted': 'ยังไม่เริ่ม', 'paused.ago': '{time} ที่แล้ว',
-    'crew.waiting': 'รอคุณ', 'lead.allDone': 'เสร็จครบแล้ว', 'lead.failure': 'มีงานล้มเหลวในทีม',
-    'orb.thinking': 'กำลังคิด', 'card.now': 'ตอนนี้', 'card.next': 'ถัดไป', team: 'ทีม',
-    'chips.label': 'ระบบ', 'toolbar.label': 'เครื่องมือ', 'menu.label': 'คำสั่ง', send: 'ส่ง', close: 'ปิด',
-    'drawer.level': 'เลเวล', 'drawer.timeline': 'ลำดับเหตุการณ์', 'drawer.finished': 'เอเจนต์นี้ทำงานเสร็จแล้ว ไม่มีอะไรให้ส่งหรือหยุด',
-    'drawer.messageTo': 'ส่งข้อความถึง {name}…', 'drawer.stopAsk': 'หยุด {name} ใช่ไหม', 'drawer.stopWarn': 'หยุด {name} ใช่ไหม งานที่ทำค้างไว้จะหายไป',
-    'drawer.keep': 'ให้ทำต่อ', 'drawer.stop': 'หยุด', 'drawer.stopAgent': 'หยุดเอเจนต์',
-    'stat.tools': 'เครื่องมือ', 'stat.time': 'เวลา', 'stat.last': 'ล่าสุด',
-    'feed.title': 'กิจกรรม', 'feed.fold': 'ย่อ{title}', 'feed.open': 'เปิด{title}', 'feed.quiet': 'ยังเงียบอยู่',
-    'feed.caughtUpOne': '… ตามทัน {n} เหตุการณ์', 'feed.caughtUp': '… ตามทัน {n} เหตุการณ์', 'feed.tooOld': '({n} รายการเก่าเกินจะแสดง)',
-    'inbox.empty': 'ไม่มีอะไรรอคุณ ทีมจัดการอยู่', 'inbox.waitingFor': 'รอมาแล้ว', 'inbox.waiting': 'รอ', 'inbox.message': 'ส่งข้อความ',
-    'inbox.terminal': 'ตอบในเทอร์มินัล', 'inbox.needsApproval': 'รออนุมัติ', 'toast.dismiss': 'ปิดแจ้งเตือน',
-    'add.title': 'เพิ่มเอเจนต์', 'add.cancel': 'ยกเลิก', 'add.hire': 'ขอเพิ่มอีกคน', 'add.add': 'เพิ่มเอเจนต์', 'add.role': 'บทบาท',
-    'add.full': '{title}: ทำงานครบ {count} คนแล้ว', 'add.room': 'ทำงานอยู่ {active} จาก {count}', 'add.noRoles': 'ทีมนี้ไม่มีบทบาท ใช้ "ขอเพิ่มอีกคน" เพื่อขอจากหัวหน้า',
-    'add.task': 'งาน', 'add.taskHint': 'ให้ทำอะไร', 'add.hireHint': '"ขอเพิ่มอีกคน" จะขอให้หัวหน้าหาเพิ่มอีกคน',
-    'board.title': 'บอร์ดงาน', 'board.close': 'ปิดบอร์ดงาน', 'board.empty': 'ยังไม่มีงานบนบอร์ด', 'board.waitsOn': 'รอ {ids}',
-    'lead.title': 'หัวหน้าทีมเทคนิค', 'lead.crew': 'สมาชิก', 'lead.more': 'อีก {n} คน', 'lead.moreList': '+อีก {n} คน · {words}',
-    'lead.message': 'คุยกับหัวหน้า', 'lead.messageLabel': 'คุยกับหัวหน้า', 'lead.tasks': 'งาน', 'lead.tasksLabel': 'เปิดบอร์ดงาน', 'lead.actions': 'คำสั่งของหัวหน้า',
-    'lead.board': 'บอร์ดภารกิจ', 'lead.steps': 'ขั้นตอน', 'lead.plan': 'แผน', 'lead.noPlan': 'ยังไม่มีแผน', 'lead.noCrew': 'ยังไม่มีสมาชิก',
-    'lead.needsOne': '{n} คนรอคุณ', 'lead.needsMany': '{n} คนรอคุณ', 'lead.of': '{title} ของ {team}',
-    'step.done': 'เสร็จแล้ว', 'step.now': 'กำลังทำ', 'step.next': 'ถัดไป',
-    'live.on': 'ออนไลน์', 'live.lost': 'หลุดจากระบบ: รัน /hq web อีกครั้ง', 'live.reconnecting': 'กำลังเชื่อมต่อใหม่',
-    'live.connecting': 'กำลังเชื่อมต่อกับ Agent HQ…', 'live.moment': 'รอสักครู่', 'live.none': 'ไม่มีเซสชัน Claude Code ที่ทำงานอยู่',
-    'live.start': 'เปิดเซสชันใหม่ แล้วรัน /hq web ในนั้น', 'live.lostPage': 'หน้านี้หลุดจากระบบ: รัน /hq web อีกครั้ง', 'live.noSession': 'ไม่มีเซสชันที่ทำงานอยู่',
-    'live.teamToMessage': 'ทีมที่จะคุยด้วย', 'live.hide': 'ซ่อน', 'live.hideFeed': 'ซ่อนกิจกรรม',
-    'live.boardHide': 'ซ่อนบอร์ดงาน', 'live.boardShow': 'แสดงบอร์ดงาน', 'live.showDone': 'แสดงที่เสร็จ', 'live.hideDone': 'ซ่อนที่เสร็จ',
-    'live.clearDone': 'ล้างที่เสร็จ', 'live.fit': 'พอดีจอ', 'live.fullScreen': 'เต็มจอ', 'live.soundsOn': 'เสียง: เปิด', 'live.soundsOff': 'เสียง: ปิด',
-    'live.noRole': 'ทีมนี้ไม่มีบทบาทให้เริ่มเอเจนต์', 'live.clearTitle': 'ล้างที่เสร็จใช่ไหม', 'live.keepThem': 'เก็บไว้', 'live.clear': 'ล้าง',
-    'live.clearText': 'เอเจนต์และงานที่เสร็จแล้วจะหายไปจากหน้านี้ (และแถบข้าง) งานที่ทำอยู่ยังอยู่ครบ', 'live.all': 'ทั้งหมด',
-    'hud.systems': '{n} ระบบ',
-    'post.sent': 'ส่งถึง Agent HQ แล้ว…', 'post.stopped': '{where}เซสชันนั้นหยุดไปแล้ว', 'post.unreachable': '{where}ติดต่อเซสชันไม่ได้',
-    'post.busy': '{where}มีคำขอรอคิวมากเกินไป ลองใหม่อีกสักครู่', 'post.offline': 'ติดต่อ Agent HQ ไม่ได้',
-    'view.label': 'มุมมอง', 'view.diagram': 'แผนผัง', 'view.space': 'อวกาศ', 'view.lost': 'มุมมองอวกาศหยุดทำงาน: เบราว์เซอร์ปิด WebGL',
-    'space.unavailableTitle': 'ใช้มุมมองอวกาศไม่ได้',
-    'space.unavailable': "มุมมองอวกาศต้องใช้ WebGL ซึ่งเบราว์เซอร์นี้ปิดอยู่ ให้ปิดแล้วเปิด Chrome ใหม่ หรือเปิด 'Use graphics acceleration' ใน chrome://settings/system",
-    'space.noWebgl': 'เบราว์เซอร์นี้ไม่มี WebGL จึงวาดมุมมองอวกาศไม่ได้', 'space.loading': 'กำลังโหลดมุมมองอวกาศ…',
-    'badge.first_task': 'งานแรก', 'badge.ten_tools': 'เริ่มคล่องมือ', 'badge.hundred_tools': 'เจ้าแห่งเครื่องมือ', 'badge.test_streak_5': 'เทสต์ผ่านรวด',
-    'badge.bug_squasher': 'นักปราบบั๊ก', 'badge.reviewer_eagle': 'ตาเหยี่ยวรีวิว', 'badge.speedy': 'ไวสุด', 'badge.comeback': 'กลับมาได้',
-    'talk.lead': 'หัวหน้า', 'talk.to': 'ถึง {who}', 'talk.from': 'จาก {who}',
-    'next.title': 'ขั้นตอนถัดไป', 'next.list': 'หัวหน้าแนะนำ', 'next.use': 'ร่างในช่องคุยกับหัวหน้า: {text}', 'next.notNow': 'ไว้ทีหลัง',
-    'approval.title': 'รอคำตอบของคุณ', 'approval.wants': '{agent} ขอใช้ {tool}', 'approval.size': '{key}: {n} อักขระ',
-    'approval.hidden': 'อักขระที่มองไม่เห็นแสดงเป็น ⟦U+…⟧', 'approval.terminal': 'ตอบในเทอร์มินัล',
-    'approval.seeTerminal': 'ใหญ่หรือเป็นความลับเกินไป: ดูในเทอร์มินัล', 'approval.because': 'Claude Code ถามเพราะ: {reason}',
-    'unit.s': '{n} วิ', 'unit.m': '{n} นาที', 'unit.h': '{n} ชม.',
-    'tasks.title': 'งาน', 'tasks.loading': 'กำลังโหลดงาน…', 'tasks.empty': 'แผนยังไม่มีงาน', 'tasks.offline': 'ออฟไลน์: แสดงงานตามที่เห็นล่าสุด',
-    'tasks.footnote': '≈ ประมาณการจากราคาตามรายการ ไม่ใช่ยอดที่เรียกเก็บจริง', 'tasks.footPartial': '+ บางรายการไม่ทราบราคา', 'tasks.footNoPrice': '— ไม่มีราคา', 'tasks.footRemoved': 'ยอดรวมนับงานที่ถูกลบออกด้วย', 'tasks.progress': 'งานที่เสร็จ', 'tasks.lastActive': 'ใช้งานล่าสุด {n} นาทีก่อน', 'tasks.ago': '{n} นาทีก่อน', 'tasks.quiet': 'ไม่มีความเคลื่อนไหว {n} นาที', 'tasks.colStatus': 'สถานะ', 'tasks.colTask': 'งาน', 'tasks.colWho': 'ใคร', 'tasks.colMin': 'นาที', 'tasks.colCost': 'ราคา ≈',
-    'tasks.total': 'รวม', 'tasks.done': 'เสร็จ {done}/{count}', 'tasks.noWork': 'ยังไม่มีใครทำงานนี้', 'tasks.minutes': '{n} นาที', 'tasks.tokens': '{n} โทเค็น',
-    'tasks.status.done': 'เสร็จ', 'tasks.status.working': 'กำลังทำ', 'tasks.status.review': 'กำลังตรวจ', 'tasks.status.waiting': 'รอ',
-    'tasks.step.tests': 'ทดสอบ', 'tasks.step.build': 'สร้าง', 'tasks.step.review': 'ตรวจ', 'tasks.step.fix': 'แก้',
-    'tasks.event.start': 'เริ่ม', 'tasks.event.review': 'ส่งตรวจ', 'tasks.event.done': 'เสร็จ',
-  },
 }
-
-let lang = 'en'
-
-/** The page's language from here on: 'th', else English. */
-export const setLang = next => { lang = next === 'th' ? 'th' : 'en' }
-export const getLang = () => lang
 
 /** Whether the table has `key` (the page's words for an open set, like statuses, fall back to the raw value otherwise). */
 export const has = key => Object.hasOwn(STRINGS.en, key)
 
 /** A string of the page in its language, `{name}` holes filled from `params`; a key with no text is shown as itself. */
-export const t = (key, params = {}) => (STRINGS[lang][key] ?? STRINGS.en[key] ?? key).replace(/\{(\w+)\}/g, (hole, name) => (params[name] ?? hole))
-
-/** The language the sessions ask for: the first live one's (the page lists them in a stable order); undefined with none. */
-export function langOf(sessions) {
-  const first = sessions.find(s => s.alive) ?? sessions[0]
-  if (!first) return undefined
-  return first.snapshot?.lang === 'th' ? 'th' : 'en'
-}
+export const t = (key, params = {}) => (STRINGS.en[key] ?? key).replace(/\{(\w+)\}/g, (hole, name) => (params[name] ?? hole))

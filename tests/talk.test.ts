@@ -22,7 +22,7 @@ test('a bubble says the first sentence of the first line that says something', (
   expect(bubbleText('Can you check the API tests? Thanks')).toBe('Can you check the API tests?')
   expect(bubbleText('## Report\n\n**Done**, 3 tests added. Details below')).toBe('Done, 3 tests added.')
   expect(bubbleText('- read api.ts and fix it\n- then tests')).toBe('read api.ts and fix it') // a dot inside a word ends nothing
-  expect(bubbleText('แก้ปัญหาของ API เก่า\nรายละเอียด')).toBe('แก้ปัญหาของ API เก่า')
+  expect(bubbleText('修复旧 API 的问题\n详情')).toBe('修复旧 API 的问题')
   expect(bubbleText('   \n\n')).toBe('')
   expect(bubbleText(undefined)).toBe('')
   expect(bubbleText({ type: 'shutdown_request' })).toBe('')
@@ -43,15 +43,11 @@ test('a bubble is at most 80 columns, cut between clusters with an ellipsis', ()
   expect(textWidth(cut)).toBeLessThanOrEqual(BUBBLE_MAX)
   expect(long.startsWith(cut.slice(0, -1))).toBe(true)
 
-  const thai = 'ช่วยเช็กเทสต์ของ API หน้าค้นหาทั้งหมดที่เขียนไว้เมื่อวานแล้วแก้ที่พังให้ผ่านทุกข้อก่อนส่งงานให้หัวหน้าตรวจอีกรอบ'
-  const thaiCut = bubbleText(thai)
-  expect(thaiCut.endsWith('…')).toBe(true)
-  expect(textWidth(thaiCut)).toBeLessThanOrEqual(BUBBLE_MAX)
-  const kept = thaiCut.slice(0, -1)
-  expect(thai.startsWith(kept)).toBe(true)
-  // the cut never parts a consonant from its marks, nor a leading vowel from its consonant
-  expect(/^[ัิ-ฺ็-๎]/.test(thai.slice(kept.length))).toBe(false)
-  expect(/[เ-ไ]$/.test(kept)).toBe(false)
+  const accented = 'cafe\u0301 '.repeat(30) // e + combining acute is one cluster
+  const accentedCut = bubbleText(accented)
+  expect(accentedCut.endsWith('…')).toBe(true)
+  expect(textWidth(accentedCut)).toBeLessThanOrEqual(BUBBLE_MAX)
+  expect(accented.startsWith(accentedCut.slice(0, -1))).toBe(true)
 })
 
 test('a bubble sits on the party that is not the lead: from the lead, to the lead, and from the sender between members', () => {
@@ -96,7 +92,6 @@ test('a bubble lasts six seconds; the same list comes back when none ended', () 
 test('a bubble reads with its direction and the other party by nickname, the lead by its word', () => {
   const lead = { agent: 'd1', other: MAIN, dir: 'from' as const, text: 'fix the old API', at: 0 }
   expect(talkLine(lead, AGENTS, 'en')).toBe('← Lead: fix the old API')
-  expect(talkLine(lead, AGENTS, 'th')).toBe('← หัวหน้า: fix the old API')
   const peer = { agent: 'd1', other: 'r1', dir: 'to' as const, text: 'can you check?', at: 0 }
   expect(talkLine(peer, AGENTS, 'en')).toBe(`→ ${AGENTS.r1?.nickname}: can you check?`)
   expect(talkLine({ ...peer, other: 'gone' }, AGENTS, 'en')).toBe('→ gone: can you check?')

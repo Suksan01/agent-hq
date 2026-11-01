@@ -36,7 +36,7 @@ const near = (got: unknown, want: number) => typeof got === 'number' && Math.abs
 const LEDGER = () =>
   listOf([
     task(1, { title: 'Data model', status: 'done', doneBy: 'dev-1', startedAt: 10, doneAt: 90, work: { 'qa-1': work(3, { role: 'qa', step: 'tests' }), 'dev-1': work(9) }, events: [ev('dev-1', 40), ev('qa-1', 10), ev('dev-1', 90, 'done')] }),
-    task(2, { title: '<script>alert(1)</script> ตารางงาน', status: 'working', work: { 'dev-2': work(5) }, events: [ev('dev-2', 20)] }),
+    task(2, { title: '<script>alert(1)</script> 任务表', status: 'working', work: { 'dev-2': work(5) }, events: [ev('dev-2', 20)] }),
     task(3, { status: 'review', work: { 'dev-3': work(2), 'rev-1': work(1, { role: 'reviewer', step: 'review', model: 'mystery-model' }) }, events: [ev('dev-3', 30), ev('rev-1', 31, 'review')] }),
     task(4),
   ])
@@ -117,7 +117,7 @@ test('a total with everything priced is not partial', () => {
 })
 
 test('a title is the plan\'s text as it is: markup is not escaped in the snapshot, the page draws it as text (AC17)', () => {
-  expect(rowsOf(LEDGER())[1]?.title).toBe('<script>alert(1)</script> ตารางงาน')
+  expect(rowsOf(LEDGER())[1]?.title).toBe('<script>alert(1)</script> 任务表')
 })
 
 test('a list from an earlier session shows the same tasks and totals with no task working (AC11)', () => {

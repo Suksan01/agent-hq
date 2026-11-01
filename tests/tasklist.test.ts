@@ -56,11 +56,11 @@ test('parsePlan cuts a very long title to a fixed length, and keeps its start', 
   expect(first?.title.startsWith('Long title')).toBe(true)
 })
 
-test('parsePlan keeps markup and Thai text in a title as plain text', () => {
-  const tasks = parsePlan('- [ ] 1. <script>alert(1)</script>\n- [ ] 2. ตารางงาน\n')
+test('parsePlan keeps markup and non-ASCII text in a title as plain text', () => {
+  const tasks = parsePlan('- [ ] 1. <script>alert(1)</script>\n- [ ] 2. 任务表\n')
 
   expect(tasks[0]?.title).toContain('<script>')
-  expect(tasks[1]?.title).toBe('ตารางงาน')
+  expect(tasks[1]?.title).toBe('任务表')
 })
 
 // ---- mergeList: AC3
@@ -236,7 +236,7 @@ test('readList reads a valid file as the list it holds', async () => {
 
 test('writeList writes a file that readList reads back as the same list,', async () => {
   const d = disk()
-    const saved = listOf([task(1, { work: { 'senior-dev-1': work() }, events: [{ at: 1, kind: 'start', who: 'senior-dev-1' }] }), task(2, { title: 'ตารางงาน <b>' })])
+    const saved = listOf([task(1, { work: { 'senior-dev-1': work() }, events: [{ at: 1, kind: 'start', who: 'senior-dev-1' }] }), task(2, { title: '任务表 <b>' })])
 
     await writeList(d.$, d.path, saved)
 

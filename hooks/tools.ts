@@ -527,8 +527,8 @@ export function keepResult(all: Record<string, string>, agentId: string, text: s
   return Object.fromEntries(entries.slice(-MAX_KEPT))
 }
 
-/** "Developers" for more than one in English; Thai counts with คน and keeps the title as it is. */
-const pluralTitle = (title: string, n: number, lang: Lang) => (n === 1 || lang !== 'en' ? title : `${title}s`)
+/** "Developers" for more than one. */
+const pluralTitle = (title: string, n: number) => (n === 1 ? title : `${title}s`)
 
 /**
  * hq_hire: raise a role's headcount or create a role, in the team file the team came from, then reload the team.
@@ -549,7 +549,7 @@ export async function hqHire(input: unknown, deps: ToolDeps): Promise<ToolAnswer
   const asked = await deps.confirm(
     first.created
       ? t(lang, 'hire.askCreate', { path, id: first.roleId, title: first.title, n: first.after, card: first.card ? ` (${first.card})` : '' })
-      : t(lang, 'hire.askAdd', { path, n: first.hired, plural: pluralTitle(first.title, first.hired, lang), title: first.title, before: first.before, after: first.after }),
+      : t(lang, 'hire.askAdd', { path, n: first.hired, plural: pluralTitle(first.title, first.hired), title: first.title, before: first.before, after: first.after }),
   )
   if (asked === 'unavailable') return fail('hq_hire: changing the team file needs the person\'s confirmation and nobody could be asked here (a run without a screen?); nothing was changed')
   if (asked === 'no') return fail('hq_hire: the person did not confirm; nothing was changed')
@@ -568,7 +568,7 @@ export async function hqHire(input: unknown, deps: ToolDeps): Promise<ToolAnswer
       kind: 'action',
       text: plan.created
         ? t(lang, 'feed.createdRole', { title: plan.title, n: plan.hired, after: plan.after })
-        : t(lang, 'feed.hired', { n: plan.hired, plural: pluralTitle(plan.title, plan.hired, lang), after: plan.after }),
+        : t(lang, 'feed.hired', { n: plan.hired, plural: pluralTitle(plan.title, plan.hired), after: plan.after }),
     })
     return {
       text: [

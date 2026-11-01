@@ -1,5 +1,5 @@
-// Thai in Text lines: kept whole by cluster (a consonant never parts from its marks), marks taking no column. Anything
-// else is drawn exactly as the cell path draws it, so English and the dotted fallback stay byte for byte as they were.
+// Thai content (typed by the team or the person) in Text lines: kept whole by cluster (a consonant never parts from its marks),
+// marks taking no column. Anything else is drawn exactly as the cell path draws it. The UI around it is English.
 import { expect, test } from 'claude-code/testing'
 
 import { cellText, fit, fitText, headOf, textWidth } from '../hooks/cells'

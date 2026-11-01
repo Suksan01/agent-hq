@@ -1,12 +1,10 @@
-// The sidebar and the band with the language set to Thai: every word Thai and shown whole (never dotted), no English left
-// from the tables, and no Thai in a Raster cell (a mark has no column of its own, so the engine would refuse the tree).
+// The sidebar and the band with the English UI and Thai content (team name, task titles, steps): the Thai is shown whole
+// (never dotted) and never in a Raster cell (a mark has no column of its own, so the engine would refuse the tree).
 import { expect, mock, test } from 'claude-code/testing'
 import type { AgentInfo, On, RenderElement } from 'claude-code'
 import type { Engine } from 'claude-code/testing'
 
 import { withApproval } from '../hooks/approval'
-import { TABLES } from '../hooks/i18n'
-import type { Key } from '../hooks/i18n'
 import { TEAM_FILE } from '../hooks/team'
 
 const RAW_TEAM = {
@@ -21,7 +19,7 @@ const PANE_PROPS = { title: 'Agent HQ', isFocused: false, bodyColumns: 46, place
 const BAND_PROPS = { hasSurvey: false, isWorking: true, maxRows: 10, bodyColumns: 100, scroll: { offset: 0, bodyRows: 10 }, view: {} }
 const THAI = /[฀-๿]/
 
-/** A Thai session with the team loaded: agent 1 has Thai todos, agent 2 none (its bar stands in), a Thai task on the board. */
+/** A session with Thai content with the team loaded: agent 1 has Thai todos, agent 2 none (its bar stands in), a Thai task on the board. */
 async function session($: Engine, on: On) {
   mock.clock(on)
   mock.store(on, { approvedTeams: withApproval([], `/work/app/${TEAM_FILE}`, JSON.stringify(RAW_TEAM)), languageAsked: true })
@@ -70,50 +68,40 @@ async function rasterChars(ui: { findAll: (q: { type: string }) => Promise<{ pro
   return chars
 }
 
-// the English words of the tables that draw the sidebar and band: none may be left on a Thai screen
-const DRAWN = /^(sidebar|row|now|tree|tasks|status|band|track|team)\./
-const englishLeft = (text: string) =>
-  (Object.keys(TABLES.en) as Key[])
-    .filter(key => DRAWN.test(key))
-    .flatMap(key => TABLES.en[key].split(/\{\w+\}/).map(part => part.trim()))
-    .filter(part => part.length >= 4 && /[A-Za-z]/.test(part) && text.includes(part))
-
-test('the Thai sidebar shows Thai whole, keeps no English from the tables and no Thai in its cells', { options: { language: 'thai' } }, async ($, on) => {
+test('the English sidebar shows Thai content whole and puts no Thai in its cells', async ($, on) => {
   await session($, on)
   const ui = await $.ui.mount({ plugin: 'agent-hq', surface: 'terminal', component: 'Pane', requestId: 'agent-hq', props: PANE_PROPS as never })
   const text = await shown(ui as never)
 
-  for (const word of ['บอร์ดงาน', 'ซ่อนที่เสร็จ', 'ล้างที่เสร็จ', 'ถัดไป: เขียนเทสต์', 'ทีมเว็บ', 'เริ่มต้น', 'กำลังแก้ API เก่า']) expect(text, word).toContain(word)
+  for (const word of ['TASK BOARD', 'ทีมเว็บ', 'กำลังแก้ API เก่า']) expect(text, word).toContain(word)
   expect(text).not.toMatch(/··/) // a Thai word sent through the cell path would be a run of dots
-  expect(englishLeft(text)).toEqual([])
   expect((await rasterChars(ui as never)).filter(c => c >= 0x0e00 && c <= 0x0e7f)).toEqual([])
-  expect(await ui.find({ type: 'Raster', key: 'todo-2' })).toBeDefined() // the stand-in bar is still drawn, its word beside it
+  expect(await ui.find({ type: 'Raster', key: 'todo-2' })).toBeDefined() // the stand-in bar is still drawn
   await ui.unmount()
 })
 
-test('the Thai band keeps its words beside the tracks, never in them', { options: { language: 'thai' } }, async ($, on) => {
+test('the band keeps a Thai task label beside its track, never in it', async ($, on) => {
   await session($, on)
   const ui = await $.ui.mount({ plugin: 'agent-hq', surface: 'terminal', component: 'AbovePrompt', props: BAND_PROPS as never, viewport: { columns: 100, rows: 40, isFullscreen: true } as never })
   const text = await shown(ui as never)
 
-  for (const word of ['ทีม', 'งาน', 'ทำงานอยู่ 2', 'กำลังทำหน้าค้นหา', 'เอเจนต์ ›']) expect(text, word).toContain(word)
+  expect(text).toContain('กำลังทำหน้าค้นหา')
+  expect(text).toContain('Agents ›') // the English words around it are unchanged
   expect(text).not.toMatch(/··/)
-  expect(englishLeft(text)).toEqual([])
   expect((await rasterChars(ui as never)).filter(c => c >= 0x0e00 && c <= 0x0e7f)).toEqual([])
   await ui.unmount()
 })
 
-test('where the app draws, the Thai words sit beside the Svg tracks too', { options: { language: 'thai' } }, async ($, on) => {
+test('where the app draws, the Thai words sit beside the Svg tracks too', async ($, on) => {
   await session($, on)
   const ui = await $.ui.mount({ plugin: 'agent-hq', surface: 'desktop', component: 'Pane', requestId: 'agent-hq', props: PANE_PROPS as never })
   const text = await shown(ui as never)
-  expect(text).toContain('เริ่มต้น')
-  expect(englishLeft(text)).toEqual([])
+  expect(text).toContain('ทีมเว็บ')
   expect(THAI.test(text)).toBe(true)
   await ui.unmount()
 })
 
-test('the English sidebar is unchanged: no words beside its tracks', async ($, on) => {
+test('the English sidebar with English content has no words beside its tracks', async ($, on) => {
   await session($, on)
   const ui = await $.ui.mount({ plugin: 'agent-hq', surface: 'terminal', component: 'Pane', requestId: 'agent-hq', props: PANE_PROPS as never })
   expect(await ui.find({ text: /TASK BOARD/ })).toBeDefined()

@@ -4,8 +4,8 @@ import type { EngineInterface, PromptOrigin, Register } from 'claude-code'
 import { DOING_TOOL, MAIN, barIdsIn, clearFinished, countTool, createTask, mergeAgents, mergeTodos, overallProgress, planSteps, updateTask, who, workingCount } from './model'
 import { cleanSaying, currentStep, maskedWork, pruneSays } from './says'
 import type { HqTeam, HqTodo } from '../types'
-import { BRIEFS_DIR, MEMORY_SCOPE, NO_TEAM_PROMPT, TEAM_FILE, languageSection, leadModelWarning, leadPrompt, parseTeam, rolePrompt } from './team'
-import { LANGUAGE_CHOICES, LANGUAGE_HEADER, LANGUAGE_OPTION, LANGUAGE_QUESTION, langOf, languageOfAnswer, t } from './i18n'
+import { BRIEFS_DIR, MEMORY_SCOPE, NO_TEAM_PROMPT, TEAM_FILE, leadModelWarning, leadPrompt, parseTeam, rolePrompt } from './team'
+import { t } from './i18n'
 import type { Key, Lang } from './i18n'
 import { PERSON_FRAME, personStarts, runFreshActions } from './actions'
 import type { ActionDeps, PageAction } from './actions'
@@ -144,7 +144,7 @@ async function loadTeam($: EngineInterface, options: { approve?: boolean; expect
     await $.agent.register({
       name: role.id,
       description: `${role.title} on the ${parsed.name} team. ${role.mission}`.slice(0, 1000),
-      prompt: rolePrompt(parsed, role, hasMemory, lang, root),
+      prompt: rolePrompt(parsed, role, hasMemory, root),
       ...(role.tools ? { tools: role.tools } : {}),
       ...(role.model ? { model: role.model } : {}),
       ...(role.effort ? { effort: role.effort } : {}),
@@ -225,7 +225,7 @@ async function readTeamTodos($: EngineInterface): Promise<Record<string, HqTodo[
 let isLight = false
 let isMuted = false // the `sounds` option, read when the module registers
 let nameTheme = themeOf(undefined) // the `nicknameTheme` option, read when the module registers
-let lang: Lang = 'en' // the `language` option, read when the module registers; /hq lang sets it at once, before the reload
+const lang: Lang = 'en'
 const xpLedger = createLedger() // what each agent has earned this session, on top of what the store held
 type Site = { requestId: string; data: HqData; draw: (t: number) => Raster[]; refused: number }
 const sites = new Map<'band' | 'sidebar', Site>()
@@ -705,7 +705,7 @@ async function suggestNext($: EngineInterface) {
     while (suggestFor !== null) {
       const turnId = suggestFor
       if (!(await isSettingOn($, NEXT_TASKS)) || (await openPages($)) === 0) break
-      const reply = await $.model.fork({ prompt: suggestPrompt(lang) })
+      const reply = await $.model.fork({ prompt: suggestPrompt() })
       if (suggestFor !== turnId) continue
       if (!reply.isAnswered) $.ui.log(`Agent HQ: no next-task suggestions (${reply.reason})`, { to: 'debug' })
       const parsed = reply.isAnswered ? parseSuggestions(reply.text) : null
@@ -870,74 +870,15 @@ async function closeSidebar($: EngineInterface): Promise<{ text: string }> {
   return { text: closed }
 }
 
-const LANGUAGE_ASKED = 'languageAsked' // $.store key: the first-run language question was asked (or nobody could be)
-
-/** Sets the `language` option, which reloads the plugin with it; this module speaks it from now on too. The refusal, or null. */
-async function setLanguage($: EngineInterface, next: Lang): Promise<string | null> {
-  await $.store.set(LANGUAGE_ASKED, true) // a language chosen (here or by /hq lang) is the answer: never asked after it
-  const set = await $.config.set({ key: `${$.plugin.name}.language`, value: LANGUAGE_OPTION[next] }).catch((error: unknown) => ({ deny: error instanceof Error ? error.message : String(error) }))
-  if (set.deny !== undefined) return set.deny
-  lang = next
-  return null
-}
-
-let languageAsk: Promise<Lang | null> | null = null // the question being asked: a client joining and /hq at once ask it once
-
-/** Thai, as the person chose it: the setting reloads the plugin; a refusal is said in a toast. */
-async function chooseThai($: EngineInterface) {
-  const denied = await setLanguage($, 'th')
-  if (denied !== null) $.ui.toast(t('th', 'lang.failed', { reason: denied }))
-}
-
-/**
- * Once: which language Agent HQ speaks, asked in both where a person can answer: at a REPL start, when a client joins
- * later (the desktop app starts with nobody to ask), or on the first plain /hq. Dismissed means English; either way it is
- * not asked again. The caller makes sure someone can answer: nothing is marked where nobody could be asked. Resolves
- * to Thai when Thai was chosen now. The setting reloads the plugin, so it is made just after, never inside a hook
- * still running (a /hq that joined the question).
- */
-function askLanguageOnce($: EngineInterface): Promise<Lang | null> {
-  languageAsk ??= (async (): Promise<Lang | null> => {
-    if (await $.store.get(LANGUAGE_ASKED)) return null
-    if (lang !== 'en') {
-      await $.store.set(LANGUAGE_ASKED, true) // chosen in /config
-      return null
-    }
-    const answer = await $.ui.ask(LANGUAGE_QUESTION, { options: [...LANGUAGE_CHOICES], header: LANGUAGE_HEADER }).catch(() => null)
-    await $.store.set(LANGUAGE_ASKED, true) // before the setting, which reloads the plugin
-    if (languageOfAnswer(answer) !== 'th') return null
-    $.clock.after(0, () => void chooseThai($).catch(logLanguageAsk($)))
-    return 'th'
-  })().finally(() => {
-    languageAsk = null
-  })
-  return languageAsk
-}
-
-const logLanguageAsk = ($: EngineInterface) => (error: unknown) =>
-  $.ui.log(`Agent HQ: could not ask for the language (${error instanceof Error ? error.message : String(error)})`, { to: 'debug' })
-
-const LANGUAGE_WORD = /^(thai|th|ไทย|ภาษาไทย|english|en)$/i
-
-/** `/hq lang [thai|english]`: says the language in force, or sets it and answers in the new one. */
-async function langCommand($: EngineInterface, word: string): Promise<{ text: string }> {
-  if (word === '') return { text: t(lang, 'lang.current') }
-  if (!LANGUAGE_WORD.test(word)) return { text: t(lang, 'lang.unknown') }
-  const next = languageOfAnswer(word)
-  const denied = await setLanguage($, next)
-  return { text: denied === null ? t(next, 'lang.changed') : t(lang, 'lang.failed', { reason: denied }) }
-}
-
 export const register: Register = (on, options) => {
   isMuted = !soundsOn(options.sounds)
   nameTheme = themeOf(options.nicknameTheme)
-  lang = langOf(options.language)
   on('session.start', async ($, e, next) => {
     configureLock((ms, fn) => $.clock.after(ms, fn)) // times both locks, the roster's and the task list's (hooks/lock.ts)
     await $.command.register({
       name: 'hq',
       description: t(lang, 'hq.description'),
-      argumentHint: '[open|close|web [next on|off]|report|trust|lang]',
+      argumentHint: '[open|close|web [next on|off]|report|trust]',
     })
     // shortcut: a light theme name picks the light tint; "auto" is read as dark (plan-progress also probes macOS appearance).
     const theme = (await $.config.list().catch(() => [])).find(row => row.key === 'theme')
@@ -958,16 +899,12 @@ export const register: Register = (on, options) => {
     for (const spec of TOOL_SPECS) await $.tool.register(spec).catch(error => $.ui.log(`Agent HQ: could not offer ${spec.name} (${error instanceof Error ? error.message : 'error'})`, { to: 'debug' }))
     // a hot reload ends the module and the page server with it: bring the page back (same hub port and secret, so an open tab reconnects)
     if (await read($, isWebWanted)) void startWeb($).catch(error => $.ui.log(`Agent HQ: could not restart the live page (${error instanceof Error ? error.message : String(error)})`, { to: 'debug' }))
-    // not awaited: the first start is awaited before the first prompt, and a dialog must not hold it. Only the REPL has
-    // someone to ask at the start; the desktop app, the SDK and -p start with nobody (a client joining later asks)
-    if (e.isInteractive) void askLanguageOnce($).catch(logLanguageAsk($))
 
     return next(e)
   })
 
   on('command.run', { command: 'hq' }, async ($, e) => {
     const [verb, ...words] = e.args.trim().split(/\s+/)
-    if (verb?.toLowerCase() === 'lang') return langCommand($, words.join(' '))
     const setting = verb?.toLowerCase() === 'web' ? WEB_SETTINGS[words[0]?.toLowerCase() ?? ''] : undefined
     if (setting) {
       const word = (words[1] ?? '').toLowerCase()
@@ -1001,11 +938,6 @@ export const register: Register = (on, options) => {
     }
     const arg = e.args.trim().toLowerCase()
     const canAsk = PERSON_ORIGINS.has(e.origin.kind) || ASKING_ORIGINS.has(e.origin.kind)
-    // the language first, where no client was asked yet (its join was missed) and someone can answer: before the trust
-    // dialog. Thai reloads the plugin, so this run ends here and the setting follows once it returned
-    if (arg === '' && canAsk && (await $.session.surfaces().catch(() => [])).length > 0) {
-      if ((await askLanguageOnce($).catch(logLanguageAsk($))) === 'th') return { text: t('th', 'lang.changedReopen') }
-    }
     const trusted = (arg === '' || arg === 'open') && canAsk ? await askTrust($, false) : null
     if (trusted) {
       await update($, isBandHidden, () => false)
@@ -1024,28 +956,18 @@ export const register: Register = (on, options) => {
     return { text: loaded ? t(lang, 'hq.openedTeam', { name: loaded.name }) : t(lang, 'hq.openedNoTeam') }
   })
 
-  // the main session plays the team's lead: its role, rules and roster ride in the system prompt while a team exists; the
-  // person's language rides there too, team or not
+  // the main session plays the team's lead: its role, rules and roster ride in the system prompt while a team exists
   on('prompt.compose', async ($, e, next) => {
     const composed = await next(e)
     const current = await read($, team)
     if (e.traits.includes('teammate') || e.traits.includes('bare')) return composed
-    const language = languageSection(lang)
-    const spoken = language ? [{ id: 'agent-hq:language', text: language, scope: 'session' as const }] : []
     if (!current) {
       // no file at all: offer to make one; a file that is untrusted or ignored has its own toast pointing at the fix
-      if ((await read($, teamSource)) !== null) return spoken.length > 0 ? { sections: [...composed.sections, ...spoken] } : composed
-      return { sections: [...composed.sections, { id: 'agent-hq:no-team', text: NO_TEAM_PROMPT, scope: 'session' as const }, ...spoken] }
+      if ((await read($, teamSource)) !== null) return composed
+      return { sections: [...composed.sections, { id: 'agent-hq:no-team', text: NO_TEAM_PROMPT, scope: 'session' as const }] }
     }
 
-    return { sections: [...composed.sections, { id: 'agent-hq:team', text: `${leadPrompt(current)}\n\n${LEAD_TOOLS_NOTE}`, scope: 'session' as const }, ...spoken] }
-  })
-
-  // a client that joins later (the desktop app, whose session started with nobody to ask) is asked the language then
-  on('session.attach', async ($, e, next) => {
-    const joined = await next(e)
-    void askLanguageOnce($).catch(logLanguageAsk($)) // beside the join, never in its way
-    return joined
+    return { sections: [...composed.sections, { id: 'agent-hq:team', text: `${leadPrompt(current)}\n\n${LEAD_TOOLS_NOTE}`, scope: 'session' as const }] }
   })
 
   // a /model switch raises no event a mod sees: check the lead's model as each prompt goes in

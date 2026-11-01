@@ -26,7 +26,7 @@ async function boot($: Engine, on: On, roster: AgentInfo[] = []) {
   const listed = roster // the test may add to it later: an agent started after the last poll
   const clock = mock.clock(on)
   const snapshots: { events?: { agent: string; kind: string; text: string; failed?: boolean }[] }[] = []
-  mock.store(on, { approvedTeams: withApproval([], PROJECT_FILE, TEAM), languageAsked: true })
+  mock.store(on, { approvedTeams: withApproval([], PROJECT_FILE, TEAM) })
   // the live page, when a test starts it (/hq web): its state writes caught
   on('fs.write', (_, e) => {
     if (e.path === '/home/me/.claude/agent-hq/live/sess.json') snapshots.push(JSON.parse(e.text))
@@ -160,14 +160,14 @@ test('an agent a guarded role started is held to that role\'s rules (and one tha
   expect(read.deny).toBeUndefined()
 })
 
-test('a block is a feed event flagged failed, so the page tells it in any language; other events are not', { options: { language: 'thai' } }, async ($, on) => {
+test('a block is a feed event flagged failed, so the page tells it in any language; other events are not', async ($, on) => {
   const s = await boot($, on, [info('r1', 'reviewer-1', 'agent-hq:reviewer')])
   await $.command.run({ command: 'hq', args: 'web', origin: { kind: 'composer' }, presentation: {} } as never)
   await s.call({ tool: 'Edit', file_path: 'app/page.tsx', old_string: 'a', new_string: 'b', agentId: 'r1' })
   await s.clock.advance(1_000) // the next poll writes the page's state
   const events = s.snapshots.at(-1)?.events ?? []
   const blocked = events.find(e => e.kind === 'action')
-  expect(blocked?.text).toMatch(/^ไม่อนุญาต Edit/)
+  expect(blocked?.text).toMatch(/^blocked Edit/)
   expect(blocked?.failed).toBe(true)
   expect(events.filter(e => e !== blocked).length).toBeGreaterThan(0)
   expect(events.filter(e => e !== blocked).every(e => e.failed === false)).toBe(true)

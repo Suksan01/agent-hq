@@ -88,7 +88,7 @@ export function Blob({ seed, state = 'idle', lead, size = 72, index, label }) {
 }
 
 
-/** Seconds as a Doto number with a unit: 12s, 4m, 2h (12 วิ, 4 นาที, 2 ชม. in Thai). */
+/** Seconds as a Doto number with a unit: 12s, 4m, 2h. */
 export function Elapsed({ secs = 0, size }) {
   const [value, unit] = secs < 60 ? [secs, 'unit.s'] : secs < 3600 ? [Math.floor(secs / 60), 'unit.m'] : [Math.floor(secs / 3600), 'unit.h']
   return html`<${DotNumber} value=${value} suffix=${t(unit, { n: '' })} size=${size} />`

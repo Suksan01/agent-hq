@@ -24,7 +24,7 @@ test('addEvents numbers events from where the feed left off and never changes th
 
 test('addEvents flags every event failed or not, so the page never reads the words to tell', () => {
   const feed = addEvents(EMPTY_FEED, 10, [
-    { agent: 'a', kind: 'action', text: 'ไม่อนุญาต Edit: x', failed: true },
+    { agent: 'a', kind: 'action', text: '不允许 Edit: x', failed: true },
     { agent: 'a', kind: 'action', text: 'finished agents hidden' },
   ])
   expect(feed.events.map(e => e.failed)).toEqual([true, false])

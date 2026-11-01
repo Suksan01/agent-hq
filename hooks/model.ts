@@ -293,14 +293,11 @@ export function clearFinished(
   }
 }
 
-const pad2 = (n: number) => String(n).padStart(2, '0')
-
-/** "4m 12s"; in Thai "4 นาที 12 วิ", or "4:12" where the row is narrow (`isNarrow`; English is short already). */
-export function elapsed(ms: number, lang: Lang = 'en', isNarrow = false): string {
+/** "4m 12s". */
+export function elapsed(ms: number, lang: Lang = 'en'): string {
   const s = Math.max(0, Math.round(ms / 1000))
   const [h, m] = [Math.floor(s / 3600), Math.floor((s % 3600) / 60)]
   if (s < 60) return t(lang, 'time.s', { s })
-  if (isNarrow && lang !== 'en') return s < 3600 ? `${m}:${pad2(s % 60)}` : `${h}:${pad2(m)}:${pad2(s % 60)}`
   return s < 3600 ? t(lang, 'time.ms', { m, s: s % 60 }) : t(lang, 'time.hm', { h, m })
 }
 

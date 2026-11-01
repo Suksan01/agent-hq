@@ -1,7 +1,7 @@
 /* Agent HQ, space theme: tokens and every component's styles. Deep space at night: a near-black canvas, glass tiles that
    bleed light from one edge, dot-matrix numerals, thin dotted rings, glow-blob creatures. Light, not lines, shows state.
    Components set `--hue` (a status colour) and the glass, pill, bar and number styles follow it. Fonts come from
-   vendor/fonts.css (Doto, Space Grotesk, JetBrains Mono, all SIL OFL, shipped with the page); those cover Latin only, so Thai falls
+   vendor/fonts.css (Doto, Space Grotesk, JetBrains Mono, all SIL OFL, shipped with the page); those cover Latin only, so Thai text the team types falls
    through to the Thai system fonts named after them (macOS, Windows, Linux/Android); nothing is fetched for it. */
 
 /* ---------- tokens ---------- */
@@ -674,14 +674,6 @@
       linear-gradient(180deg, rgb(15, 15, 24), rgb(5, 5, 10));
   }
 }
-html[lang='th'] :is(.tk-table th, .tk-foot, .tk-note, .tk-offline) { letter-spacing: 0; line-height: 1.5; }
-html[lang='th'] .tk-table th { font-size: 12px; text-transform: none; }
-
-/* ---------- Thai (html lang="th"): room for the marks above and below, no tracking, long runs may break ---------- */
-html[lang='th'] .sk-label { letter-spacing: 0; }
-html[lang='th'] :is(.sk-hud__title, .sk-title, .sk-modal__title, .lc-name) { line-height: 1.4; }
-html[lang='th'] :is(.sk-agent__says, .sk-bubble, .lc-says) { line-height: 1.55; }
-html[lang='th'] :is(.sk-body-text, .sk-toast__text, .sk-inbox__ask, .sk-confirm, .sk-empty, .sk-feed__row, .sk-timeline__item) { overflow-wrap: anywhere; }
 
 @media (prefers-reduced-motion: reduce) {
   .sk-canvas *, .sk-canvas *::before, .sk-canvas *::after, .sk-nebula, .sk-stars, .sk-blob *, .sk-toast, .sk-agent--waiting { animation: none !important; transition: none !important; }

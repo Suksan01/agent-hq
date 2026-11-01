@@ -4,22 +4,19 @@
 // untrusted text, so each line is cut to one line, stripped of control characters, masked and capped.
 
 import { cleanSaying } from './says'
-import type { Lang } from './i18n'
 
 export const NEXT_COUNT = 3 // tasks at most
 export const NEXT_MAX = 120 // characters per task
 export const RECAP_MAX = 240 // characters for the recap ("at most 2 short sentences")
 
-const LANGUAGE_NAME: Record<Lang, string> = { en: 'English', th: 'Thai' }
-
 /** The one message the fork answers. */
-export function suggestPrompt(lang: Lang): string {
+export function suggestPrompt(): string {
   return [
     'Do not continue the task and do not use any tool. Look at where this conversation stands now and suggest what the person could ask you to do next.',
     'Answer with ONLY a JSON object, no prose and no code fence:',
     '{"recap": "<at most 2 short sentences: where the work stands>", "next": ["<task>", "<task>", "<task>"]}',
     `"next" holds up to ${NEXT_COUNT} tasks, the most useful first. Each is one instruction the person could send you as their next message, specific to this conversation (name the file, test or follow-up), at most ${NEXT_MAX} characters. Leave "next" empty when the work is finished or nothing useful comes to mind.`,
-    `Write the recap and the tasks in ${LANGUAGE_NAME[lang]}; code words, file names and commands stay as they are.`,
+    'Write the recap and the tasks in English; code words, file names and commands stay as they are.',
   ].join('\n')
 }
 

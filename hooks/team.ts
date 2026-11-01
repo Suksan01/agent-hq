@@ -120,21 +120,6 @@ export function leadModelWarning(wanted: string | undefined, current: string, la
   return t(lang, 'team.leadModel', { wanted, current })
 }
 
-/**
- * What the lead and every member are told about the language the person chose (the `language` option). English is the
- * prompts' own language, so it adds nothing.
- */
-export function languageSection(lang: Lang): string {
-  if (lang === 'en') return ''
-  return [
-    '## Language',
-    'The person chose Thai (ภาษาไทย) for Agent HQ. Speak Thai to the person: every reply and question, AskUserQuestion labels and previews, todo steps and status sentences.',
-    'Write the files the person reads (specs, plans, reports, team titles and missions) in Thai.',
-    'Keep code, file paths, commands, JSON keys, code comments and commit messages in English; role ids, tool and skill names stay English too.',
-    'In Thai use no polite particles (ครับ/ค่ะ) and no first-person pronouns (ผม/ฉัน); keep digits 0-9 and code words (API, commit, file names) in Latin script.',
-  ].join('\n')
-}
-
 /** A role that cannot edit or write files: flagged read-only, or a tools list with neither Edit nor Write. */
 export const isReadOnlyRole = (role: TeamRole) => role.guard?.readOnly === true || (role.tools !== undefined && !role.tools.includes('Edit') && !role.tools.includes('Write'))
 
@@ -147,7 +132,7 @@ const CLOSE_TABS = 'Close every browser tab or window you open to check your wor
  * One role's whole system prompt: who it is, its mission, its team, tasks and rules, and how to report back.
  * `hasMemory` is false when the engine gives agents no memory (auto memory off): lessons then go to the team notes.
  */
-export function rolePrompt(team: Team, role: TeamRole, hasMemory = true, lang: Lang = 'en', root?: string): string {
+export function rolePrompt(team: Team, role: TeamRole, hasMemory = true, root?: string): string {
   const others = team.roles.filter(r => r.id !== role.id)
   // absolute when the project is known: a member working in another repo would otherwise write the team's files there
   const notes = root ? `${root}/${TEAM_NOTES}` : TEAM_NOTES
@@ -227,7 +212,6 @@ export function rolePrompt(team: Team, role: TeamRole, hasMemory = true, lang: L
           ]),
       '- If the assignment is unclear or outside your role, say so in your reply instead of guessing.',
     ].join('\n'),
-    languageSection(lang),
   ]
     .filter(Boolean)
     .join('\n\n')
