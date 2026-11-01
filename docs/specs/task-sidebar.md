@@ -45,6 +45,14 @@ member link, not kept across sessions).
    `.claude/agent-hq/tasks.json`, replacing any earlier list (the brainstorm's "kept until the next plan is approved").
 4. The sidebar and the live page show every task as waiting (○), or done (✓) when its box is already ticked.
 
+### F1b. No plan: assignments as tasks
+1. With no saved list, or a list made from assignments (`"source": "assignments"`, `plan` empty), an `hq_assign` without
+   `plan_task` adds a row: the next number, the first line of the task (about 60 characters) as its title, working, the
+   member linked as `plan_task` links it. A plan list gets no row from a plain `hq_assign`.
+2. The row is review after `hq_review` (the reviewer's turns count on it), done when the member's run ends or, in review,
+   when the reviewer's ends, and waiting when the run failed or was stopped (as a working task is on a new session).
+3. `hq_plan` replaces an assignments list outright; `plan_task` is refused while only an assignments list exists.
+
 ### F2. A member starts on a task
 1. The lead calls `hq_assign` with `plan_task: 3` (QA writing failing tests, or the developer building it).
 2. Task 3 shows working, with an animated spinner and the member's name in Who.

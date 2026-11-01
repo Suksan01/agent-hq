@@ -4,7 +4,8 @@
 
 import type { HqAgent, HqStatus, HqTeam, HqTeamRole } from '../types'
 import { MAIN, agentWork, isFinished } from './model'
-import type { TaskList } from './tasklist'
+import { titleOfAssignment } from './tasklist'
+import type { ListTask, TaskList } from './tasklist'
 import { REPLY_LINES, isReadOnlyRole, reportPathOf } from './team'
 import { labelOf, nowLine } from './view'
 import type { HqData } from './view'
@@ -184,4 +185,22 @@ export function linkMember(list: TaskList, n: number, link: { status: 'working' 
 export function taskOfMember(list: TaskList, who: string): number | undefined {
   const mine = list.tasks.filter(x => Object.hasOwn(x.work, who) && x.status !== 'done')
   return (mine.find(x => x.status === 'working') ?? mine.at(-1))?.n
+}
+
+// ---------- assignments as tasks: a list made of hq_assign rows when no plan was saved ----------
+
+/**
+ * `list` (null: a new assignments list) with one more row for an assignment: the next number after the last, the first line of
+ * the task as its title, working, the member linked as plan_task links it. The list it is given is not changed.
+ */
+export function addAssignmentRow(list: TaskList | null, link: { who: string; role: string; task: string; at: number }): TaskList {
+  const base: TaskList = list ?? { version: 1, plan: '', approvedAt: link.at, source: 'assignments', tasks: [], removed: { workMs: 0, costUsd: 0 } }
+  const n = Math.max(0, ...base.tasks.map(x => x.n)) + 1
+  const row: ListTask = { n, title: titleOfAssignment(link.task) || `Task ${n}`, status: 'waiting', doneBy: null, startedAt: null, doneAt: null, work: {}, events: [] }
+  return linkMember({ ...base, tasks: [...base.tasks, row] }, n, { status: 'working', who: link.who, role: link.role, step: 'build', kind: 'start', at: link.at })
+}
+
+/** The newest row a member has a work row in, whatever its status (a finished member's row is done); undefined when none. */
+export function rowOfMember(list: TaskList, who: string): number | undefined {
+  return list.tasks.filter(x => Object.hasOwn(x.work, who)).at(-1)?.n
 }

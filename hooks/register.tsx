@@ -23,9 +23,9 @@ import type { Sound } from './sounds'
 import { soundsOn, themeOf } from './themes'
 import { agentRoles, guardToolCall } from './guard'
 import { addTurn } from './usage'
-import { applyPlanTicks, parsePlan, readList, writeList } from './tasklist'
+import { applyPlanTicks, isAssignmentList, parsePlan, readList, writeList } from './tasklist'
 import type { TaskList } from './tasklist'
-import { addTurnToTask, settleForNewSession } from './taskwork'
+import { addTurnToTask, settleAssignmentRows, settleForNewSession } from './taskwork'
 import { describeCall, endActivity, hasRunningCall, liveActivities, startActivity } from './activity'
 import { addAsk, buildInbox, cardOf, describeAsk, dropAsksOf, pageCount, removeAsk, statusText, trackWaiting } from './inbox'
 import { announceXp, createLedger, creditActivity, creditTestRun, xpStoreOf, xpSummaries } from './xpstore'
@@ -276,6 +276,7 @@ async function syncAgents($: EngineInterface) {
   // XP from what changed, then the one clip of this poll: a status change's, or a level up's when that is louder
   const earned = await creditActivity(xpStoreOf($), xpLedger, { agents: after, todos: await readTeamTodos($), tasks: await read($, tasks) }, at).catch(() => [])
   await announceXp($, earned, heard, isMuted, lang)
+  await changeTaskList($, (list, now) => settleAssignmentRows(list, after, now)) // an assignments row ends with its members' runs
   const waits = trackWaiting(await read($, waitingSince), after, at)
   if (JSON.stringify(waits) !== JSON.stringify(await read($, waitingSince))) await update($, waitingSince, () => waits)
   await pruneSaid($)
@@ -436,11 +437,12 @@ function changeTaskList($: EngineInterface, change: (list: TaskList, at: number)
 }
 
 /** The guard's `planFile` for a list: the approved plan's project-relative path; nothing without a list. */
-const planFileOf = (list: TaskList | null) => (list ? { planFile: list.plan } : {})
+const planFileOf = (list: TaskList | null) => (list && !isAssignmentList(list) ? { planFile: list.plan } : {}) // an assignments list has no plan file
 
 /** A Write, Edit or Bash command that touches the list's plan file: its ticked boxes become done tasks. */
 const tickFromPlan = ($: EngineInterface, e: { tool: unknown; file_path?: unknown; command?: unknown }) =>
   changeTaskList($, async (list, at) => {
+    if (isAssignmentList(list)) return list
     // a Bash command (sed -i, >>) counts when its words name the plan file; Write and Edit when their path is it
     const isPlan = e.tool === 'Bash' ? typeof e.command === 'string' && e.command.includes(list.plan) : typeof e.file_path === 'string' && (await pathOf($, e.file_path)) === (await pathOf($, list.plan))
     if (!isPlan) return list

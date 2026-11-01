@@ -1,6 +1,9 @@
 // What a turn does to the saved task list (docs/specs/task-sidebar.md AC6, AC8, F2 step 4, F3 step 3, F5). Pure: each function
 // returns a new list and leaves the one it was given as it was. Plan ticks are applyPlanTicks (./tasklist).
 
+import type { HqAgent } from '../types'
+import { isFinished } from './model'
+import { applyPlanTicks, isAssignmentList } from './tasklist'
 import type { ListTask, TaskList, TaskWork } from './tasklist'
 import type { TurnReport } from './usage'
 
@@ -55,4 +58,23 @@ export function addTurnToTask(list: TaskList, member: string | undefined, turn: 
 /** The saved list for a new session: nobody works yet, so a working task waits for a new turn; every total is kept. */
 export function settleForNewSession(list: TaskList): TaskList {
   return { ...list, tasks: list.tasks.map(task => (task.status === 'working' ? { ...task, status: 'waiting' as const } : task)) }
+}
+
+/**
+ * The assignments list with each working or review row settled by how its members' runs ended (a plan list comes back as it was):
+ * working is done once every member completed, or waits when one failed or was stopped; review is done once its reviewers
+ * completed, and stays in review if one failed. A member still running, or not listed yet, changes nothing. The same list comes
+ * back when no row moved, so a poll writes only when something changed.
+ */
+export function settleAssignmentRows(list: TaskList, agents: Readonly<Record<string, HqAgent>>, at: number): TaskList {
+  if (!isAssignmentList(list)) return list
+  const byName = new Map(Object.values(agents).map(a => [a.name, a]))
+  const tasks = list.tasks.map(task => {
+    if (task.status !== 'working' && task.status !== 'review') return task
+    const members = Object.entries(task.work).filter(([, w]) => task.status === 'working' || w.step === 'review').map(([who]) => byName.get(who))
+    if (members.length === 0 || members.some(m => m === undefined || !isFinished(m.status))) return task
+    if (members.every(m => m?.status === 'completed')) return applyPlanTicks({ ...list, tasks: [task] }, [{ n: task.n, title: task.title, done: true }], at).tasks[0] ?? task
+    return task.status === 'working' ? { ...task, status: 'waiting' as const } : task
+  })
+  return tasks.every((x, i) => x === list.tasks[i]) ? list : { ...list, tasks }
 }
