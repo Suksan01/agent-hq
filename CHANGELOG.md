@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.1 (2026-11-01)
 
 ### Changed
 - **The task table shows work that has no plan.** Without a saved plan, every `hq_assign` adds its own row (title: the
