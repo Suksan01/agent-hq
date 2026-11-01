@@ -231,7 +231,7 @@ test('hq_assign with a plan_task and no list is refused, and says there is no pl
   expect(s.calls.spawn).toEqual([])
 })
 
-test('hq_assign without plan_task behaves as before and leaves the list alone, with a list or without (AC20)', async () => {
+test('hq_assign without plan_task behaves as before and leaves a plan list alone (AC20); with no list file it makes an assignments list (see assignment-tasks.test.ts)', async () => {
   for (const list of [THREE(), null]) {
     const s = setup({ list })
 
@@ -240,7 +240,7 @@ test('hq_assign without plan_task behaves as before and leaves the list alone, w
     expect(answer.isError).toBeUndefined()
     expect(answer.text).toContain('Started dev-1 as Developer')
     expect(s.calls.spawn).toHaveLength(1)
-    expect(s.calls.written).toEqual([])
+    expect(s.calls.written.length).toBe(list ? 0 : 1)
   }
 })
 

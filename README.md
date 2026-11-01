@@ -12,7 +12,8 @@ A Claude Code mod for building and watching orchestrated agent teams.
 - **Sidebar** (docked beside a fullscreen transcript, on a darker panel): the agent tree with a pixel-art bot for
   each agent, its nickname, role and running time, what it works on now (`▸`), what comes next (`○ next:`), the last
   thing it finished (`✓`), and a dotted todo track.
-- **Task table**: once a plan is approved, the sidebar and the live page list every task of the plan: its status (a ✓
+- **Task table**: once a plan is approved, the sidebar and the live page list every task of the plan; with no plan,
+  every `hq_assign` adds its own row, so the table shows for any work. Each row has its status (a ✓
   when done, a moving spinner while a member works on it, ◑ in review, ○ waiting), who is on it or who finished it,
   the working minutes and an estimated cost (`≈ $`). The cost is an **estimate from list prices, not your bill**.
 - **One live page for every session**: `/hq web` opens your browser on a page that shows the teams of all your open
@@ -130,7 +131,11 @@ The lead (the main session) gets five tools, offered as `mcp__agent-hq__hq_assig
 - **`hq_plan`**: save the approved plan's checklist (`- [ ] 3. Title` lines of a `.md` file inside the project) as the
   task list in `.claude/agent-hq/tasks.json`. `hq_assign` and `hq_review` then take `plan_task` (the task's number) to
   link a member's work to a task; each finished turn adds its minutes and tokens, and ticking `- [x]` in the plan
-  marks the task done. Members cannot change them: the guard refuses a member's write to the list and the approved
+  marks the task done. With no plan saved, every `hq_assign` without `plan_task` adds a row of its own to the list
+  (marked `"source": "assignments"`; the title is the first line of the task): working while the member runs, review
+  once `hq_review` sends it, done when the run (or the reviewer's) ends, waiting if the run failed or was stopped;
+  `hq_plan` later replaces such a list outright, and `plan_task` is refused until a plan is saved. A saved plan list
+  gets no rows from plain `hq_assign` calls. Members cannot change them: the guard refuses a member's write to the list and the approved
   plan file by path; a glob over the plan's name is not caught.
 
 Only the lead can use them; a subagent that calls one gets an error.

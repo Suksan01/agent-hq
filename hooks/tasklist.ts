@@ -8,6 +8,7 @@ import { maskSecrets } from './secrets'
 
 export const LIST_VERSION = 1
 const MAX_TITLE = 200 // a title is untrusted text from the plan file
+const MAX_ASSIGNMENT_TITLE = 60 // a row made from an assignment: the first line of the task text
 
 export type TaskStatus = 'waiting' | 'working' | 'review' | 'done'
 const STATUSES: readonly string[] = ['waiting', 'working', 'review', 'done']
@@ -18,7 +19,9 @@ export const isCounted = (w: Pick<TaskWork, 'workMs' | 'inputTokens' | 'outputTo
 
 export type TaskEvent = { at: number; kind: string; who: string | null }
 export type ListTask = { n: number; title: string; status: TaskStatus; doneBy: string | null; startedAt: number | null; doneAt: number | null; work: Record<string, TaskWork>; events: TaskEvent[] }
-export type TaskList = { version: 1; plan: string; approvedAt: number; tasks: ListTask[]; removed: { workMs: number; costUsd: number; isPartial?: boolean } }
+/** `source` is "assignments" for a list made of hq_assign rows (its `plan` is ""); a plan list, and a file saved before 0.9.1, have none. */
+export type TaskList = { version: 1; plan: string; approvedAt: number; source?: 'assignments'; tasks: ListTask[]; removed: { workMs: number; costUsd: number; isPartial?: boolean } }
+export const isAssignmentList = (list: TaskList | null | undefined) => list?.source === 'assignments'
 export type PlanTask = { n: number; title: string; done: boolean }
 
 // `- [ ] 3. Title` or `- [x] 3. Title`: nothing else in a plan is a task (sub-bullets are indented, prose has no box)
@@ -38,6 +41,13 @@ export function parsePlan(text: string): PlanTask[] {
     const title = masked.length > MAX_TITLE ? `${headOf(masked, MAX_TITLE - 1).trimEnd()}…` : masked
     return [{ n, title, done: m[1] !== ' ' }]
   })
+}
+
+/** The title of the row an assignment makes: its first non-empty line, secrets masked, controls dropped, cut to 60 code units with "…" and never inside a cluster. */
+export function titleOfAssignment(text: string): string {
+  const line = (text.split(/\r?\n/).map(l => l.replace(CONTROL, ' ').trim()).find(l => l !== '') ?? '')
+  const masked = maskSecrets(line)
+  return masked.length > MAX_ASSIGNMENT_TITLE ? `${headOf(masked, MAX_ASSIGNMENT_TITLE - 1).trimEnd()}…` : masked
 }
 
 // a member who reviewed or tested a task did not build it: judged by its role and by the step it worked in
@@ -139,6 +149,7 @@ export function parseList(source: string): { list: TaskList; reason?: undefined 
   }
   if (!isRaw(raw)) return { list: null, reason: 'the file must hold one JSON object' }
   if (raw.version !== LIST_VERSION) return { list: null, reason: `unknown version ${JSON.stringify(raw.version) ?? 'none'}: this reads version ${LIST_VERSION}` }
+  if (raw.source !== undefined && raw.source !== 'assignments') return { list: null, reason: `unknown source ${JSON.stringify(raw.source) ?? 'none'}: a list is made from a plan or from assignments` }
   if (typeof raw.plan !== 'string' || typeof raw.approvedAt !== 'number') return { list: null, reason: 'needs a "plan" path and an "approvedAt" time' }
   if (!isRaw(raw.removed) || !isCount(raw.removed.workMs) || !isCount(raw.removed.costUsd) || (raw.removed.isPartial !== undefined && typeof raw.removed.isPartial !== 'boolean')) return { list: null, reason: '"removed" needs workMs and costUsd of 0 or more' }
   if (!Array.isArray(raw.tasks)) return { list: null, reason: '"tasks" must be a list' }

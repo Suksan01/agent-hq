@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- **The task table shows work that has no plan.** Without a saved plan, every `hq_assign` adds its own row (title: the
+  first line of the task, who, time, cost), so the sidebar and the live page show a table for any work, not only after
+  `hq_plan`. A row is working while the member runs, in review after `hq_review`, done when the run (or the reviewer's)
+  ends, and waiting when the run failed or was stopped. The list records `"source": "assignments"` (a 0.9.0
+  `tasks.json` still reads); `hq_plan` replaces such a list outright, `plan_task` is refused until a plan is saved, and
+  a plan list is not changed by plain `hq_assign` calls.
+
 ## 0.9.0 (2026-10-26)
 
 ### Added

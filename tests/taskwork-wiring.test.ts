@@ -298,3 +298,27 @@ test('a Bash command that does not name the plan file leaves the list alone', as
 
   expect(s.listWrites.length).toBe(before)
 })
+
+test('an assignments row is done once its member\'s run ended, and a later poll writes nothing more', async ($, on) => {
+  const list = { version: 1, plan: '', approvedAt: 1, source: 'assignments', tasks: [task(1, { status: 'working', startedAt: 10, work: { 'dev-1': work() }, events: [{ at: 10, kind: 'start', who: 'dev-1' }] })], removed: { workMs: 0, costUsd: 0 } }
+  const listed = LISTED[0]!
+  const before = listed.status
+  try {
+    const s = await boot($, on, { [LIST_FILE]: JSON.stringify(list) })
+    await s.turn('d1', 1000) // a new session starts its rows waiting; the member's turn makes the row working again
+    expect(taskOf(s.list() as unknown as Saved, 1)?.status).toBe('working')
+    listed.status = 'completed'
+    await s.clock.advance(5_000)
+    await s.clock.settle()
+
+    const row = taskOf(s.list() as unknown as Saved, 1)
+    expect(row).toMatchObject({ status: 'done', doneBy: 'dev-1' })
+    expect(row?.doneAt).toBeGreaterThan(0)
+    const writes = s.listWrites.length
+    await s.clock.advance(5_000)
+    await s.clock.settle()
+    expect(s.listWrites.length).toBe(writes)
+  } finally {
+    listed.status = before
+  }
+})

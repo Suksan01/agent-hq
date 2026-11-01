@@ -6,13 +6,13 @@ import type { EngineInterface, ToolSpec } from 'claude-code'
 
 import type { HqAssignment, HqTeam } from '../types'
 import { spawnAgent } from './actions'
-import { linkMember, missingTask, parseAssign, planTaskOf, statusSummary, taskOfMember } from './assign'
+import { addAssignmentRow, linkMember, missingTask, parseAssign, planTaskOf, rowOfMember, statusSummary, taskOfMember } from './assign'
 import { planHire } from './hire'
 import { LockTimeout, withListLock, withLock } from './lock'
 import type { NewEvent } from './feed'
 import { MAIN, isFinished, who } from './model'
 import { costOf } from './prices'
-import { mergeList, parsePlan } from './tasklist'
+import { isAssignmentList, mergeList, parsePlan } from './tasklist'
 import type { ReadResult, TaskList } from './tasklist'
 import { BRIEFS_DIR, isReadOnlyRole, reportPathOf, roleTitle } from './team'
 import { t } from './i18n'
@@ -308,6 +308,7 @@ export async function hqAssign($: EngineInterface, given: unknown, deps: ToolDep
   if (!started.ok) return fail(`hq_assign: ${started.error}`)
   const plannedN = planned.n
   // a member put on a task that was in review is fixing it
+  if (!plannedN) await addAssignmentToList($, deps, { who: started.name, role: started.role, task: started.task })
   if (plannedN) await updateList($, deps, (list, at) => linkMember(list, plannedN, { status: 'working', who: started.name, role: started.role, step: list.tasks.find(x => x.n === plannedN)?.status === 'review' ? 'fix' : 'build', kind: 'start', at }))
   const linked = await linkBoardTask($, started.name, started.task, !started.refused)
   const board = 'id' in linked ? linked.id : null
@@ -351,7 +352,7 @@ async function planTaskCheck(input: unknown, deps: ToolDeps): Promise<{ n?: numb
   const given = planTaskOf(input)
   if ('error' in given || given.n === undefined) return given
   const { list, reason } = (await deps.readList?.()) ?? { list: null }
-  if (!list) return { error: isNoList(reason) }
+  if (!list || isAssignmentList(list)) return { error: isNoList(list ? undefined : reason) } // an assignments list has no plan numbers to link to
   const missing = missingTask(list, given.n)
   return missing ? { error: missing } : given
 }
@@ -368,6 +369,22 @@ async function updateList($: EngineInterface, deps: ToolDeps, change: (list: Tas
   } catch (error) {
     // the list is a convenience for the sidebar: the member is already running
     $.ui.log(`Agent HQ: could not update the task list (${error instanceof Error ? error.message : 'error'})`, { to: 'debug' })
+  }
+}
+
+/**
+ * An hq_assign without plan_task puts the assignment on the table as its own row: on an assignments list the next row; with no
+ * list file at all, a new assignments list. A plan list, and a file that is invalid or unreadable, are left as they are.
+ */
+async function addAssignmentToList($: EngineInterface, deps: ToolDeps, link: { who: string; role: string; task: string }): Promise<void> {
+  try {
+    await withListLock(async () => {
+      const { list, kind } = (await deps.readList?.()) ?? { list: null, kind: 'unreadable' as const }
+      if (list ? !isAssignmentList(list) : kind !== undefined && kind !== 'missing') return
+      await deps.writeList?.(addAssignmentRow(list, { ...link, at: await deps.now() }))
+    })
+  } catch (error) {
+    $.ui.log(`Agent HQ: could not add the assignment to the task list (${error instanceof Error ? error.message : 'error'})`, { to: 'debug' })
   }
 }
 
@@ -391,7 +408,8 @@ export async function hqPlan(input: unknown, deps: ToolDeps): Promise<ToolAnswer
   let refused: ToolAnswer | null
   try {
     refused = await withListLock(async () => {
-      const { list: old, kind, reason } = (await deps.readList?.()) ?? { list: null }
+      const { list: saved, kind, reason } = (await deps.readList?.()) ?? { list: null }
+      const old = isAssignmentList(saved) ? null : saved // a plan replaces an assignments list outright
       // a file that could not be read may still hold saved time and cost: only a missing or invalid one may be rewritten
       if (!old && kind === 'unreadable') return fail(`hq_plan: ${reason ?? 'the task list could not be read'}; nothing was saved`)
       const now = await deps.now()
@@ -409,7 +427,7 @@ export async function hqPlan(input: unknown, deps: ToolDeps): Promise<ToolAnswer
 /** The reviewed task goes to review with the reviewer in it: the given plan_task, else the task the reviewed member is on. */
 async function linkReview($: EngineInterface, deps: ToolDeps, given: number | undefined, reviewed: string, reviewer: string, role: string): Promise<void> {
   await updateList($, deps, (list, at) => {
-    const n = given ?? taskOfMember(list, reviewed)
+    const n = given ?? (isAssignmentList(list) ? rowOfMember(list, reviewed) : taskOfMember(list, reviewed))
     return n === undefined ? list : linkMember(list, n, { status: 'review', who: reviewer, role, step: 'review', kind: 'review', at })
   })
 }
