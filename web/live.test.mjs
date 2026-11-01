@@ -73,15 +73,18 @@ async function members(page) {
   return [...new Map(list.map(c => [c.name, c])).values()]
 }
 
-/** The centre of the first visible card whose text matches `name`, or null. */
-const cardPoint = (page, name) => page.eval(`(() => { const re = new RegExp(${JSON.stringify(name)}, 'i'); const el = [...document.querySelectorAll(${JSON.stringify(SEL.agentCard)})].filter(e => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 }).find(e => re.test(e.textContent)); if (!el) return null; const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 } })()`)
+/** After a rendered frame, the centre of the first visible card whose text matches `name` and whether a transition is running on it or an ancestor, or null. */
+const cardPoint = (page, name) => page.eval(`new Promise(requestAnimationFrame).then(() => { const re = new RegExp(${JSON.stringify(name)}, 'i'); const el = [...document.querySelectorAll(${JSON.stringify(SEL.agentCard)})].filter(e => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 }).find(e => re.test(e.textContent)); if (!el) return null; const r = el.getBoundingClientRect(); let moving = false; for (let e = el; e; e = e.parentElement) moving ||= e.getAnimations().some(a => a instanceof CSSTransition); return { x: r.left + r.width / 2, y: r.top + r.height / 2, moving } })`)
 
-/** Waits until the card stops moving (the camera is still flying after Fit): two samples 150 ms apart that agree. */
+/**
+ * Waits until the card stops moving (the camera is still flying after Fit): two samples 150 ms apart that agree, with no transition running.
+ * Each look waits for a rendered frame: headless Chrome can go seconds between frames, and until the next one an eased move reads as not moving.
+ */
 async function settledPoint(page, name) {
   let before = null
   for (let i = 0; i < 60; i++) {
     const now = await cardPoint(page, name)
-    if (now && before && Math.abs(now.x - before.x) < 1 && Math.abs(now.y - before.y) < 1) return now
+    if (now && !now.moving && before && Math.abs(now.x - before.x) < 1 && Math.abs(now.y - before.y) < 1) return now
     before = now
     await sleep(150)
   }
