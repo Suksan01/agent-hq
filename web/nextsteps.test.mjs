@@ -35,14 +35,18 @@ const next = `${alphaLead}?.querySelector('.lc-next')`
 const posts = page => [...page.requests.values()].filter(r => r.method === 'POST' && r.url.endsWith('/action')).length
 const shown = page => page.eval(`!!(${next})`)
 
-/** Presses the element `expr` (a page expression) with a real mouse once it holds still and is what lies under its centre: the diagram's camera eases. */
+/**
+ * Presses the element `expr` (a page expression) with a real mouse once it holds still and is what lies under its centre: the diagram's camera eases.
+ * Each look waits for a rendered frame and counts running transitions: headless Chrome can go seconds between frames, and until the next one an eased move reads as not moving.
+ */
 async function press(page, expr) {
   const seen = []
   const point = await until(async () => {
-    seen.push(await page.eval(`(() => { const el = ${expr}, r = el.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2; return JSON.stringify({ x, y, hit: el.contains(document.elementFromPoint(x, y)) }) })()`))
+    seen.push(await page.eval(`new Promise(requestAnimationFrame).then(() => { const el = ${expr}, r = el.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2; let moving = false; for (let e = el; e; e = e.parentElement) moving ||= e.getAnimations().some(a => a instanceof CSSTransition); return JSON.stringify({ x, y, moving, hit: el.contains(document.elementFromPoint(x, y)) }) })`))
     await sleep(150)
     const last = seen.slice(-3)
-    return last.length === 3 && new Set(last).size === 1 && JSON.parse(last[0]).hit && JSON.parse(last[0])
+    const look = JSON.parse(last[0])
+    return last.length === 3 && new Set(last).size === 1 && look.hit && !look.moving && look
   }, 10_000, `${expr} to hold still`)
   await page.mouseClick(point.x, point.y)
 }
